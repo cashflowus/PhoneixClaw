@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: position-monitor
+  namespace: copytrader
+  labels:
+    app: position-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: position-monitor
+  template:
+    metadata:
+      labels:
+        app: position-monitor
+    spec:
+      containers:
+        - name: position-monitor
+          image: copytrader/position-monitor:latest
+          ports:
+            - containerPort: 8009
+          envFrom:
+            - configMapRef:
+                name: copytrader-config
+            - secretRef:
+                name: copytrader-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8009
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8009
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: position-monitor
+  namespace: copytrader
+spec:
+  selector:
+    app: position-monitor
+  ports:
+    - port: 8009
+      targetPort: 8009

@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trade-gateway
+  namespace: copytrader
+  labels:
+    app: trade-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trade-gateway
+  template:
+    metadata:
+      labels:
+        app: trade-gateway
+    spec:
+      containers:
+        - name: trade-gateway
+          image: copytrader/trade-gateway:latest
+          ports:
+            - containerPort: 8007
+          envFrom:
+            - configMapRef:
+                name: copytrader-config
+            - secretRef:
+                name: copytrader-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8007
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8007
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trade-gateway
+  namespace: copytrader
+spec:
+  selector:
+    app: trade-gateway
+  ports:
+    - port: 8007
+      targetPort: 8007

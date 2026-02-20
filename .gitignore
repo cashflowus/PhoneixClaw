@@ -39,20 +39,37 @@ env/
 *~
 .project
 .pydevproject
+.cursor/
 
 # Database
 *.db
 *.sqlite
 *.sqlite3
-tradingbot.db
 
 # Logs
 logs/
 *.log
 
-# Data files (if using CSV)
-data/trade_queue.csv
-
 # OS
 .DS_Store
 Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Node / Dashboard
+services/dashboard-ui/node_modules/
+services/dashboard-ui/dist/
+services/dashboard-ui/.vite/
+
+# Docker
+*.tar
+docker-compose.override.yml
+
+# Data
+data/

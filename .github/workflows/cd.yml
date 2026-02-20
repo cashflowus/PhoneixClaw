@@ -1,0 +1,31 @@
+name: CD
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push all services
+        run: |
+          for svc in auth-service api-gateway trade-parser trade-gateway trade-executor position-monitor notification-service source-orchestrator audit-writer; do
+            docker build -t ghcr.io/${{ github.repository }}/$svc:${{ github.ref_name }} -f services/$svc/Dockerfile .
+            docker push ghcr.io/${{ github.repository }}/$svc:${{ github.ref_name }}
+          done
+          docker build -t ghcr.io/${{ github.repository }}/dashboard-ui:${{ github.ref_name }} -f services/dashboard-ui/Dockerfile services/dashboard-ui
+          docker push ghcr.io/${{ github.repository }}/dashboard-ui:${{ github.ref_name }}
+      - name: Deploy to K8s
+        run: |
+          echo "Deploy step - configure kubectl and apply manifests"
+          # kubectl apply -f k8s/

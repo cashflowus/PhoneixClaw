@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install ruff mypy
+      - run: ruff check shared/ services/ tests/
+
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[dev]"
+      - run: python -m pytest tests/unit/ -v --tb=short
+      - run: python -m pytest tests/unit/ --cov=shared --cov-report=xml
+      - uses: codecov/codecov-action@v3
+        with:
+          file: coverage.xml
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    strategy:
+      matrix:
+        service:
+          - auth-service
+          - api-gateway
+          - trade-parser
+          - trade-gateway
+          - trade-executor
+          - position-monitor
+          - notification-service
+          - source-orchestrator
+          - audit-writer
+          - dashboard-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.service == 'dashboard-ui' && 'services/dashboard-ui' || '.' }}
+          file: services/${{ matrix.service }}/Dockerfile
+          push: false
+          tags: copytrader/${{ matrix.service }}:${{ github.sha }}

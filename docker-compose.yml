@@ -1,0 +1,175 @@
+version: "3.9"
+
+services:
+  kafka:
+    image: apache/kafka-native:3.8
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 6
+    healthcheck:
+      test: /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: copytrader
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: copytrader
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U copytrader
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: redis-cli ping
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  init:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    command: >
+      sh -c "
+        echo 'Waiting for Postgres...' &&
+        sleep 5 &&
+        python -c 'import asyncio; from shared.models.database import init_db; asyncio.run(init_db())' &&
+        echo 'Database initialized'
+      "
+    environment:
+      DATABASE_URL: postgresql+asyncpg://copytrader:localdev@postgres:5432/copytrader
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    ports:
+      - "8001:8001"
+    environment: &common-env
+      DATABASE_URL: postgresql+asyncpg://copytrader:localdev@postgres:5432/copytrader
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET_KEY: dev-secret-key
+      CREDENTIAL_ENCRYPTION_KEY: ZGV2LWVuY3J5cHRpb24ta2V5LTEyMzQ1Njc4OTA=
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    ports:
+      - "8011:8011"
+    environment: *common-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  trade-parser:
+    build:
+      context: .
+      dockerfile: services/trade-parser/Dockerfile
+    environment: *common-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  trade-gateway:
+    build:
+      context: .
+      dockerfile: services/trade-gateway/Dockerfile
+    environment: *common-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  trade-executor:
+    build:
+      context: .
+      dockerfile: services/trade-executor/Dockerfile
+    environment: *common-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  position-monitor:
+    build:
+      context: .
+      dockerfile: services/position-monitor/Dockerfile
+    environment: *common-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    environment: *common-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  source-orchestrator:
+    build:
+      context: .
+      dockerfile: services/source-orchestrator/Dockerfile
+    environment: *common-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  audit-writer:
+    build:
+      context: .
+      dockerfile: services/audit-writer/Dockerfile
+    environment: *common-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  dashboard-ui:
+    build:
+      context: services/dashboard-ui
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+
+volumes:
+  pgdata:
