@@ -286,7 +286,7 @@ services:
       context: services/dashboard-ui
       dockerfile: Dockerfile
     ports:
-      - "80:80"
+      - "3080:80"
     depends_on:
       - api-gateway
     deploy:
