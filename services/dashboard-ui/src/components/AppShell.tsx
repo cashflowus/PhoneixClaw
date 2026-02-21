@@ -22,10 +22,11 @@ import {
   PanelLeftClose,
   PanelLeft,
   TrendingUp,
+  ShieldCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const navItems = [
+const baseNavItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/sources', icon: Database, label: 'Data Sources' },
   { to: '/accounts', icon: Wallet, label: 'Trading Accounts' },
@@ -33,6 +34,8 @@ const navItems = [
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/system', icon: Settings, label: 'System' },
 ]
+
+const adminNavItem = { to: '/admin', icon: ShieldCheck, label: 'Admin Panel' }
 
 function NavItem({
   to,
@@ -79,10 +82,12 @@ function SidebarContent({
   collapsed,
   onCollapse,
   onLogout,
+  navItems,
 }: {
   collapsed: boolean
   onCollapse?: () => void
   onLogout: () => void
+  navItems: typeof baseNavItems
 }) {
   const { theme, setTheme } = useTheme()
 
@@ -157,14 +162,16 @@ const pageTitles: Record<string, string> = {
   '/messages': 'Raw Messages',
   '/analytics': 'Analytics',
   '/system': 'System',
+  '/admin': 'Admin Panel',
 }
 
 export default function AppShell() {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
-  const { logout } = useAuth()
+  const { logout, isAdmin } = useAuth()
   const location = useLocation()
   const pageTitle = pageTitles[location.pathname] || 'PhoenixTrade'
+  const navItems = isAdmin ? [...baseNavItems, adminNavItem] : baseNavItems
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -179,6 +186,7 @@ export default function AppShell() {
           collapsed={collapsed}
           onCollapse={() => setCollapsed((c) => !c)}
           onLogout={logout}
+          navItems={navItems}
         />
       </aside>
 
@@ -194,7 +202,7 @@ export default function AppShell() {
             </SheetTrigger>
             <SheetContent side="left" className="w-64 p-0">
               <SheetTitle className="sr-only">Navigation</SheetTitle>
-              <SidebarContent collapsed={false} onLogout={logout} />
+              <SidebarContent collapsed={false} onLogout={logout} navItems={navItems} />
             </SheetContent>
           </Sheet>
 

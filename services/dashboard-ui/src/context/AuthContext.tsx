@@ -3,15 +3,29 @@ import axios, { AxiosError } from 'axios'
 
 interface AuthContextType {
   token: string | null
+  isAdmin: boolean
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, name?: string) => Promise<void>
   logout: () => void
+}
+
+function parseJwtPayload(token: string): Record<string, unknown> {
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(atob(base64))
+  } catch {
+    return {}
+  }
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'))
+  const [isAdmin, setIsAdmin] = useState(() => {
+    const t = localStorage.getItem('token')
+    return t ? !!parseJwtPayload(t).admin : false
+  })
   const logoutRef = useRef<() => void>(() => {})
 
   const logout = useCallback(() => {
@@ -66,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('token', t)
     localStorage.setItem('refresh_token', res.data.refresh_token)
     setToken(t)
+    setIsAdmin(!!parseJwtPayload(t).admin)
     axios.defaults.headers.common['Authorization'] = `Bearer ${t}`
   }, [])
 
@@ -82,5 +97,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
   }
 
-  return <AuthContext.Provider value={{ token, login, register, logout }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ token, isAdmin, login, register, logout }}>{children}</AuthContext.Provider>
 }

@@ -10,6 +10,7 @@ import TradingAccounts from './pages/TradingAccounts'
 import RawMessages from './pages/RawMessages'
 import Analytics from './pages/Analytics'
 import System from './pages/System'
+import Admin from './pages/Admin'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuth()
@@ -39,6 +40,7 @@ export default function App() {
           <Route path="messages" element={<RawMessages />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="system" element={<System />} />
+          <Route path="admin" element={<Admin />} />
         </Route>
       </Routes>
       {token && <ChatWidget />}

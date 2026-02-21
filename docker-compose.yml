@@ -103,7 +103,9 @@ services:
     build:
       context: .
       dockerfile: services/trade-parser/Dockerfile
-    environment: *common-env
+    environment:
+      <<: *common-env
+      NLP_PARSER_URL: http://nlp-parser:8020
     depends_on:
       init:
         condition: service_completed_successfully
@@ -161,6 +163,15 @@ services:
     depends_on:
       init:
         condition: service_completed_successfully
+
+  nlp-parser:
+    build:
+      context: services/nlp-parser
+      dockerfile: Dockerfile
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
 
   dashboard-ui:
     build:

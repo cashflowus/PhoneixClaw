@@ -28,6 +28,7 @@ class JWTMiddleware(BaseHTTPMiddleware):
             if payload.get("type") != "access":
                 return JSONResponse(status_code=401, content={"detail": "Invalid token type"})
             request.state.user_id = payload["sub"]
+            request.state.is_admin = payload.get("admin", False)
         except JWTError:
             return JSONResponse(status_code=401, content={"detail": "Invalid or expired token"})
 

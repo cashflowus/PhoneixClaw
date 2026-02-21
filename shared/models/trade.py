@@ -37,6 +37,7 @@ class User(Base):
     timezone = Column(String(50), nullable=False, default="UTC")
     notification_prefs = Column(JSONB, nullable=False, default=lambda: {"email_enabled": True})
     is_active = Column(Boolean, nullable=False, default=True)
+    is_admin = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
 

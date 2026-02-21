@@ -42,6 +42,7 @@ class UserResponse(BaseModel):
     name: str | None
     timezone: str
     is_active: bool
+    is_admin: bool
     created_at: str
 
 
@@ -53,10 +54,10 @@ def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
 
 
-def create_access_token(user_id: str) -> str:
+def create_access_token(user_id: str, is_admin: bool = False) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=config.auth.access_token_expire_minutes)
     return jwt.encode(
-        {"sub": user_id, "exp": expire, "type": "access"},
+        {"sub": user_id, "exp": expire, "type": "access", "admin": is_admin},
         config.auth.secret_key,
         algorithm=config.auth.algorithm,
     )
@@ -112,7 +113,7 @@ async def login(req: LoginRequest, session: AsyncSession = Depends(get_session))
 
     user_id = str(user.id)
     return TokenResponse(
-        access_token=create_access_token(user_id),
+        access_token=create_access_token(user_id, is_admin=user.is_admin),
         refresh_token=create_refresh_token(user_id),
     )
 
@@ -144,5 +145,6 @@ async def get_me(request: Request, session: AsyncSession = Depends(get_session))
         name=user.name,
         timezone=user.timezone,
         is_active=user.is_active,
+        is_admin=user.is_admin,
         created_at=user.created_at.isoformat(),
     )

@@ -150,7 +150,9 @@ services:
     build:
       context: .
       dockerfile: services/trade-parser/Dockerfile
-    environment: *app-env
+    environment:
+      <<: *app-env
+      NLP_PARSER_URL: http://nlp-parser:8020
     depends_on:
       init:
         condition: service_completed_successfully
@@ -278,6 +280,27 @@ services:
           memory: 192M
         reservations:
           memory: 96M
+    restart: unless-stopped
+
+  # ─── NLP Parser (FinBERT + spaCy) ────────────────────────────────────
+  nlp-parser:
+    build:
+      context: services/nlp-parser
+      dockerfile: Dockerfile
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    healthcheck:
+      test: python -c "import httpx; httpx.get('http://localhost:8020/health').raise_for_status()" || exit 1
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+        reservations:
+          memory: 768M
     restart: unless-stopped
 
   # ─── Dashboard (public-facing, gets Coolify domain) ──────────────────

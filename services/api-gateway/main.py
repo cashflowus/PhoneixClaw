@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from services.api_gateway.src.middleware import JWTMiddleware
 from services.api_gateway.src.routes.accounts import router as accounts_router
+from services.api_gateway.src.routes.admin import router as admin_router
 from services.api_gateway.src.routes.chat import router as chat_router
 from services.api_gateway.src.routes.chat import set_kafka_producer
 from services.api_gateway.src.routes.mappings import router as mappings_router
@@ -33,15 +34,21 @@ _kafka_producer = None
 
 async def _run_migrations():
     """Run DB schema creation and any needed migrations."""
+    import sqlalchemy as sa
+
     from shared.models.database import engine, init_db
 
     await init_db()
+    migrations = [
+        "ALTER TABLE trades ALTER COLUMN trading_account_id DROP NOT NULL",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE",
+    ]
     async with engine.begin() as conn:
-        await conn.execute(
-            __import__("sqlalchemy").text(
-                "ALTER TABLE trades ALTER COLUMN trading_account_id DROP NOT NULL"
-            )
-        )
+        for sql in migrations:
+            try:
+                await conn.execute(sa.text(sql))
+            except Exception:
+                pass
     logger.info("Database schema ready")
 
 
@@ -79,6 +86,7 @@ app.add_middleware(
 app.add_middleware(JWTMiddleware)
 
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(accounts_router)
 app.include_router(sources_router)
 app.include_router(mappings_router)
