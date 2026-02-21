@@ -2,8 +2,19 @@ import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
+import services.api_gateway.src.middleware as mw_module
 from services.api_gateway.src.middleware import JWTMiddleware
 from services.auth_service.src.auth import create_access_token, create_refresh_token
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Reset the module-level rate limiter state between tests."""
+    mw_module._rate_limiter = None
+    mw_module._rate_limiter_initialized = False
+    yield
+    mw_module._rate_limiter = None
+    mw_module._rate_limiter_initialized = False
 
 
 @pytest.fixture

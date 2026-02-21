@@ -50,10 +50,13 @@ class JWTMiddleware(BaseHTTPMiddleware):
         except JWTError:
             return JSONResponse(status_code=401, content={"detail": "Invalid or expired token"})
 
-        rl = await _get_rate_limiter()
-        if rl:
-            client_key = f"user:{request.state.user_id}"
-            if not await rl.is_allowed(client_key):
-                return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
+        try:
+            rl = await _get_rate_limiter()
+            if rl:
+                client_key = f"user:{request.state.user_id}"
+                if not await rl.is_allowed(client_key):
+                    return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
+        except Exception:
+            logger.debug("Rate limiter check failed, allowing request")
 
         return await call_next(request)
