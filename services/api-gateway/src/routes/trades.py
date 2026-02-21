@@ -15,7 +15,7 @@ async def list_trades(
     request: Request,
     status: str | None = None,
     limit: int = Query(50, le=200),
-    offset: int = 0,
+    offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
 ):
     user_id = request.state.user_id

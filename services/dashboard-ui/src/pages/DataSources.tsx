@@ -58,21 +58,26 @@ export default function DataSources() {
     queryFn: () => axios.get('/api/v1/sources').then((r) => r.data),
   })
 
+  const [error, setError] = useState<string | null>(null)
+
   const createMutation = useMutation({
     mutationFn: (payload: object) => axios.post('/api/v1/sources', payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['sources'] })
       setOpen(false)
       setForm({ ...emptyForm })
+      setError(null)
     },
+    onError: () => setError('Failed to create source. Please check your credentials.'),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => axios.delete(`/api/v1/sources/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sources'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sources'] }); setError(null) },
+    onError: () => setError('Failed to delete source.'),
   })
 
-  const [testResult, setTestResult] = useState<{ id: string; status: string; detail: string } | null>(null)
+  const [testResult, setTestResult] = useState<{ id: string; connection_status: string; detail: string } | null>(null)
   const [testingId, setTestingId] = useState<string | null>(null)
 
   const testMutation = useMutation({
@@ -86,12 +91,13 @@ export default function DataSources() {
       qc.invalidateQueries({ queryKey: ['sources'] })
       setTestingId(null)
     },
-    onError: () => setTestingId(null),
+    onError: () => { setTestingId(null); setError('Connection test failed.') },
   })
 
   const toggleMutation = useMutation({
     mutationFn: (id: string) => axios.post(`/api/v1/sources/${id}/toggle`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sources'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sources'] }); setError(null) },
+    onError: () => setError('Failed to toggle source.'),
   })
 
   function handleSubmit(e: React.FormEvent) {
@@ -244,16 +250,23 @@ export default function DataSources() {
         </Card>
       )}
 
+      {error && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400 flex items-center justify-between">
+          <span>{error}</span>
+          <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => setError(null)}>Dismiss</Button>
+        </div>
+      )}
+
       {testResult && (
         <div
           className={`rounded-lg border p-3 text-sm flex items-center justify-between ${
-            testResult.status === 'CONNECTED'
+            testResult.connection_status === 'CONNECTED'
               ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
               : 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400'
           }`}
         >
           <span>
-            {testResult.status === 'CONNECTED'
+            {testResult.connection_status === 'CONNECTED'
               ? `Connected successfully${testResult.detail ? ` (${testResult.detail})` : ''}`
               : `Connection failed: ${testResult.detail}`}
           </span>

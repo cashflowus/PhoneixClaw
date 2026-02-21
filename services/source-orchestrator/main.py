@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import sys
 from contextlib import asynccontextmanager
@@ -14,11 +15,31 @@ logger = logging.getLogger(SERVICE_NAME)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
 
+async def _run_orchestrator(service):
+    try:
+        await service.start()
+        await service.run()
+    except asyncio.CancelledError:
+        pass
+    except Exception:
+        logger.exception("Orchestrator error")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from services.source_orchestrator.src.orchestrator import SourceOrchestrator
+
+    orchestrator = SourceOrchestrator()
+    task = asyncio.create_task(_run_orchestrator(orchestrator))
+    shutdown.register(lambda: orchestrator.stop())
     logger.info("%s ready", SERVICE_NAME)
     yield
     await shutdown.run_cleanup()
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(title=SERVICE_NAME, lifespan=lifespan)

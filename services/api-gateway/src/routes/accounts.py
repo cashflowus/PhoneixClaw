@@ -61,6 +61,7 @@ async def create_account(req: AccountCreate, request: Request, session: AsyncSes
     await session.refresh(account)
     return _to_response(account)
 
+@router.patch("/{account_id}", response_model=AccountResponse)
 @router.put("/{account_id}", response_model=AccountResponse)
 async def update_account(
     account_id: str, req: AccountUpdate, request: Request,

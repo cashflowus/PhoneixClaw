@@ -45,6 +45,7 @@ export default function TradingAccounts() {
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ ...emptyForm })
+  const [error, setError] = useState<string | null>(null)
 
   const { data: accounts } = useQuery<Account[]>({
     queryKey: ['accounts'],
@@ -57,18 +58,22 @@ export default function TradingAccounts() {
       qc.invalidateQueries({ queryKey: ['accounts'] })
       setOpen(false)
       setForm({ ...emptyForm })
+      setError(null)
     },
+    onError: () => setError('Failed to create account. Please check your credentials.'),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => axios.delete(`/api/v1/accounts/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['accounts'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['accounts'] }); setError(null) },
+    onError: () => setError('Failed to delete account.'),
   })
 
   const toggleMutation = useMutation({
     mutationFn: ({ id, paper_mode }: { id: string; paper_mode: boolean }) =>
       axios.patch(`/api/v1/accounts/${id}`, { paper_mode }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['accounts'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['accounts'] }); setError(null) },
+    onError: () => setError('Failed to update trading mode.'),
   })
 
   function handleSubmit(e: React.FormEvent) {
@@ -172,6 +177,13 @@ export default function TradingAccounts() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400 flex items-center justify-between">
+          <span>{error}</span>
+          <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => setError(null)}>Dismiss</Button>
+        </div>
+      )}
 
       {(!accounts || accounts.length === 0) && (
         <Card className="border-dashed">

@@ -1,5 +1,5 @@
-import { createContext, useState, useCallback, ReactNode } from 'react'
-import axios from 'axios'
+import { createContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react'
+import axios, { AxiosError } from 'axios'
 
 interface AuthContextType {
   token: string | null
@@ -12,11 +12,59 @@ export const AuthContext = createContext<AuthContextType | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'))
+  const logoutRef = useRef<() => void>(() => {})
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('refresh_token')
+    setToken(null)
+    delete axios.defaults.headers.common['Authorization']
+    window.location.href = '/login'
+  }, [])
+
+  logoutRef.current = logout
+
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      (response) => response,
+      async (error: AxiosError) => {
+        const originalRequest = error.config
+        if (
+          error.response?.status === 401 &&
+          originalRequest &&
+          !originalRequest.url?.includes('/auth/')
+        ) {
+          const refreshToken = localStorage.getItem('refresh_token')
+          if (refreshToken) {
+            try {
+              const res = await axios.post('/auth/refresh', {
+                refresh_token: refreshToken,
+              })
+              const newToken = res.data.access_token
+              localStorage.setItem('token', newToken)
+              localStorage.setItem('refresh_token', res.data.refresh_token)
+              setToken(newToken)
+              axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`
+              originalRequest.headers['Authorization'] = `Bearer ${newToken}`
+              return axios(originalRequest)
+            } catch {
+              logoutRef.current()
+              return Promise.reject(error)
+            }
+          }
+          logoutRef.current()
+        }
+        return Promise.reject(error)
+      },
+    )
+    return () => axios.interceptors.response.eject(interceptor)
+  }, [])
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await axios.post('/auth/login', { email, password })
     const t = res.data.access_token
     localStorage.setItem('token', t)
+    localStorage.setItem('refresh_token', res.data.refresh_token)
     setToken(t)
     axios.defaults.headers.common['Authorization'] = `Bearer ${t}`
   }, [])
@@ -25,14 +73,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await axios.post('/auth/register', { email, password, name })
     const t = res.data.access_token
     localStorage.setItem('token', t)
+    localStorage.setItem('refresh_token', res.data.refresh_token)
     setToken(t)
     axios.defaults.headers.common['Authorization'] = `Bearer ${t}`
-  }, [])
-
-  const logout = useCallback(() => {
-    localStorage.removeItem('token')
-    setToken(null)
-    delete axios.defaults.headers.common['Authorization']
   }, [])
 
   if (token) {
