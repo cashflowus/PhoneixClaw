@@ -259,6 +259,7 @@ docker system df
 
 | Problem | Solution |
 |---|---|
+| **Backtesting tab missing** | Dashboard is serving a cached build. **Fix:** 1) In Coolify, go to your resource → **Deploy** → click the **⋮** menu → **Force Deploy** (rebuilds without cache). 2) Or: **Configuration → Advanced** → enable **Disabled Build Cache** → **Deploy**. 3) Hard-refresh browser (Ctrl+Shift+R or Cmd+Shift+R). |
 | **Build fails** | Check build logs in Coolify. Usually a missing env var or Docker context issue. |
 | **"502 Bad Gateway"** | Services still starting. Wait 1–2 min. Check `docker ps` for unhealthy containers. |
 | **Dashboard loads but API calls fail** | Verify `api-gateway` container is running. Check `docker logs api-gateway`. |

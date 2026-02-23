@@ -287,6 +287,8 @@ services:
     build:
       context: services/nlp-parser
       dockerfile: Dockerfile
+      args:
+        CACHEBUST: ${CACHEBUST:-1}
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     healthcheck:
@@ -308,6 +310,8 @@ services:
     build:
       context: services/dashboard-ui
       dockerfile: Dockerfile
+      args:
+        CACHEBUST: ${CACHEBUST:-1}
     ports:
       - "3080:80"
     depends_on:

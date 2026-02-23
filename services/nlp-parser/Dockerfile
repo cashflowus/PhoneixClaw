@@ -1,4 +1,7 @@
 FROM python:3.12-slim AS builder
+# Cache-bust: prevents "image already exists" conflict in parallel Coolify builds
+ARG CACHEBUST=1
+RUN echo "Build cache bust: $CACHEBUST" > /dev/null
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential && \
