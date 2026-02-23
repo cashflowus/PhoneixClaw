@@ -78,6 +78,10 @@ async def fetch_channel_history(
 
     try:
         await client.start(token, bot=is_bot)
+    except TypeError:
+        # discord.py-self does not accept the bot= parameter
+        logger.info("Retrying client.start without bot= param (discord.py-self)")
+        await client.start(token)
     except Exception as e:
         logger.error("Discord fetch failed: %s", e)
         if "401" in str(e) or "Unauthorized" in str(e) or "LoginFailure" in type(e).__name__:
