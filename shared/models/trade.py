@@ -498,3 +498,27 @@ class NotificationLog(Base):
     read = Column(Boolean, nullable=False, default=False)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class BoardTask(Base):
+    __tablename__ = "board_tasks"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String(50), nullable=False, default="refinement")
+    priority = Column(String(20), nullable=False, default="medium")
+    position = Column(Integer, nullable=False, default=0)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    assigned_to = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index("idx_board_task_status", "status", "position"),
+    )

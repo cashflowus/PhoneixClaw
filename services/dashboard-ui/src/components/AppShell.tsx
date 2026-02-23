@@ -26,6 +26,7 @@ import {
   UserCog,
   LineChart,
   Workflow,
+  KanbanSquare,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -44,6 +45,7 @@ const baseNavItems = [
 const adminNavItems = [
   { to: '/access', icon: UserCog, label: 'Access Management' },
   { to: '/admin', icon: ShieldCheck, label: 'Admin Panel' },
+  { to: '/board', icon: KanbanSquare, label: 'Sprint Board' },
 ]
 
 function NavItem({
@@ -183,6 +185,7 @@ const pageTitles: Record<string, string> = {
   '/system': 'System',
   '/access': 'Access Management',
   '/admin': 'Admin Panel',
+  '/board': 'Sprint Board',
 }
 
 function getInitials(name: string | null | undefined, email: string | null | undefined): string {

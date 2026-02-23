@@ -15,6 +15,7 @@ import TradePipelines from './pages/TradePipelines'
 import System from './pages/System'
 import Admin from './pages/Admin'
 import AccessManagement from './pages/AccessManagement'
+import SprintBoard from './pages/SprintBoard'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuth()
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="system" element={<System />} />
           <Route path="admin" element={<Admin />} />
           <Route path="access" element={<AccessManagement />} />
+          <Route path="board" element={<SprintBoard />} />
         </Route>
       </Routes>
       {token && <ChatWidget />}
