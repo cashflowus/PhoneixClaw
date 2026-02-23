@@ -21,6 +21,8 @@ class SourceCreate(BaseModel):
     display_name: str
     auth_type: str = "user_token"
     credentials: dict
+    server_id: str | None = None
+    server_name: str | None = None
 
 class SourceResponse(BaseModel):
     id: str
@@ -29,9 +31,15 @@ class SourceResponse(BaseModel):
     auth_type: str
     enabled: bool
     connection_status: str
+    server_id: str | None = None
+    server_name: str | None = None
     created_at: str
     owner_email: str | None = None
     owner_name: str | None = None
+
+class DiscoverServersRequest(BaseModel):
+    token: str
+    auth_type: str = "user_token"
 
 class ChannelCreate(BaseModel):
     channel_identifier: str
@@ -102,6 +110,20 @@ async def _ensure_channels_from_credentials(source: DataSource, credentials: dic
     return created
 
 
+@router.post("/discover-servers")
+async def discover_servers_endpoint(req: DiscoverServersRequest, request: Request):
+    """Discover Discord servers accessible with the given token."""
+    from shared.discord_utils.channel_discovery import discover_servers
+    try:
+        servers = await discover_servers(req.token, auth_type=req.auth_type)
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Server discovery failed")
+        raise HTTPException(status_code=502, detail=f"Discovery failed: {str(exc)[:200]}")
+    return {"servers": servers}
+
+
 @router.post("", response_model=SourceResponse, status_code=201)
 async def create_source(req: SourceCreate, request: Request, session: AsyncSession = Depends(get_session)):
     user_id = request.state.user_id
@@ -109,6 +131,8 @@ async def create_source(req: SourceCreate, request: Request, session: AsyncSessi
         user_id=uuid.UUID(user_id), source_type=req.source_type,
         display_name=req.display_name, auth_type=req.auth_type,
         credentials_encrypted=encrypt_credentials(req.credentials),
+        server_id=req.server_id,
+        server_name=req.server_name,
     )
     session.add(source)
     await session.commit()
@@ -206,6 +230,11 @@ async def sync_channels(source_id: str, request: Request, session: AsyncSession 
         except Exception as exc:
             logger.exception("Channel discovery failed for source %s", source_id)
             raise HTTPException(status_code=502, detail=f"Discovery failed: {str(exc)[:200]}")
+
+        if source.server_id:
+            discovered = [
+                ch for ch in discovered if ch.get("guild_id") == source.server_id
+            ]
 
         result = await session.execute(
             select(Channel.channel_identifier).where(Channel.data_source_id == source.id)
@@ -393,6 +422,8 @@ def _source_response(
         id=str(s.id), source_type=s.source_type,
         display_name=s.display_name, auth_type=s.auth_type,
         enabled=s.enabled, connection_status=s.connection_status,
+        server_id=getattr(s, "server_id", None),
+        server_name=getattr(s, "server_name", None),
         created_at=s.created_at.isoformat(),
         owner_email=owner_email,
         owner_name=owner_name,

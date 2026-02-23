@@ -143,7 +143,20 @@ def run_backtest(
                     p = stack.pop(0)
                     closed += 1
                     entry = float(p.entry_price)
-                    raw_diff = (price - entry) if p.option_type == "CALL" else (entry - price)
+                    tp_price = entry * (1 + profit_target)
+                    sl_price = entry * (1 - stop_loss)
+
+                    if price >= tp_price:
+                        exit_price = tp_price
+                        exit_reason = "TAKE_PROFIT"
+                    elif price <= sl_price:
+                        exit_price = sl_price
+                        exit_reason = "STOP_LOSS"
+                    else:
+                        exit_price = price
+                        exit_reason = "MANUAL"
+
+                    raw_diff = (exit_price - entry) if p.option_type == "CALL" else (entry - exit_price)
                     pnl = raw_diff * OPTIONS_MULTIPLIER
                     total_pnl += pnl
                     if pnl > 0:
@@ -166,21 +179,31 @@ def run_backtest(
                             action="SELL",
                             quantity=1,
                             entry_price=p.entry_price,
-                            exit_price=price,
+                            exit_price=exit_price,
                             entry_ts=p.entry_ts,
                             exit_ts=ts,
-                            exit_reason="MANUAL",
+                            exit_reason=exit_reason,
                             realized_pnl=pnl,
                             raw_message=p.raw_message,
                         )
                     )
 
-    # Close any remaining positions at 0 PnL
+    # Close remaining positions at stop-loss (conservative assumption)
     for key, stack in list(positions.items()):
         end_ts = sorted_msgs[-1]["timestamp"] if sorted_msgs else datetime.now(timezone.utc)
         if end_ts.tzinfo is None:
             end_ts = end_ts.replace(tzinfo=timezone.utc)
         for p in stack:
+            entry = float(p.entry_price)
+            sl_price = entry * (1 - stop_loss)
+            raw_diff = (sl_price - entry) if p.option_type == "CALL" else (entry - sl_price)
+            pnl = raw_diff * OPTIONS_MULTIPLIER
+            total_pnl += pnl
+            losing += 1
+            loss_sum += pnl
+            peak = max(peak, total_pnl)
+            max_drawdown = max(max_drawdown, peak - total_pnl)
+
             trades.append(
                 SimulatedTrade(
                     trade_id=str(uuid.uuid4()),
@@ -191,11 +214,11 @@ def run_backtest(
                     action="SELL",
                     quantity=1,
                     entry_price=p.entry_price,
-                    exit_price=p.entry_price,
+                    exit_price=sl_price,
                     entry_ts=p.entry_ts,
                     exit_ts=end_ts,
-                    exit_reason="EXPIRED",
-                    realized_pnl=0.0,
+                    exit_reason="STOP_LOSS",
+                    realized_pnl=pnl,
                     raw_message=p.raw_message,
                 )
             )

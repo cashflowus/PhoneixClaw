@@ -26,6 +26,8 @@ interface Source {
   source_type: string
   connection_status: string
   enabled: boolean
+  server_id?: string | null
+  server_name?: string | null
 }
 
 interface Channel {
@@ -233,10 +235,27 @@ export default function TradePipelines() {
     return false
   }
 
+  const handleNext = () => {
+    if (step === 1 && form.data_source_id) {
+      const src = sources?.find(s => s.id === form.data_source_id)
+      if (src?.server_id) {
+        setSelectedGuild(src.server_id)
+        setStep(3)
+        return
+      }
+    }
+    setStep(s => s + 1)
+  }
+
   const handleBack = () => {
     if (step === 3) {
       setForm(f => ({ ...f, channel_id: '' }))
       setChannelSearch('')
+      const src = sources?.find(s => s.id === form.data_source_id)
+      if (src?.server_id) {
+        setStep(1)
+        return
+      }
     }
     if (step === 2) {
       setSelectedGuild('')
@@ -315,7 +334,9 @@ export default function TradePipelines() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium truncate">{s.display_name}</p>
-                              <p className="text-xs text-muted-foreground">Discord &middot; {s.enabled ? 'Enabled' : 'Disabled'}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {s.server_name ? s.server_name : 'Discord'} &middot; {s.enabled ? 'Enabled' : 'Disabled'}
+                              </p>
                             </div>
                             <Badge
                               variant={s.connection_status === 'CONNECTED' ? 'default' : 'secondary'}
@@ -545,7 +566,7 @@ export default function TradePipelines() {
                 )}
                 <div className="flex-1" />
                 {step < 4 ? (
-                  <Button onClick={() => setStep(s => s + 1)} disabled={!canAdvance()}>
+                  <Button onClick={handleNext} disabled={!canAdvance()}>
                     Next <ChevronRight className="ml-1 h-4 w-4" />
                   </Button>
                 ) : (

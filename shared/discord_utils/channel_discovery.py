@@ -89,3 +89,25 @@ async def discover_channels(
         raise error_holder[0]
 
     return channels
+
+
+async def discover_servers(
+    token: str,
+    auth_type: str = "user_token",
+) -> list[dict]:
+    """Return deduplicated list of guilds the token has access to.
+
+    Each dict: {guild_id, guild_name, channel_count}
+    """
+    all_channels = await discover_channels(token, auth_type=auth_type)
+    guild_map: dict[str, dict] = {}
+    for ch in all_channels:
+        gid = ch["guild_id"]
+        if gid not in guild_map:
+            guild_map[gid] = {
+                "guild_id": gid,
+                "guild_name": ch["guild_name"],
+                "channel_count": 0,
+            }
+        guild_map[gid]["channel_count"] += 1
+    return sorted(guild_map.values(), key=lambda g: g["guild_name"])

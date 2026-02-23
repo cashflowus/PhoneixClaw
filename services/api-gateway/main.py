@@ -52,6 +52,8 @@ async def _run_migrations():
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{}'::jsonb",
         "ALTER TABLE channels ADD COLUMN IF NOT EXISTS guild_id VARCHAR(100)",
         "ALTER TABLE channels ADD COLUMN IF NOT EXISTS guild_name VARCHAR(200)",
+        "ALTER TABLE data_sources ADD COLUMN IF NOT EXISTS server_id VARCHAR(100)",
+        "ALTER TABLE data_sources ADD COLUMN IF NOT EXISTS server_name VARCHAR(200)",
     ]
     async with engine.begin() as conn:
         for sql in migrations:

@@ -139,6 +139,8 @@ class DataSource(Base):
     display_name = Column(String(100), nullable=False)
     auth_type = Column(String(20), nullable=False, default="user_token")
     credentials_encrypted = Column(LargeBinary, nullable=False)
+    server_id = Column(String(100), nullable=True)
+    server_name = Column(String(200), nullable=True)
     enabled = Column(Boolean, nullable=False, default=True)
     connection_status = Column(String(20), nullable=False, default="DISCONNECTED")
     last_connected_at = Column(DateTime(timezone=True), nullable=True)

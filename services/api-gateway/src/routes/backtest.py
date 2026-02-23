@@ -25,6 +25,8 @@ class BacktestCreate(BaseModel):
     channel_id: str
     trading_account_id: str
     name: str | None = None
+    profit_target: float = 0.30
+    stop_loss: float = 0.20
 
 
 class BacktestRunResponse(BaseModel):
@@ -149,7 +151,11 @@ async def create_and_run_backtest(
             auth_type=auth_type,
         )
 
-        trade_dicts, summary = run_backtest(messages)
+        trade_dicts, summary = run_backtest(
+            messages,
+            profit_target=req.profit_target,
+            stop_loss=req.stop_loss,
+        )
 
         run.status = "completed"
         run.summary = summary

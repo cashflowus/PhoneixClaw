@@ -100,6 +100,8 @@ export default function Backtesting() {
     channel_id: '',
     trading_account_id: '',
     name: '',
+    profit_target: '30',
+    stop_loss: '20',
   })
 
   const { data: runs, isLoading: runsLoading } = useQuery<BacktestRun[]>({
@@ -159,7 +161,7 @@ export default function Backtesting() {
       qc.invalidateQueries({ queryKey: ['backtest'] })
       setWizardOpen(false)
       setStep(0)
-      setForm({ start_date: '', end_date: '', data_source_id: '', channel_id: '', trading_account_id: '', name: '' })
+      setForm({ start_date: '', end_date: '', data_source_id: '', channel_id: '', trading_account_id: '', name: '', profit_target: '30', stop_loss: '20' })
       setSelectedRunId(res.data.id)
     },
     onError: (err: unknown) => {
@@ -188,6 +190,8 @@ export default function Backtesting() {
   const handleRun = () => {
     const start = form.start_date ? `${form.start_date}T00:00:00Z` : ''
     const end = form.end_date ? `${form.end_date}T23:59:59Z` : ''
+    const pt = parseFloat(form.profit_target) / 100
+    const sl = parseFloat(form.stop_loss) / 100
     createMutation.mutate({
       start_date: start,
       end_date: end,
@@ -195,6 +199,8 @@ export default function Backtesting() {
       channel_id: form.channel_id,
       trading_account_id: form.trading_account_id,
       name: form.name || undefined,
+      profit_target: isNaN(pt) ? 0.30 : pt,
+      stop_loss: isNaN(sl) ? 0.20 : sl,
     })
   }
 
@@ -216,7 +222,7 @@ export default function Backtesting() {
         </p>
         <Dialog open={wizardOpen} onOpenChange={setWizardOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => { setStep(0); setForm({ start_date: '', end_date: '', data_source_id: '', channel_id: '', trading_account_id: '', name: '' }) }}>
+            <Button onClick={() => { setStep(0); setForm({ start_date: '', end_date: '', data_source_id: '', channel_id: '', trading_account_id: '', name: '', profit_target: '30', stop_loss: '20' }) }}>
               <Plus className="mr-2 h-4 w-4" /> New Backtest
             </Button>
           </DialogTrigger>
@@ -309,7 +315,39 @@ export default function Backtesting() {
                     <Label>Name (optional)</Label>
                     <Input placeholder="e.g. SPX Weekly Jan 2025" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
                   </div>
-                  <p className="text-sm text-muted-foreground">Click Run to fetch Discord messages and simulate trades.</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label>Take Profit %</Label>
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={500}
+                          value={form.profit_target}
+                          onChange={e => setForm(f => ({ ...f, profit_target: e.target.value }))}
+                          className="pr-8"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Exit at this profit (default 30%)</p>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Stop Loss %</Label>
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={100}
+                          value={form.stop_loss}
+                          onChange={e => setForm(f => ({ ...f, stop_loss: e.target.value }))}
+                          className="pr-8"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Cut losses at this level (default 20%)</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Click Run to fetch Discord messages and simulate trades with TP/SL strategy.</p>
                 </div>
               )}
             </div>
@@ -444,7 +482,24 @@ export default function Backtesting() {
                               <TableCell className={t.realized_pnl != null ? (t.realized_pnl >= 0 ? 'text-green-600' : 'text-red-600') : ''}>
                                 {t.realized_pnl != null ? `$${t.realized_pnl.toFixed(2)}` : '—'}
                               </TableCell>
-                              <TableCell className="text-xs">{t.exit_reason ?? '—'}</TableCell>
+                              <TableCell>
+                                {t.exit_reason ? (
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-[10px] ${
+                                      t.exit_reason === 'TAKE_PROFIT'
+                                        ? 'border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-400'
+                                        : t.exit_reason === 'STOP_LOSS'
+                                          ? 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-400'
+                                          : t.exit_reason === 'MANUAL'
+                                            ? 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400'
+                                            : ''
+                                    }`}
+                                  >
+                                    {t.exit_reason === 'TAKE_PROFIT' ? 'TP' : t.exit_reason === 'STOP_LOSS' ? 'SL' : t.exit_reason}
+                                  </Badge>
+                                ) : '—'}
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
