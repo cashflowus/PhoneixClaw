@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,7 +16,8 @@ import {
 } from '@/components/ui/select'
 import {
   Plus, Loader2, Play, Square, Trash2, RefreshCw, Workflow,
-  Database, Hash, Wallet, AlertCircle, CheckCircle2, XCircle, ChevronRight,
+  Database, Hash, Wallet, AlertCircle, CheckCircle2, XCircle,
+  ChevronRight, Search, Server, ChevronLeft,
 } from 'lucide-react'
 
 interface Source {
@@ -65,6 +66,12 @@ interface Pipeline {
   updated_at: string
 }
 
+interface GuildInfo {
+  guild_id: string
+  guild_name: string
+  channel_count: number
+}
+
 const STATUS_CONFIG: Record<string, { color: string; icon: React.ElementType }> = {
   CONNECTED: { color: 'bg-green-500', icon: CheckCircle2 },
   CONNECTING: { color: 'bg-yellow-500 animate-pulse', icon: Loader2 },
@@ -74,12 +81,27 @@ const STATUS_CONFIG: Record<string, { color: string; icon: React.ElementType }> 
   DISCONNECTED: { color: 'bg-gray-400', icon: Square },
 }
 
+const STEP_LABELS = [
+  'Select data source',
+  'Select server',
+  'Select channel',
+  'Configure pipeline',
+]
+
+function channelDisplayName(ch: Channel): string {
+  const raw = ch.display_name || ''
+  const stripped = raw.replace(/^.+\/\s*#/, '')
+  return stripped || ch.channel_identifier
+}
+
 export default function TradePipelines() {
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [step, setStep] = useState(1)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedGuild, setSelectedGuild] = useState<string>('')
+  const [channelSearch, setChannelSearch] = useState('')
 
   const [form, setForm] = useState({
     name: '',
@@ -92,7 +114,7 @@ export default function TradePipelines() {
 
   useEffect(() => {
     if (error) {
-      const t = setTimeout(() => setError(null), 5000)
+      const t = setTimeout(() => setError(null), 6000)
       return () => clearTimeout(t)
     }
   }, [error])
@@ -118,6 +140,30 @@ export default function TradePipelines() {
     queryKey: ['accounts'],
     queryFn: () => axios.get('/api/v1/accounts').then(r => r.data),
   })
+
+  const guilds = useMemo<GuildInfo[]>(() => {
+    if (!channels) return []
+    const map = new Map<string, GuildInfo>()
+    for (const ch of channels) {
+      const gid = ch.guild_id || '_unknown'
+      const gname = ch.guild_name || 'Unknown Server'
+      if (!map.has(gid)) {
+        map.set(gid, { guild_id: gid, guild_name: gname, channel_count: 0 })
+      }
+      map.get(gid)!.channel_count++
+    }
+    return Array.from(map.values()).sort((a, b) => a.guild_name.localeCompare(b.guild_name))
+  }, [channels])
+
+  const filteredChannels = useMemo(() => {
+    if (!channels) return []
+    let list = channels.filter(ch => (ch.guild_id || '_unknown') === selectedGuild)
+    if (channelSearch.trim()) {
+      const q = channelSearch.toLowerCase()
+      list = list.filter(ch => channelDisplayName(ch).toLowerCase().includes(q))
+    }
+    return list.sort((a, b) => channelDisplayName(a).localeCompare(channelDisplayName(b)))
+  }, [channels, selectedGuild, channelSearch])
 
   const createMutation = useMutation({
     mutationFn: (data: typeof form) => axios.post('/api/v1/pipelines', data),
@@ -157,10 +203,18 @@ export default function TradePipelines() {
     setSyncing(false)
   }
 
+  useEffect(() => {
+    if (step === 2 && form.data_source_id && channels !== undefined && channels.length === 0 && !syncing) {
+      handleSyncChannels()
+    }
+  }, [step, form.data_source_id, channels])
+
   const resetDialog = () => {
     setDialogOpen(false)
     setStep(1)
     setForm({ name: '', data_source_id: '', channel_id: '', trading_account_id: '', auto_approve: true, paper_mode: false })
+    setSelectedGuild('')
+    setChannelSearch('')
     setError(null)
   }
 
@@ -172,15 +226,27 @@ export default function TradePipelines() {
     createMutation.mutate(form)
   }
 
+  const canAdvance = () => {
+    if (step === 1) return !!form.data_source_id
+    if (step === 2) return !!selectedGuild
+    if (step === 3) return !!form.channel_id
+    return false
+  }
+
+  const handleBack = () => {
+    if (step === 3) {
+      setForm(f => ({ ...f, channel_id: '' }))
+      setChannelSearch('')
+    }
+    if (step === 2) {
+      setSelectedGuild('')
+    }
+    setStep(s => s - 1)
+  }
+
   const selectedChannel = channels?.find(c => c.id === form.channel_id)
   const selectedSource = sources?.find(s => s.id === form.data_source_id)
-
-  const groupedChannels = channels?.reduce<Record<string, Channel[]>>((acc, ch) => {
-    const guild = ch.guild_name || 'Unknown Server'
-    if (!acc[guild]) acc[guild] = []
-    acc[guild].push(ch)
-    return acc
-  }, {}) || {}
+  const selectedGuildInfo = guilds.find(g => g.guild_id === selectedGuild)
 
   return (
     <div className="space-y-6">
@@ -203,124 +269,235 @@ export default function TradePipelines() {
               <DialogHeader>
                 <DialogTitle>Create Trade Pipeline</DialogTitle>
                 <DialogDescription>
-                  {step === 1 && 'Step 1: Select your Discord data source'}
-                  {step === 2 && 'Step 2: Choose a channel to monitor'}
-                  {step === 3 && 'Step 3: Configure pipeline and trading account'}
+                  Step {step} of 4: {STEP_LABELS[step - 1]}
                 </DialogDescription>
               </DialogHeader>
 
               {error && (
-                <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">
+                <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">
                   <AlertCircle className="h-4 w-4 shrink-0" />
-                  {error}
+                  <span className="flex-1">{error}</span>
                 </div>
               )}
 
-              <div className="flex gap-2 mb-4">
-                {[1, 2, 3].map(s => (
-                  <div key={s} className={`flex-1 h-1.5 rounded-full transition-colors ${s <= step ? 'bg-primary' : 'bg-muted'}`} />
+              {/* Progress bar */}
+              <div className="flex gap-1.5">
+                {[1, 2, 3, 4].map(s => (
+                  <div key={s} className="flex-1 flex flex-col items-center gap-1">
+                    <div className={`w-full h-1.5 rounded-full transition-colors duration-300 ${s <= step ? 'bg-primary' : 'bg-muted'}`} />
+                    <span className={`text-[10px] transition-colors ${s === step ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
+                      {s === 1 ? 'Source' : s === 2 ? 'Server' : s === 3 ? 'Channel' : 'Config'}
+                    </span>
+                  </div>
                 ))}
               </div>
 
+              {/* Step 1: Data Source */}
               {step === 1 && (
-                <div className="space-y-4">
+                <div className="space-y-4 py-2">
                   <div className="space-y-2">
-                    <Label>Data Source</Label>
-                    <Select
-                      value={form.data_source_id}
-                      onValueChange={v => setForm(f => ({ ...f, data_source_id: v, channel_id: '' }))}
-                    >
-                      <SelectTrigger><SelectValue placeholder="Select a Discord connection" /></SelectTrigger>
-                      <SelectContent>
-                        {sources?.filter(s => s.source_type === 'discord').map(s => (
-                          <SelectItem key={s.id} value={s.id}>
-                            <div className="flex items-center gap-2">
-                              <Database className="h-4 w-4 text-muted-foreground" />
-                              {s.display_name}
-                              <Badge variant={s.connection_status === 'CONNECTED' ? 'default' : 'secondary'} className="text-[10px] ml-1">
-                                {s.connection_status}
-                              </Badge>
+                    <Label className="text-sm font-medium">Discord Connection</Label>
+                    {sources?.filter(s => s.source_type === 'discord').length ? (
+                      <div className="space-y-2">
+                        {sources.filter(s => s.source_type === 'discord').map(s => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => setForm(f => ({ ...f, data_source_id: s.id, channel_id: '' }))}
+                            className={`w-full flex items-center gap-3 rounded-lg border p-3.5 text-left transition-all ${
+                              form.data_source_id === s.id
+                                ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                                : 'border-border hover:border-primary/40 hover:bg-accent/50'
+                            }`}
+                          >
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                              <Database className="h-5 w-5 text-primary" />
                             </div>
-                          </SelectItem>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{s.display_name}</p>
+                              <p className="text-xs text-muted-foreground">Discord &middot; {s.enabled ? 'Enabled' : 'Disabled'}</p>
+                            </div>
+                            <Badge
+                              variant={s.connection_status === 'CONNECTED' ? 'default' : 'secondary'}
+                              className="text-[10px] shrink-0"
+                            >
+                              {s.connection_status}
+                            </Badge>
+                          </button>
                         ))}
-                      </SelectContent>
-                    </Select>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed p-6 text-center">
+                        <Database className="h-8 w-8 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">
+                          No Discord data sources found.<br />
+                          Create one in the <strong>Data Sources</strong> page first.
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  {!sources?.filter(s => s.source_type === 'discord').length && (
-                    <p className="text-sm text-muted-foreground">
-                      No Discord data sources found. Create one in the Data Sources page first.
-                    </p>
-                  )}
                 </div>
               )}
 
+              {/* Step 2: Server */}
               {step === 2 && (
-                <div className="space-y-4">
+                <div className="space-y-4 py-2">
                   <div className="flex items-center justify-between">
-                    <Label>Channel</Label>
+                    <Label className="text-sm font-medium">Discord Server</Label>
                     <Button
                       type="button" variant="outline" size="sm"
                       onClick={handleSyncChannels} disabled={syncing}
+                      className="h-8"
                     >
-                      {syncing ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}
-                      Discover Channels
+                      {syncing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+                      {syncing ? 'Discovering...' : 'Refresh Servers'}
                     </Button>
                   </div>
 
-                  {channelsLoading ? (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground py-4 justify-center">
-                      <Loader2 className="h-4 w-4 animate-spin" /> Loading channels...
+                  {(channelsLoading || syncing) ? (
+                    <div className="flex flex-col items-center gap-3 py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      <p className="text-sm text-muted-foreground">Discovering servers and channels...</p>
                     </div>
-                  ) : channels && channels.length > 0 ? (
-                    <div className="max-h-64 overflow-y-auto space-y-3 pr-1">
-                      {Object.entries(groupedChannels).map(([guild, chs]) => (
-                        <div key={guild}>
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{guild}</p>
-                          <div className="space-y-1">
-                            {chs.map(ch => (
-                              <button
-                                key={ch.id}
-                                type="button"
-                                onClick={() => setForm(f => ({ ...f, channel_id: ch.id }))}
-                                className={`w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm text-left transition-colors ${
-                                  form.channel_id === ch.id
-                                    ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
-                                    : 'hover:bg-accent text-foreground'
-                                }`}
-                              >
-                                <Hash className="h-4 w-4 text-muted-foreground shrink-0" />
-                                <span className="truncate">{ch.display_name.replace(/^.+\/ #/, '')}</span>
-                                <span className="text-[10px] text-muted-foreground ml-auto shrink-0">{ch.channel_identifier}</span>
-                              </button>
-                            ))}
+                  ) : guilds.length > 0 ? (
+                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                      {guilds.map(g => (
+                        <button
+                          key={g.guild_id}
+                          type="button"
+                          onClick={() => setSelectedGuild(g.guild_id)}
+                          className={`w-full flex items-center gap-3 rounded-lg border p-3.5 text-left transition-all ${
+                            selectedGuild === g.guild_id
+                              ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                              : 'border-border hover:border-primary/40 hover:bg-accent/50'
+                          }`}
+                        >
+                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
+                            <Server className="h-5 w-5 text-indigo-500" />
                           </div>
-                        </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{g.guild_name}</p>
+                            <p className="text-xs text-muted-foreground">{g.channel_count} channel{g.channel_count !== 1 ? 's' : ''}</p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                        </button>
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-6 space-y-2">
-                      <Hash className="h-8 w-8 text-muted-foreground mx-auto" />
-                      <p className="text-sm text-muted-foreground">
-                        No channels found. Click "Discover Channels" to fetch channels from Discord.
-                      </p>
+                    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-8 text-center">
+                      <Server className="h-8 w-8 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">No servers found</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Click "Refresh Servers" to discover channels from your Discord account.
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
               )}
 
+              {/* Step 3: Channel */}
               {step === 3 && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Pipeline Name</Label>
+                <div className="space-y-3 py-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-sm font-medium">Channel</Label>
+                      {selectedGuildInfo && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          in {selectedGuildInfo.guild_name}
+                        </p>
+                      )}
+                    </div>
+                    <Badge variant="outline" className="text-xs">
+                      {filteredChannels.length} channel{filteredChannels.length !== 1 ? 's' : ''}
+                    </Badge>
+                  </div>
+
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder={selectedChannel ? `${selectedChannel.display_name.replace(/^.+\/ #/, '')} Pipeline` : 'My Pipeline'}
+                      placeholder="Search channels..."
+                      value={channelSearch}
+                      onChange={e => setChannelSearch(e.target.value)}
+                      className="pl-9 h-9"
+                    />
+                  </div>
+
+                  {filteredChannels.length > 0 ? (
+                    <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
+                      {filteredChannels.map(ch => {
+                        const name = channelDisplayName(ch)
+                        return (
+                          <button
+                            key={ch.id}
+                            type="button"
+                            onClick={() => setForm(f => ({ ...f, channel_id: ch.id }))}
+                            className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-left transition-all ${
+                              form.channel_id === ch.id
+                                ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
+                                : 'hover:bg-accent/70 text-foreground'
+                            }`}
+                          >
+                            <Hash className={`h-4 w-4 shrink-0 ${form.channel_id === ch.id ? 'text-primary' : 'text-muted-foreground'}`} />
+                            <span className="truncate font-medium">{name}</span>
+                            {form.channel_id === ch.id && (
+                              <CheckCircle2 className="h-4 w-4 text-primary ml-auto shrink-0" />
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : channelSearch ? (
+                    <div className="flex flex-col items-center gap-2 py-6 text-center">
+                      <Search className="h-6 w-6 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">
+                        No channels match "{channelSearch}"
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 py-6 text-center">
+                      <Hash className="h-6 w-6 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">No channels in this server</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Step 4: Configure */}
+              {step === 4 && (
+                <div className="space-y-4 py-2">
+                  {selectedSource && selectedChannel && (
+                    <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Database className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-muted-foreground">Source:</span>
+                        <span className="font-medium">{selectedSource.display_name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Server className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-muted-foreground">Server:</span>
+                        <span className="font-medium">{selectedGuildInfo?.guild_name || 'Unknown'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Hash className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-muted-foreground">Channel:</span>
+                        <span className="font-medium">{channelDisplayName(selectedChannel)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Pipeline Name</Label>
+                    <Input
+                      placeholder={selectedChannel ? `${channelDisplayName(selectedChannel)} Pipeline` : 'My Pipeline'}
                       value={form.name}
                       onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Trading Account</Label>
+                    <Label className="text-sm font-medium">Trading Account</Label>
                     <Select
                       value={form.trading_account_id}
                       onValueChange={v => setForm(f => ({ ...f, trading_account_id: v }))}
@@ -340,43 +517,35 @@ export default function TradePipelines() {
                     </Select>
                   </div>
 
-                  <div className="flex items-center justify-between rounded-md border p-3">
-                    <div>
-                      <p className="text-sm font-medium">Auto-Approve Trades</p>
-                      <p className="text-xs text-muted-foreground">Automatically approve parsed trades without manual review</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <p className="text-sm font-medium">Auto-Approve Trades</p>
+                        <p className="text-xs text-muted-foreground">Execute parsed trades without manual review</p>
+                      </div>
+                      <Switch checked={form.auto_approve} onCheckedChange={v => setForm(f => ({ ...f, auto_approve: v }))} />
                     </div>
-                    <Switch checked={form.auto_approve} onCheckedChange={v => setForm(f => ({ ...f, auto_approve: v }))} />
-                  </div>
 
-                  <div className="flex items-center justify-between rounded-md border p-3">
-                    <div>
-                      <p className="text-sm font-medium">Paper Trading Mode</p>
-                      <p className="text-xs text-muted-foreground">Simulate trades without real money</p>
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <p className="text-sm font-medium">Paper Trading</p>
+                        <p className="text-xs text-muted-foreground">Simulate trades without real money</p>
+                      </div>
+                      <Switch checked={form.paper_mode} onCheckedChange={v => setForm(f => ({ ...f, paper_mode: v }))} />
                     </div>
-                    <Switch checked={form.paper_mode} onCheckedChange={v => setForm(f => ({ ...f, paper_mode: v }))} />
                   </div>
-
-                  {selectedSource && selectedChannel && (
-                    <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
-                      <p><span className="text-muted-foreground">Source:</span> {selectedSource.display_name}</p>
-                      <p><span className="text-muted-foreground">Channel:</span> {selectedChannel.display_name}</p>
-                    </div>
-                  )}
                 </div>
               )}
 
-              <DialogFooter className="gap-2">
+              <DialogFooter className="gap-2 pt-2">
                 {step > 1 && (
-                  <Button variant="outline" onClick={() => setStep(s => s - 1)}>Back</Button>
+                  <Button variant="outline" onClick={handleBack}>
+                    <ChevronLeft className="mr-1 h-4 w-4" /> Back
+                  </Button>
                 )}
-                {step < 3 ? (
-                  <Button
-                    onClick={() => setStep(s => s + 1)}
-                    disabled={
-                      (step === 1 && !form.data_source_id) ||
-                      (step === 2 && !form.channel_id)
-                    }
-                  >
+                <div className="flex-1" />
+                {step < 4 ? (
+                  <Button onClick={() => setStep(s => s + 1)} disabled={!canAdvance()}>
                     Next <ChevronRight className="ml-1 h-4 w-4" />
                   </Button>
                 ) : (
@@ -391,6 +560,7 @@ export default function TradePipelines() {
         </div>
       </div>
 
+      {/* Pipeline list */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -398,7 +568,9 @@ export default function TradePipelines() {
       ) : !pipelines?.length ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 space-y-4">
-            <Workflow className="h-12 w-12 text-muted-foreground" />
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+              <Workflow className="h-8 w-8 text-primary" />
+            </div>
             <div className="text-center space-y-1">
               <h3 className="text-lg font-semibold">No Pipelines Yet</h3>
               <p className="text-sm text-muted-foreground max-w-sm">
@@ -415,10 +587,9 @@ export default function TradePipelines() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {pipelines.map(p => {
             const statusCfg = STATUS_CONFIG[p.status] || STATUS_CONFIG.STOPPED
-            const StatusIcon = statusCfg.icon
 
             return (
-              <Card key={p.id} className="relative">
+              <Card key={p.id} className="group relative overflow-hidden">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="space-y-1 min-w-0 flex-1">
@@ -481,16 +652,18 @@ export default function TradePipelines() {
                   </div>
 
                   {p.error_message && (
-                    <div className="text-xs text-red-500 bg-red-500/10 rounded p-2 truncate" title={p.error_message}>
+                    <div className="text-xs text-red-500 bg-red-500/10 rounded-lg p-2 truncate" title={p.error_message}>
                       {p.error_message}
                     </div>
                   )}
 
-                  <div className="flex gap-4 text-xs text-muted-foreground pt-1 border-t">
-                    <span>{p.messages_count} messages</span>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground pt-2 border-t">
+                    <span>{p.messages_count} msgs</span>
                     <span>{p.trades_count} trades</span>
-                    {p.auto_approve && <Badge variant="outline" className="text-[10px]">Auto</Badge>}
-                    {p.paper_mode && <Badge variant="outline" className="text-[10px]">Paper</Badge>}
+                    <div className="flex gap-1 ml-auto">
+                      {p.auto_approve && <Badge variant="outline" className="text-[10px]">Auto</Badge>}
+                      {p.paper_mode && <Badge variant="outline" className="text-[10px]">Paper</Badge>}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
