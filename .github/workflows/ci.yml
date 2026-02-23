@@ -27,6 +27,8 @@ jobs:
           python-version: "3.13"
       - run: pip install -e ".[dev]"
       - run: python -m pytest tests/unit/ -v --tb=short
+      - run: python -m pytest tests/integration/ -v --tb=short
+      - run: python scripts/parser_benchmark.py --min-precision 0.80
       - run: python -m pytest tests/unit/ --cov=shared --cov-report=xml
       - uses: codecov/codecov-action@v3
         with:

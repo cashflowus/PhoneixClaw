@@ -17,6 +17,11 @@ RUN python -c "from transformers import AutoModelForSequenceClassification, Auto
     AutoTokenizer.from_pretrained('ProsusAI/finbert'); \
     AutoModelForSequenceClassification.from_pretrained('ProsusAI/finbert')"
 
+# Pre-download FLAN-T5-small for BERT entity extraction
+RUN python -c "from transformers import AutoModelForSeq2SeqLM, AutoTokenizer; \
+    AutoTokenizer.from_pretrained('google/flan-t5-small'); \
+    AutoModelForSeq2SeqLM.from_pretrained('google/flan-t5-small')"
+
 # ─── Runtime stage ────────────────────────────────────────────────────
 FROM python:3.12-slim
 

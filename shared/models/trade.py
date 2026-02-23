@@ -391,6 +391,56 @@ class RawMessage(Base):
     )
 
 
+class BacktestRun(Base):
+    __tablename__ = "backtest_runs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(200), nullable=True)
+    data_source_id = Column(
+        UUID(as_uuid=True), ForeignKey("data_sources.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    channel_id = Column(
+        UUID(as_uuid=True), ForeignKey("channels.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    trading_account_id = Column(
+        UUID(as_uuid=True), ForeignKey("trading_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    start_date = Column(DateTime(timezone=True), nullable=False)
+    end_date = Column(DateTime(timezone=True), nullable=False)
+    status = Column(String(20), nullable=False, default="pending")
+    summary = Column(JSONB, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    __table_args__ = (Index("idx_backtest_run_user", "user_id", "created_at"),)
+
+
+class BacktestTrade(Base):
+    __tablename__ = "backtest_trades"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    backtest_run_id = Column(
+        UUID(as_uuid=True), ForeignKey("backtest_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    trade_id = Column(UUID(as_uuid=True), default=uuid.uuid4, nullable=False)
+    ticker = Column(String(10), nullable=False)
+    strike = Column(Numeric(10, 2), nullable=False)
+    option_type = Column(String(4), nullable=False)
+    expiration = Column(DateTime, nullable=True)
+    action = Column(String(4), nullable=False)
+    quantity = Column(String(20), nullable=False)
+    entry_price = Column(Numeric(10, 2), nullable=False)
+    exit_price = Column(Numeric(10, 2), nullable=True)
+    entry_ts = Column(DateTime(timezone=True), nullable=False)
+    exit_ts = Column(DateTime(timezone=True), nullable=True)
+    exit_reason = Column(String(20), nullable=True)
+    realized_pnl = Column(Numeric(12, 2), nullable=True)
+    raw_message = Column(Text, nullable=True)
+
+    __table_args__ = (Index("idx_backtest_trade_run", "backtest_run_id"),)
+
+
 class NotificationLog(Base):
     __tablename__ = "notification_log"
 

@@ -10,7 +10,8 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///test.db")
 os.environ.setdefault("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379")
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-testing-only")
-os.environ.setdefault("CREDENTIAL_ENCRYPTION_KEY", "dGVzdC1lbmNyeXB0aW9uLWtleS0xMjM0NTY3ODkw")
+if not os.environ.get("CREDENTIAL_ENCRYPTION_KEY"):
+    os.environ["CREDENTIAL_ENCRYPTION_KEY"] = "5auLTQ2PfTgU_G8sw3-QGC0C9e26Rs_51rBMrfoeR_A="
 
 
 @pytest.fixture

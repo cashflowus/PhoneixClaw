@@ -1,0 +1,78 @@
+[
+  {
+    "input": "BTO AAPL 190C 3/21 @ 2.50",
+    "expected": {
+      "actions": [
+        {"action": "BUY", "ticker": "AAPL", "strike": 190.0, "option_type": "CALL", "price": 2.5, "quantity": 1}
+      ]
+    }
+  },
+  {
+    "input": "STC AAPL 190C @ 3.00",
+    "expected": {
+      "actions": [
+        {"action": "SELL", "ticker": "AAPL", "strike": 190.0, "option_type": "CALL", "price": 3.0, "quantity": 1}
+      ]
+    }
+  },
+  {
+    "input": "Bought IWM 250P at 1.50 Exp: 02/20/2026",
+    "expected": {
+      "actions": [
+        {"action": "BUY", "ticker": "IWM", "strike": 250.0, "option_type": "PUT", "price": 1.5, "quantity": 1}
+      ]
+    }
+  },
+  {
+    "input": "Bought SPX 6940C at 4.80",
+    "expected": {
+      "actions": [
+        {"action": "BUY", "ticker": "SPX", "strike": 6940.0, "option_type": "CALL", "price": 4.8, "quantity": 1}
+      ]
+    }
+  },
+  {
+    "input": "Sold 50% SPX 6950C at 6.50",
+    "expected": {
+      "actions": [
+        {"action": "SELL", "ticker": "SPX", "strike": 6950.0, "option_type": "CALL", "price": 6.5}
+      ]
+    }
+  },
+  {
+    "input": "Bought 5 SPX 6940C at 4.80",
+    "expected": {
+      "actions": [
+        {"action": "BUY", "ticker": "SPX", "strike": 6940.0, "option_type": "CALL", "price": 4.8, "quantity": 5}
+      ]
+    }
+  },
+  {
+    "input": "Hey everyone, market looks bullish today!",
+    "expected": {"actions": []}
+  },
+  {
+    "input": "BTO SPY 500C 3/21 @ 2.00",
+    "expected": {
+      "actions": [
+        {"action": "BUY", "ticker": "SPY", "strike": 500.0, "option_type": "CALL", "price": 2.0, "quantity": 1}
+      ]
+    }
+  },
+  {
+    "input": "Buy AAPL 180P at 2.80",
+    "expected": {
+      "actions": [
+        {"action": "BUY", "ticker": "AAPL", "strike": 180.0, "option_type": "PUT", "price": 2.8, "quantity": 1}
+      ]
+    }
+  },
+  {
+    "input": "Bought TSLA 250.5C at 5.00",
+    "expected": {
+      "actions": [
+        {"action": "BUY", "ticker": "TSLA", "strike": 250.5, "option_type": "CALL", "price": 5.0, "quantity": 1}
+      ]
+    }
+  }
+]

@@ -72,4 +72,5 @@ services/dashboard-ui/.vite/
 docker-compose.override.yml
 
 # Data
-data/
+data/*
+!data/parser_test_cases.json

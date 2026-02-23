@@ -10,6 +10,7 @@ import TradingAccounts from './pages/TradingAccounts'
 import RawMessages from './pages/RawMessages'
 import Analytics from './pages/Analytics'
 import Positions from './pages/Positions'
+import Backtesting from './pages/Backtesting'
 import System from './pages/System'
 import Admin from './pages/Admin'
 import AccessManagement from './pages/AccessManagement'
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="sources" element={<DataSources />} />
           <Route path="accounts" element={<TradingAccounts />} />
           <Route path="positions" element={<Positions />} />
+          <Route path="backtest" element={<Backtesting />} />
           <Route path="messages" element={<RawMessages />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="system" element={<System />} />

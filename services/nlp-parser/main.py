@@ -52,6 +52,12 @@ async def startup():
     sample = "BTO AAPL 190C 3/21 @ 2.50"
     classify_intent(sample)
     extract_entities(sample)
+    try:
+        from src.bert_entity_extractor import extract_entities_bert
+        extract_entities_bert(sample)
+        logger.info("BERT entity extractor loaded")
+    except Exception as e:
+        logger.warning("BERT entity extractor not loaded: %s", e)
     logger.info("NLP models loaded and ready")
 
 
@@ -60,15 +66,27 @@ async def health():
     return {"status": "ready", "service": "nlp-parser"}
 
 
+def _get_entities(text: str) -> dict:
+    """Try BERT entity extraction first, fall back to spaCy+regex."""
+    from src.bert_entity_extractor import extract_entities_bert
+    from src.entity_extractor import extract_entities
+
+    bert_result = extract_entities_bert(text)
+    if bert_result and bert_result.get("ticker") and (
+        bert_result.get("price") or bert_result.get("strike")
+    ):
+        return bert_result
+    return extract_entities(text)
+
+
 @app.post("/parse", response_model=ParseResponse)
 async def parse_message(req: ParseRequest):
-    from src.entity_extractor import extract_entities
     from src.intent_classifier import classify_intent
 
     start = time.monotonic()
 
     intent = classify_intent(req.text)
-    entities = extract_entities(req.text)
+    entities = _get_entities(req.text)
 
     action = intent.get("action")
     if entities.get("option_type") and not action:

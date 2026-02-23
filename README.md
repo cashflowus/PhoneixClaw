@@ -305,12 +305,31 @@ make test-cov
 # Run specific test file
 python3 -m pytest tests/unit/test_trade_parser.py -v
 
+# Run integration tests (backtest API)
+python3 -m pytest tests/integration/ -v
+
 # Run latency benchmark
 make benchmark
 
 # Load testing (requires: pip install locust)
 locust -f tests/load/locustfile.py --host http://localhost:8011
 ```
+
+### Backtest E2E (Manual, Real Discord)
+
+To verify the backtest pipeline end-to-end with real Discord data:
+
+```bash
+export DISCORD_TOKEN="your-user-or-bot-token"
+export CHANNEL_ID="123456789012345678"
+export START_DATE="2025-01-01T00:00:00Z"
+export END_DATE="2025-01-31T23:59:59Z"
+export AUTH_TYPE="user_token"   # or "bot" for bot token
+
+python3 scripts/test_backtest_e2e.py
+```
+
+The script fetches messages from the channel, parses them with the regex parser, runs the backtest engine, and prints results. Requires `discord.py` or `discord.py-self` (see `DISCORD_TOKEN_GUIDE.md` for token setup).
 
 ---
 
