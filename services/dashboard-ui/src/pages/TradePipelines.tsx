@@ -206,7 +206,7 @@ export default function TradePipelines() {
   }
 
   useEffect(() => {
-    if (step === 2 && form.data_source_id && channels !== undefined && channels.length === 0 && !syncing) {
+    if ((step === 2 || step === 3) && form.data_source_id && channels !== undefined && channels.length === 0 && !syncing) {
       handleSyncChannels()
     }
   }, [step, form.data_source_id, channels])
