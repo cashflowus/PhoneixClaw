@@ -13,7 +13,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { MessageSquare, RefreshCw, Loader2, Inbox, Search, XCircle } from 'lucide-react'
+import { MessageSquare, RefreshCw, Loader2, Inbox, Search, XCircle, Download } from 'lucide-react'
+import { exportToCSV } from '@/lib/csv-export'
 
 interface Source {
   id: string
@@ -111,6 +112,26 @@ export default function RawMessages() {
               ))}
             </SelectContent>
           </Select>
+          {messages.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1 text-xs"
+              onClick={() => {
+                const headers = ['Author', 'Channel', 'Source Type', 'Content', 'Time']
+                const rows = messages.map(m => [
+                  m.author || '',
+                  m.channel_name || '',
+                  m.source_type,
+                  m.content,
+                  m.created_at ? new Date(m.created_at).toLocaleString() : '',
+                ])
+                exportToCSV('raw-messages', headers, rows)
+              }}
+            >
+              <Download className="h-3 w-3" /> Export CSV
+            </Button>
+          )}
           <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
           </Button>

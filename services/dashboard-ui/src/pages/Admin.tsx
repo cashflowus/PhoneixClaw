@@ -37,7 +37,9 @@ import {
   XCircle,
   Wifi,
   WifiOff,
+  Download,
 } from 'lucide-react'
+import { exportToCSV } from '@/lib/csv-export'
 
 interface AdminUser {
   id: string
@@ -209,11 +211,31 @@ export default function Admin() {
 
       {tab === 'users' && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <Users className="h-5 w-5" />
               All Users ({users?.length ?? 0})
             </CardTitle>
+            {users && users.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                onClick={() => {
+                  const headers = ['Email', 'Name', 'Role', 'Status', 'Last Login']
+                  const rows = users.map(u => [
+                    u.email,
+                    u.name || '',
+                    u.is_admin ? 'Admin' : 'User',
+                    u.is_active ? 'Active' : 'Inactive',
+                    u.last_login ? new Date(u.last_login).toLocaleString() : 'Never',
+                  ])
+                  exportToCSV('admin-users', headers, rows)
+                }}
+              >
+                <Download className="h-3 w-3" /> Export CSV
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="p-0">
             {usersLoading ? (
@@ -294,11 +316,32 @@ export default function Admin() {
 
       {tab === 'sources' && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <Database className="h-5 w-5" />
               All Data Sources ({sources?.length ?? 0})
             </CardTitle>
+            {sources && sources.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                onClick={() => {
+                  const headers = ['Owner Email', 'Owner Name', 'Source', 'Type', 'Status', 'Channels']
+                  const rows = sources.map(s => [
+                    s.owner_email,
+                    s.owner_name || '',
+                    s.display_name,
+                    s.source_type,
+                    s.connection_status,
+                    String(s.channel_count),
+                  ])
+                  exportToCSV('admin-data-sources', headers, rows)
+                }}
+              >
+                <Download className="h-3 w-3" /> Export CSV
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="p-0">
             {sourcesLoading ? (

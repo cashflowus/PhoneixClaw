@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { TrendingUp, CheckCircle2, XCircle, AlertTriangle, Loader2 } from 'lucide-react'
+import { TrendingUp, CheckCircle2, XCircle, AlertTriangle, Loader2, Download } from 'lucide-react'
+import { exportToCSV } from '@/lib/csv-export'
 
 interface Trade {
   trade_id: string
@@ -121,8 +122,29 @@ export default function Dashboard() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Recent Trades</CardTitle>
+          {trades && trades.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              onClick={() => {
+                const headers = ['Ticker', 'Action', 'Strike', 'Price', 'Status', 'Time']
+                const rows = trades.map(t => [
+                  t.ticker,
+                  t.action,
+                  String(t.strike),
+                  t.price?.toFixed(2) ?? '',
+                  t.status,
+                  t.created_at ? new Date(t.created_at).toLocaleString() : '',
+                ])
+                exportToCSV('recent-trades', headers, rows)
+              }}
+            >
+              <Download className="h-3 w-3" /> Export CSV
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="p-0">
           <Table>

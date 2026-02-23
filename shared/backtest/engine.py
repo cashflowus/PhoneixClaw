@@ -18,11 +18,14 @@ def _position_key(ticker: str, strike: float, option_type: str, _expiration: str
     return f"{ticker}|{strike}|{option_type}"
 
 
-def _resolve_qty(qty: int | str) -> int:
+def _resolve_qty(qty: int | str, stack_size: int = 0) -> int:
+    """Resolve quantity, treating percentage strings against the open position stack."""
+    if isinstance(qty, str) and qty.endswith("%"):
+        pct = float(qty.rstrip("%")) / 100.0
+        resolved = max(1, round(stack_size * pct)) if stack_size > 0 else 1
+        return resolved
     if isinstance(qty, int):
         return max(1, qty)
-    if isinstance(qty, str) and qty.endswith("%"):
-        return 1
     try:
         return max(1, int(float(qty)))
     except (ValueError, TypeError):
@@ -112,7 +115,7 @@ def run_backtest(
             strike = float(act.get("strike", 0))
             opt_type = act.get("option_type", "CALL")
             exp = act.get("expiration")
-            qty = _resolve_qty(act.get("quantity", 1))
+            raw_qty = act.get("quantity", 1)
             price = float(act.get("price", 0))
 
             if not ticker or price <= 0:
@@ -121,6 +124,7 @@ def run_backtest(
             key = _position_key(ticker, strike, opt_type, exp)
 
             if action == "BUY":
+                qty = _resolve_qty(raw_qty)
                 pos = OpenPosition(
                     ticker=ticker,
                     strike=strike,
@@ -136,7 +140,8 @@ def run_backtest(
 
             elif action == "SELL":
                 stack = positions.get(key, [])
-                to_close = min(qty, sum(1 for _ in stack))
+                qty = _resolve_qty(raw_qty, stack_size=len(stack))
+                to_close = min(qty, len(stack))
                 closed = 0
 
                 while closed < to_close and stack:
@@ -156,7 +161,7 @@ def run_backtest(
                         exit_price = price
                         exit_reason = "MANUAL"
 
-                    raw_diff = (exit_price - entry) if p.option_type == "CALL" else (entry - exit_price)
+                    raw_diff = exit_price - entry
                     pnl = raw_diff * OPTIONS_MULTIPLIER
                     total_pnl += pnl
                     if pnl > 0:
@@ -188,22 +193,13 @@ def run_backtest(
                         )
                     )
 
-    # Close remaining positions at stop-loss (conservative assumption)
+    # Mark remaining positions as EXPIRED at breakeven (no assumption about direction)
     for key, stack in list(positions.items()):
         end_ts = sorted_msgs[-1]["timestamp"] if sorted_msgs else datetime.now(timezone.utc)
         if end_ts.tzinfo is None:
             end_ts = end_ts.replace(tzinfo=timezone.utc)
         for p in stack:
             entry = float(p.entry_price)
-            sl_price = entry * (1 - stop_loss)
-            raw_diff = (sl_price - entry) if p.option_type == "CALL" else (entry - sl_price)
-            pnl = raw_diff * OPTIONS_MULTIPLIER
-            total_pnl += pnl
-            losing += 1
-            loss_sum += pnl
-            peak = max(peak, total_pnl)
-            max_drawdown = max(max_drawdown, peak - total_pnl)
-
             trades.append(
                 SimulatedTrade(
                     trade_id=str(uuid.uuid4()),
@@ -214,11 +210,11 @@ def run_backtest(
                     action="SELL",
                     quantity=1,
                     entry_price=p.entry_price,
-                    exit_price=sl_price,
+                    exit_price=entry,
                     entry_ts=p.entry_ts,
                     exit_ts=end_ts,
-                    exit_reason="STOP_LOSS",
-                    realized_pnl=pnl,
+                    exit_reason="EXPIRED",
+                    realized_pnl=0.0,
                     raw_message=p.raw_message,
                 )
             )

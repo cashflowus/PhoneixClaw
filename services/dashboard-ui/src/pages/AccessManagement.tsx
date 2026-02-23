@@ -44,7 +44,9 @@ import {
   Pencil,
   Power,
   KeyRound,
+  Download,
 } from 'lucide-react'
+import { exportToCSV } from '@/lib/csv-export'
 
 interface Permission {
   key: string
@@ -291,14 +293,37 @@ export default function AccessManagement() {
                 Assign roles and configure granular permissions for each user
               </CardDescription>
             </div>
-            <div className="relative w-64">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search users..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8"
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative w-64">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search users..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+              {filtered.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1 text-xs"
+                  onClick={() => {
+                    const headers = ['User', 'Email', 'Role', 'Status', 'Permissions Enabled', 'Last Login']
+                    const rows = filtered.map(u => [
+                      u.name || u.email.split('@')[0],
+                      u.email,
+                      u.role || 'trader',
+                      u.is_active ? 'Active' : 'Disabled',
+                      `${Object.values(u.permissions || {}).filter(Boolean).length}/${PERMISSION_DEFS.length}`,
+                      u.last_login ? new Date(u.last_login).toLocaleString() : 'Never',
+                    ])
+                    exportToCSV('user-access', headers, rows)
+                  }}
+                >
+                  <Download className="h-3 w-3" /> Export CSV
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>

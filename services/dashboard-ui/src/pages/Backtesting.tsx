@@ -30,7 +30,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Plus, Loader2, BarChart3, TrendingUp, TrendingDown, DollarSign, Activity, ChevronRight, X, RefreshCw } from 'lucide-react'
+import { Plus, Loader2, BarChart3, TrendingUp, TrendingDown, DollarSign, Activity, ChevronRight, X, RefreshCw, Download, ChevronDown } from 'lucide-react'
+import { exportToCSV } from '@/lib/csv-export'
 
 interface Source {
   id: string
@@ -147,6 +148,7 @@ export default function Backtesting() {
   })
 
   const [btError, setBtError] = useState<string | null>(null)
+  const [expandedTradeId, setExpandedTradeId] = useState<number | null>(null)
 
   useEffect(() => {
     if (btError) {
@@ -459,11 +461,40 @@ export default function Backtesting() {
                     </div>
                   </div>
                   <div>
-                    <h4 className="text-sm font-medium mb-2">Trades</h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-medium">Trades</h4>
+                      {trades.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1 text-xs"
+                          onClick={() => {
+                            const headers = ['Ticker', 'Strike', 'Type', 'Action', 'Entry', 'Exit', 'P&L', 'Reason', 'Entry Time', 'Exit Time', 'Raw Message']
+                            const rows = trades.map(t => [
+                              t.ticker,
+                              String(t.strike),
+                              t.option_type,
+                              t.action,
+                              t.entry_price.toFixed(2),
+                              t.exit_price != null ? t.exit_price.toFixed(2) : '',
+                              t.realized_pnl != null ? t.realized_pnl.toFixed(2) : '',
+                              t.exit_reason ?? '',
+                              t.entry_ts ?? '',
+                              t.exit_ts ?? '',
+                              t.raw_message ?? '',
+                            ])
+                            exportToCSV(`backtest-${selectedRun?.name || selectedRun?.id.slice(0, 8)}`, headers, rows)
+                          }}
+                        >
+                          <Download className="h-3 w-3" /> Export CSV
+                        </Button>
+                      )}
+                    </div>
                     <div className="rounded-md border max-h-[300px] overflow-auto">
                       <Table>
                         <TableHeader>
                           <TableRow>
+                            <TableHead className="w-6"></TableHead>
                             <TableHead>Ticker</TableHead>
                             <TableHead>Action</TableHead>
                             <TableHead>Entry</TableHead>
@@ -474,33 +505,54 @@ export default function Backtesting() {
                         </TableHeader>
                         <TableBody>
                           {trades.map(t => (
-                            <TableRow key={t.id}>
-                              <TableCell className="font-mono">{t.ticker} {t.strike}{t.option_type === 'CALL' ? 'C' : 'P'}</TableCell>
-                              <TableCell>{t.action}</TableCell>
-                              <TableCell>${t.entry_price.toFixed(2)}</TableCell>
-                              <TableCell>{t.exit_price != null ? `$${t.exit_price.toFixed(2)}` : '—'}</TableCell>
-                              <TableCell className={t.realized_pnl != null ? (t.realized_pnl >= 0 ? 'text-green-600' : 'text-red-600') : ''}>
-                                {t.realized_pnl != null ? `$${t.realized_pnl.toFixed(2)}` : '—'}
-                              </TableCell>
-                              <TableCell>
-                                {t.exit_reason ? (
-                                  <Badge
-                                    variant="outline"
-                                    className={`text-[10px] ${
-                                      t.exit_reason === 'TAKE_PROFIT'
-                                        ? 'border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-400'
-                                        : t.exit_reason === 'STOP_LOSS'
-                                          ? 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-400'
-                                          : t.exit_reason === 'MANUAL'
-                                            ? 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400'
-                                            : ''
-                                    }`}
-                                  >
-                                    {t.exit_reason === 'TAKE_PROFIT' ? 'TP' : t.exit_reason === 'STOP_LOSS' ? 'SL' : t.exit_reason}
-                                  </Badge>
-                                ) : '—'}
-                              </TableCell>
-                            </TableRow>
+                            <>
+                              <TableRow key={t.id} className="cursor-pointer" onClick={() => setExpandedTradeId(expandedTradeId === t.id ? null : t.id)}>
+                                <TableCell className="px-2">
+                                  <ChevronDown className={`h-3 w-3 transition-transform ${expandedTradeId === t.id ? 'rotate-180' : ''}`} />
+                                </TableCell>
+                                <TableCell className="font-mono">{t.ticker} {t.strike}{t.option_type === 'CALL' ? 'C' : 'P'}</TableCell>
+                                <TableCell>{t.action}</TableCell>
+                                <TableCell>${t.entry_price.toFixed(2)}</TableCell>
+                                <TableCell>{t.exit_price != null ? `$${t.exit_price.toFixed(2)}` : '—'}</TableCell>
+                                <TableCell className={t.realized_pnl != null ? (t.realized_pnl >= 0 ? 'text-green-600' : 'text-red-600') : ''}>
+                                  {t.realized_pnl != null ? `$${t.realized_pnl.toFixed(2)}` : '—'}
+                                </TableCell>
+                                <TableCell>
+                                  {t.exit_reason ? (
+                                    <Badge
+                                      variant="outline"
+                                      className={`text-[10px] ${
+                                        t.exit_reason === 'TAKE_PROFIT'
+                                          ? 'border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-400'
+                                          : t.exit_reason === 'STOP_LOSS'
+                                            ? 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-400'
+                                            : t.exit_reason === 'MANUAL'
+                                              ? 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400'
+                                              : t.exit_reason === 'EXPIRED'
+                                                ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                                                : ''
+                                      }`}
+                                    >
+                                      {t.exit_reason === 'TAKE_PROFIT' ? 'TP' : t.exit_reason === 'STOP_LOSS' ? 'SL' : t.exit_reason}
+                                    </Badge>
+                                  ) : '—'}
+                                </TableCell>
+                              </TableRow>
+                              {expandedTradeId === t.id && (
+                                <TableRow key={`${t.id}-msg`}>
+                                  <TableCell colSpan={7} className="bg-muted/30 py-2 px-4">
+                                    <div className="space-y-1 text-xs">
+                                      <p className="text-muted-foreground font-medium">Raw Discord Message:</p>
+                                      <p className="font-mono whitespace-pre-wrap">{t.raw_message || 'No message recorded'}</p>
+                                      <div className="flex gap-4 text-muted-foreground pt-1">
+                                        <span>Entry: {t.entry_ts ? new Date(t.entry_ts).toLocaleString() : '—'}</span>
+                                        <span>Exit: {t.exit_ts ? new Date(t.exit_ts).toLocaleString() : '—'}</span>
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </>
                           ))}
                         </TableBody>
                       </Table>

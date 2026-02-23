@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Loader2, TrendingUp, TrendingDown, DollarSign, XCircle } from 'lucide-react'
+import { Loader2, TrendingUp, TrendingDown, DollarSign, XCircle, Download } from 'lucide-react'
+import { exportToCSV } from '@/lib/csv-export'
 
 interface Position {
   id: number
@@ -108,10 +109,32 @@ export default function Positions() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5" /> Open Positions
           </CardTitle>
+          {openPositions && openPositions.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              onClick={() => {
+                const headers = ['Symbol', 'Type', 'Qty', 'Entry', 'PT%', 'SL%', 'Opened']
+                const rows = openPositions.map(p => [
+                  `${p.ticker} $${p.strike}${p.option_type === 'CALL' ? 'C' : 'P'}`,
+                  p.option_type,
+                  String(p.quantity),
+                  p.avg_entry_price.toFixed(2),
+                  `${(p.profit_target * 100).toFixed(0)}%`,
+                  `${(p.stop_loss * 100).toFixed(0)}%`,
+                  p.opened_at ? new Date(p.opened_at).toLocaleString() : '',
+                ])
+                exportToCSV('open-positions', headers, rows)
+              }}
+            >
+              <Download className="h-3 w-3" /> Export CSV
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {openLoading ? (
@@ -171,10 +194,32 @@ export default function Positions() {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <TrendingDown className="h-5 w-5" /> Closed Positions
           </CardTitle>
+          {closedPositions && closedPositions.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              onClick={() => {
+                const headers = ['Symbol', 'Type', 'Qty', 'Entry', 'Reason', 'P&L', 'Closed']
+                const rows = closedPositions.map(p => [
+                  `${p.ticker} $${p.strike}${p.option_type === 'CALL' ? 'C' : 'P'}`,
+                  p.option_type,
+                  String(p.quantity),
+                  p.avg_entry_price.toFixed(2),
+                  p.close_reason ?? '',
+                  p.realized_pnl != null ? p.realized_pnl.toFixed(2) : '',
+                  p.closed_at ? new Date(p.closed_at).toLocaleString() : '',
+                ])
+                exportToCSV('closed-positions', headers, rows)
+              }}
+            >
+              <Download className="h-3 w-3" /> Export CSV
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {closedLoading ? (
