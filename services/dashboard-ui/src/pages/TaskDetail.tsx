@@ -263,12 +263,14 @@ export default function TaskDetail() {
             className="w-full text-3xl font-bold bg-transparent border-none outline-none placeholder:text-muted-foreground/50"
             placeholder="Task title"
           />
-          <RichTextEditor
-            content={description}
-            onChange={handleDescriptionChange}
-            placeholder="Add a description, paste images, write notes..."
-            className="min-h-[400px]"
-          />
+          {initialLoaded && (
+            <RichTextEditor
+              content={description}
+              onChange={handleDescriptionChange}
+              placeholder="Add a description, paste images, write notes..."
+              className="min-h-[400px]"
+            />
+          )}
         </div>
 
         {/* Sidebar */}
