@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
+import { useAuth } from '@/hooks/useAuth'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -38,6 +39,8 @@ interface Source {
   connection_status: string
   enabled: boolean
   created_at: string
+  owner_email?: string | null
+  owner_name?: string | null
 }
 
 const AUTH_HELP: Record<string, string> = {
@@ -49,6 +52,7 @@ const AUTH_HELP: Record<string, string> = {
 const emptyForm = { display_name: '', source_type: 'discord', auth_type: 'user_token', token: '', channels: '' }
 
 export default function DataSources() {
+  const { isAdmin } = useAuth()
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ ...emptyForm })
@@ -314,6 +318,9 @@ export default function DataSources() {
                   <div>
                     <h3 className="font-semibold text-sm">{s.display_name}</h3>
                     <p className="text-xs text-muted-foreground capitalize">{s.source_type}</p>
+                    {isAdmin && s.owner_name && (
+                      <p className="text-xs text-muted-foreground/70 mt-0.5">{s.owner_name} ({s.owner_email})</p>
+                    )}
                   </div>
                 </div>
                 <DropdownMenu>

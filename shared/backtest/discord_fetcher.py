@@ -44,10 +44,7 @@ async def fetch_channel_history(
 
     class HistoryClient(discord.Client):
         def __init__(self) -> None:
-            intents = discord.Intents.default()
-            intents.message_content = True
-            intents.guilds = True
-            super().__init__(intents=intents)
+            super().__init__()
 
         async def on_ready(self) -> None:
             try:

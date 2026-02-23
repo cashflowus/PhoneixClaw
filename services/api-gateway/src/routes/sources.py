@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.crypto.credentials import decrypt_credentials, encrypt_credentials
 from shared.models.database import get_session
-from shared.models.trade import Channel, DataSource, RawMessage
+from shared.models.trade import Channel, DataSource, RawMessage, User
 
 router = APIRouter(prefix="/api/v1/sources", tags=["sources"])
 
@@ -27,6 +27,8 @@ class SourceResponse(BaseModel):
     enabled: bool
     connection_status: str
     created_at: str
+    owner_email: str | None = None
+    owner_name: str | None = None
 
 class ChannelCreate(BaseModel):
     channel_identifier: str
@@ -41,6 +43,18 @@ class ChannelResponse(BaseModel):
 @router.get("", response_model=list[SourceResponse])
 async def list_sources(request: Request, session: AsyncSession = Depends(get_session)):
     user_id = request.state.user_id
+    is_admin = getattr(request.state, "is_admin", False)
+    if is_admin:
+        stmt = (
+            select(DataSource, User.email, User.name)
+            .join(User, DataSource.user_id == User.id)
+            .order_by(DataSource.created_at)
+        )
+        result = await session.execute(stmt)
+        return [
+            _source_response(s, owner_email=email, owner_name=name)
+            for s, email, name in result.all()
+        ]
     result = await session.execute(select(DataSource).where(DataSource.user_id == uuid.UUID(user_id)))
     return [_source_response(s) for s in result.scalars().all()]
 
@@ -272,10 +286,16 @@ def _raw_msg(m: RawMessage) -> dict:
     }
 
 
-def _source_response(s: DataSource) -> SourceResponse:
+def _source_response(
+    s: DataSource,
+    owner_email: str | None = None,
+    owner_name: str | None = None,
+) -> SourceResponse:
     return SourceResponse(
         id=str(s.id), source_type=s.source_type,
         display_name=s.display_name, auth_type=s.auth_type,
         enabled=s.enabled, connection_status=s.connection_status,
         created_at=s.created_at.isoformat(),
+        owner_email=owner_email,
+        owner_name=owner_name,
     )
