@@ -518,6 +518,7 @@ The current implementation (`SimpleSignalScorer`) evaluates:
 | Dashboard | `/` | KPI cards, P&L chart, recent trades table |
 | Data Sources | `/sources` | Connect Discord/Twitter/Reddit sources |
 | Trading Accounts | `/accounts` | Manage broker connections (Alpaca, IB) |
+| Backtesting | `/backtest` | Run historical backtests on past signals |
 | Analytics | `/analytics` | Cumulative P&L, win rate trends |
 | System | `/system` | Service health, notifications |
 
@@ -1029,6 +1030,10 @@ Centered card on a dark gradient background. Email + password form with loading 
 - Service health grid with status badges (healthy = green, unhealthy = red)
 - Recent notifications list with timestamps
 
+### Backtesting Tab
+
+The **Backtesting** page (`/backtest`) lets you run historical simulations on past trade signals. Select a data source, channel, and trading account, then run a backtest to see simulated P&L, win rate, and trade-by-trade results. Useful for validating signal quality before going live.
+
 ### Chat Widget
 
 A floating ChatGPT-style panel that:
@@ -1074,6 +1079,12 @@ Coolify is a self-hosted PaaS (like Heroku) that runs on your VPS.
 - Resource limits (CPU and memory per service)
 - Health checks on all services
 - Traefik reverse proxy (built into Coolify) for HTTPS
+
+**Coolify deployment troubleshooting:**
+- **Backtesting tab missing:** Dashboard may serve a cached build. Use **Force Deploy** (Deploy menu) or enable **Disabled Build Cache** in Advanced → Deploy. Hard-refresh browser (Ctrl+Shift+R).
+- **Build fails with "image already exists":** CACHEBUST build arg helps. Set `CACHEBUST` env var in Coolify (e.g. `2`) and redeploy. Or remove conflicting images via SSH before deploy.
+- **Full deploy guide:** See `DEPLOY.md` for step-by-step Hostinger VPS setup.
+- **SSH monitoring:** Use `scripts/coolify-deploy-via-ssh.sh` to check deployment status and logs via SSH.
 
 ### Option 3: Kubernetes
 

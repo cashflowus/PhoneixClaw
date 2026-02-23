@@ -1,7 +1,6 @@
 """Integration tests for backtest API (mocked Discord, real DB)."""
 
 import uuid
-from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
@@ -9,7 +8,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import sessionmaker
 
 from services.api_gateway.src.middleware import JWTMiddleware
 from services.api_gateway.src.routes.backtest import router as backtest_router

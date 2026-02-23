@@ -4,8 +4,6 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 # Add nlp-parser to path so "from src.bert_entity_extractor" works
 _nlp_path = Path(__file__).resolve().parents[2] / "services" / "nlp-parser"
 if _nlp_path.exists() and str(_nlp_path) not in sys.path:
@@ -25,7 +23,10 @@ class TestBertEntityExtractor:
 
     def test_parses_valid_json_output(self):
         """When model returns valid JSON, returns parsed entities."""
-        mock_output = '{"ticker": "AAPL", "strike": 190, "option_type": "CALL", "price": 2.5, "quantity": 1, "expiration": "2025-03-21"}'
+        mock_output = (
+            '{"ticker": "AAPL", "strike": 190, "option_type": "CALL",'
+            ' "price": 2.5, "quantity": 1, "expiration": "2025-03-21"}'
+        )
 
         mock_model = MagicMock()
         mock_tokenizer = MagicMock()
@@ -38,9 +39,7 @@ class TestBertEntityExtractor:
 
                 from src.bert_entity_extractor import extract_entities_bert
 
-                result = extract_entities_bert("BTO AAPL 190C 3/21 @ 2.50")
-                # With mocked model, the actual generate won't run our tokenizer.batch_decode
-                # We need to patch at the point where the model is used
+                extract_entities_bert("BTO AAPL 190C 3/21 @ 2.50")
                 pass
 
         # Simpler: test the helper functions directly
@@ -77,7 +76,8 @@ class TestBertEntityExtractor:
         mock_outputs = MagicMock()
         mock_tokenizer = MagicMock()
         mock_tokenizer.batch_decode.return_value = [
-            '{"ticker": "AAPL", "strike": 190, "option_type": "CALL", "price": 2.5, "quantity": 1, "expiration": "2025-03-21"}'
+            '{"ticker": "AAPL", "strike": 190, "option_type": "CALL",'
+            ' "price": 2.5, "quantity": 1, "expiration": "2025-03-21"}'
         ]
         mock_tokenizer.return_value = {"input_ids": MagicMock()}
 

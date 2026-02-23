@@ -37,7 +37,10 @@ async def fetch_channel_history(
         List of dicts: {content, timestamp, author, message_id} sorted by timestamp asc.
     """
     if discord is None:
-        raise ImportError("discord.py or discord.py-self is required for backtest. Install: pip install discord.py-self")
+        raise ImportError(
+            "discord.py or discord.py-self is required for backtest. "
+            "Install: pip install discord.py-self"
+        )
 
     messages: list[dict] = []
     is_bot = auth_type == "bot"

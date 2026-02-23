@@ -11,8 +11,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from services.api_gateway.src.middleware import JWTMiddleware
 from services.api_gateway.src.routes.accounts import router as accounts_router
-from services.api_gateway.src.routes.backtest import router as backtest_router
 from services.api_gateway.src.routes.admin import router as admin_router
+from services.api_gateway.src.routes.backtest import router as backtest_router
 from services.api_gateway.src.routes.chat import router as chat_router
 from services.api_gateway.src.routes.chat import set_kafka_producer
 from services.api_gateway.src.routes.mappings import router as mappings_router

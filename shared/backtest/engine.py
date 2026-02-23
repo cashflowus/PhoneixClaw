@@ -5,10 +5,8 @@ and matches SELL signals for exits. Positions without matching SELL close at 0 P
 """
 import uuid
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from decimal import Decimal
-from typing import Any
 
 from services.trade_parser.src.parser import parse_trade_message
 
