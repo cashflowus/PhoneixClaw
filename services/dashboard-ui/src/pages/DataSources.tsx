@@ -111,12 +111,21 @@ export default function DataSources() {
       const res = await axios.post(`/api/v1/sources/${id}/sync-channels`)
       return { id, channels: res.data }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['sources'] })
+      qc.invalidateQueries({ queryKey: ['channels'] })
       setSyncingId(null)
       setError(null)
+      const count = data.channels?.length ?? 0
+      if (count > 0) {
+        setError(null)
+      }
     },
-    onError: () => { setSyncingId(null); setError('Failed to sync channels.') },
+    onError: (err: unknown) => {
+      setSyncingId(null)
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(msg || 'Failed to sync channels.')
+    },
   })
 
   function handleSubmit(e: React.FormEvent) {

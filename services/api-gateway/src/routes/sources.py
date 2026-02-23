@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -10,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.crypto.credentials import decrypt_credentials, encrypt_credentials
 from shared.models.database import get_session
 from shared.models.trade import Channel, DataSource, RawMessage, User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/sources", tags=["sources"])
 
@@ -58,18 +61,32 @@ async def list_sources(request: Request, session: AsyncSession = Depends(get_ses
     result = await session.execute(select(DataSource).where(DataSource.user_id == uuid.UUID(user_id)))
     return [_source_response(s) for s in result.scalars().all()]
 
-async def _ensure_channels_from_credentials(source: DataSource, credentials: dict, session: AsyncSession) -> None:
-    """Create Channel records from channel_ids in credentials. Skips duplicates."""
+async def _ensure_channels_from_credentials(source: DataSource, credentials: dict, session: AsyncSession) -> int:
+    """Create Channel records from channel_ids in credentials. Skips duplicates.
+
+    Handles channel_ids as a comma-separated string or a list of strings/ints.
+    Returns the number of new channels created.
+    """
     channel_ids_raw = credentials.get("channel_ids", "")
     if not channel_ids_raw:
-        return
+        return 0
+
+    if isinstance(channel_ids_raw, list):
+        ids = [str(c).strip() for c in channel_ids_raw]
+    else:
+        ids = [c.strip() for c in str(channel_ids_raw).split(",")]
+
+    ids = [c for c in ids if c]
+    if not ids:
+        return 0
+
     result = await session.execute(
         select(Channel.channel_identifier).where(Channel.data_source_id == source.id)
     )
     existing = {row[0] for row in result.fetchall()}
-    for cid in channel_ids_raw.split(","):
-        cid = cid.strip()
-        if not cid or cid in existing:
+    created = 0
+    for cid in ids:
+        if cid in existing:
             continue
         ch = Channel(
             data_source_id=source.id,
@@ -78,6 +95,9 @@ async def _ensure_channels_from_credentials(source: DataSource, credentials: dic
         )
         session.add(ch)
         existing.add(cid)
+        created += 1
+    logger.info("Ensured channels for source %s: %d new, %d total", source.id, created, len(existing))
+    return created
 
 
 @router.post("", response_model=SourceResponse, status_code=201)
@@ -110,42 +130,74 @@ async def delete_source(source_id: str, request: Request, session: AsyncSession 
     await session.delete(source)
     await session.commit()
 
-@router.get("/{source_id}/channels", response_model=list[ChannelResponse])
-async def list_channels(source_id: str, request: Request, session: AsyncSession = Depends(get_session)):
-    result = await session.execute(select(Channel).where(Channel.data_source_id == uuid.UUID(source_id)))
+async def _get_source_for_user_or_admin(
+    source_id: str, request: Request, session: AsyncSession,
+) -> DataSource:
+    """Fetch a DataSource by id. Admins can access any source; regular users only their own."""
+    user_id = request.state.user_id
+    is_admin = getattr(request.state, "is_admin", False)
+    if is_admin:
+        result = await session.execute(
+            select(DataSource).where(DataSource.id == uuid.UUID(source_id))
+        )
+    else:
+        result = await session.execute(
+            select(DataSource).where(
+                DataSource.id == uuid.UUID(source_id),
+                DataSource.user_id == uuid.UUID(user_id),
+            )
+        )
+    source = result.scalar_one_or_none()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return source
+
+
+def _channel_responses(channels) -> list[ChannelResponse]:
     return [
         ChannelResponse(
             id=str(c.id), channel_identifier=c.channel_identifier,
             display_name=c.display_name, enabled=c.enabled,
         )
-        for c in result.scalars().all()
+        for c in channels
     ]
+
+
+@router.get("/{source_id}/channels", response_model=list[ChannelResponse])
+async def list_channels(source_id: str, request: Request, session: AsyncSession = Depends(get_session)):
+    source = await _get_source_for_user_or_admin(source_id, request, session)
+    result = await session.execute(select(Channel).where(Channel.data_source_id == source.id))
+    channels = result.scalars().all()
+
+    if not channels:
+        try:
+            creds = decrypt_credentials(source.credentials_encrypted)
+            created = await _ensure_channels_from_credentials(source, creds, session)
+            if created:
+                await session.commit()
+                result = await session.execute(select(Channel).where(Channel.data_source_id == source.id))
+                channels = result.scalars().all()
+        except Exception:
+            logger.exception("Lazy channel sync failed for source %s", source_id)
+
+    return _channel_responses(channels)
 
 
 @router.post("/{source_id}/sync-channels", response_model=list[ChannelResponse])
 async def sync_channels(source_id: str, request: Request, session: AsyncSession = Depends(get_session)):
     """Create Channel records from channel_ids in credentials for existing sources."""
-    user_id = request.state.user_id
-    result = await session.execute(
-        select(DataSource).where(
-            DataSource.id == uuid.UUID(source_id),
-            DataSource.user_id == uuid.UUID(user_id),
-        )
-    )
-    source = result.scalar_one_or_none()
-    if not source:
-        raise HTTPException(status_code=404, detail="Source not found")
+    source = await _get_source_for_user_or_admin(source_id, request, session)
     creds = decrypt_credentials(source.credentials_encrypted)
     await _ensure_channels_from_credentials(source, creds, session)
     await session.commit()
     result = await session.execute(select(Channel).where(Channel.data_source_id == source.id))
-    return [
-        ChannelResponse(
-            id=str(c.id), channel_identifier=c.channel_identifier,
-            display_name=c.display_name, enabled=c.enabled,
+    channels = result.scalars().all()
+    if not channels:
+        raise HTTPException(
+            status_code=400,
+            detail="No channel_ids found in source credentials. Edit the source and add channel IDs.",
         )
-        for c in result.scalars().all()
-    ]
+    return _channel_responses(channels)
 
 
 @router.post("/{source_id}/channels", response_model=ChannelResponse, status_code=201)

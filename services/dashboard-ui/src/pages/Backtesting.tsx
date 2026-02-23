@@ -30,7 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Plus, Loader2, BarChart3, TrendingUp, TrendingDown, DollarSign, Activity, ChevronRight, X } from 'lucide-react'
+import { Plus, Loader2, BarChart3, TrendingUp, TrendingDown, DollarSign, Activity, ChevronRight, X, RefreshCw } from 'lucide-react'
 
 interface Source {
   id: string
@@ -112,11 +112,22 @@ export default function Backtesting() {
     queryFn: () => axios.get('/api/v1/sources').then(r => r.data),
   })
 
-  const { data: channels } = useQuery<Channel[]>({
+  const { data: channels, isLoading: channelsLoading, refetch: refetchChannels } = useQuery<Channel[]>({
     queryKey: ['channels', form.data_source_id],
     queryFn: () => axios.get(`/api/v1/sources/${form.data_source_id}/channels`).then(r => r.data),
     enabled: !!form.data_source_id,
   })
+
+  const [syncing, setSyncing] = useState(false)
+  const handleSyncChannels = async () => {
+    if (!form.data_source_id) return
+    setSyncing(true)
+    try {
+      await axios.post(`/api/v1/sources/${form.data_source_id}/sync-channels`)
+      await refetchChannels()
+    } catch { /* error handled by empty channel list display */ }
+    setSyncing(false)
+  }
 
   const { data: accounts } = useQuery<Account[]>({
     queryKey: ['accounts'],
@@ -229,12 +240,28 @@ export default function Backtesting() {
                   </div>
                   <div className="grid gap-2">
                     <Label>Channel</Label>
-                    <Select value={form.channel_id} onValueChange={v => setForm(f => ({ ...f, channel_id: v }))} disabled={!form.data_source_id}>
-                      <SelectTrigger><SelectValue placeholder="Select channel" /></SelectTrigger>
-                      <SelectContent>
-                        {channels?.map(c => <SelectItem key={c.id} value={c.id}>{c.display_name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    {channelsLoading ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                        <Loader2 className="h-4 w-4 animate-spin" /> Loading channels...
+                      </div>
+                    ) : channels && channels.length > 0 ? (
+                      <Select value={form.channel_id} onValueChange={v => setForm(f => ({ ...f, channel_id: v }))} disabled={!form.data_source_id}>
+                        <SelectTrigger><SelectValue placeholder="Select channel" /></SelectTrigger>
+                        <SelectContent>
+                          {channels.map(c => <SelectItem key={c.id} value={c.id}>{c.display_name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    ) : form.data_source_id ? (
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm text-muted-foreground">No channels found.</p>
+                        <Button type="button" variant="outline" size="sm" onClick={handleSyncChannels} disabled={syncing}>
+                          {syncing ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}
+                          Sync Channels
+                        </Button>
+                      </div>
+                    ) : (
+                      <Select disabled><SelectTrigger><SelectValue placeholder="Select a source first" /></SelectTrigger><SelectContent /></Select>
+                    )}
                   </div>
                 </div>
               )}

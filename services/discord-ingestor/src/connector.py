@@ -122,9 +122,28 @@ class DiscordIngestor:
             await self._producer.start()
 
         is_bot = self._auth_type == "bot"
-        logger.info("Connecting to Discord (mode=%s)…", self._auth_type)
-        await self._client.start(self._token, bot=is_bot)
+        logger.info(
+            "Connecting to Discord (user=%s, mode=%s, channels=%s, data_source=%s)",
+            self._user_id, self._auth_type, self._target_channels, self._data_source_id,
+        )
+        try:
+            await self._client.start(self._token, bot=is_bot)
+        except TypeError:
+            logger.warning("discord.py-self does not accept bot= param, retrying without it")
+            await self._client.start(self._token)
+        except Exception:
+            logger.exception(
+                "Failed to connect to Discord (user=%s, mode=%s, data_source=%s)",
+                self._user_id, self._auth_type, self._data_source_id,
+            )
+            raise
 
     async def stop(self) -> None:
-        await self._client.close()
-        await self._producer.stop()
+        try:
+            await self._client.close()
+        except Exception:
+            logger.exception("Error closing Discord client")
+        try:
+            await self._producer.stop()
+        except Exception:
+            logger.exception("Error stopping Kafka producer")

@@ -121,13 +121,17 @@ async def login(req: LoginRequest, session: AsyncSession = Depends(get_session))
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(req: RefreshRequest):
+async def refresh(req: RefreshRequest, session: AsyncSession = Depends(get_session)):
     payload = decode_token(req.refresh_token)
     if payload.get("type") != "refresh":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not a refresh token")
     user_id = payload["sub"]
+    result = await session.execute(select(User).where(User.id == uuid.UUID(user_id)))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return TokenResponse(
-        access_token=create_access_token(user_id),
+        access_token=create_access_token(user_id, is_admin=user.is_admin),
         refresh_token=create_refresh_token(user_id),
     )
 

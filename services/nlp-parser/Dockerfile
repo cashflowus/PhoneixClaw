@@ -1,38 +1,40 @@
-FROM python:3.12-slim AS builder
-# Cache-bust: prevents "image already exists" conflict in parallel Coolify builds
-ARG CACHEBUST=1
-RUN echo "Build cache bust: $CACHEBUST" > /dev/null
+# syntax=docker/dockerfile:1
+
+# ─── Dependencies stage (cached unless requirements.txt changes) ─────
+FROM python:3.12-slim AS deps
+WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential && \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
-# Download spaCy English model
+# ─── Models stage (cached unless deps change) ────────────────────────
+FROM deps AS models
+
 RUN python -m spacy download en_core_web_sm
 
-# Pre-download FinBERT weights so they're baked into the image
-RUN python -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; \
+RUN --mount=type=cache,target=/root/.cache/huggingface \
+    python -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; \
     AutoTokenizer.from_pretrained('ProsusAI/finbert'); \
     AutoModelForSequenceClassification.from_pretrained('ProsusAI/finbert')"
 
-# Pre-download FLAN-T5-small for BERT entity extraction
-RUN python -c "from transformers import AutoModelForSeq2SeqLM, AutoTokenizer; \
+RUN --mount=type=cache,target=/root/.cache/huggingface \
+    python -c "from transformers import AutoModelForSeq2SeqLM, AutoTokenizer; \
     AutoTokenizer.from_pretrained('google/flan-t5-small'); \
     AutoModelForSeq2SeqLM.from_pretrained('google/flan-t5-small')"
 
-# ─── Runtime stage ────────────────────────────────────────────────────
+# ─── Runtime stage ───────────────────────────────────────────────────
 FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-COPY --from=builder /root/.cache/huggingface /root/.cache/huggingface
+COPY --from=models /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=models /usr/local/bin /usr/local/bin
+COPY --from=models /root/.cache/huggingface /root/.cache/huggingface
 
 COPY . .
 
