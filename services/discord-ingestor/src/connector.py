@@ -60,38 +60,54 @@ class DiscordIngestor:
         self._dedup_cache: set[str] = set()
         self._msg_count = 0
 
-        self._client = discord.Client()
+        intents = discord.Intents.all()
+        self._client = discord.Client(intents=intents)
 
-        # discord.py dispatches events via getattr(client, 'on_<event>').
-        # Setting attributes directly ensures the correct lookup name.
-        self._client.on_ready = self._handle_ready  # type: ignore[attr-defined]
-        self._client.on_message = self._handle_message  # type: ignore[attr-defined]
+        @self._client.event
+        async def on_ready():
+            await self._handle_ready()
+
+        @self._client.event
+        async def on_message(message: Message):
+            await self._handle_message(message)
 
     async def _handle_ready(self) -> None:
+        guilds = self._client.guilds
         logger.info(
-            "Discord ingestor ready (user=%s, mode=%s, channels=%s, data_source=%s)",
+            "Discord ingestor ready (user=%s, mode=%s, channels=%s, data_source=%s, guilds=%d)",
             self._user_id, self._auth_type, self._target_channels, self._data_source_id,
+            len(guilds),
         )
+        for guild in guilds:
+            text_channels = guild.text_channels
+            logger.info(
+                "  Guild: %s (id: %d) — %d text channels",
+                guild.name, guild.id, len(text_channels),
+            )
+            for ch in text_channels:
+                marker = " <-- LISTENING" if ch.id in self._target_channels else ""
+                logger.info("    #%s (id: %d)%s", ch.name, ch.id, marker)
         if self._on_connected:
             try:
                 await self._on_connected()
             except Exception:
                 logger.exception("on_connected callback failed")
-        if not self._target_channels:
-            logger.info("No target channels configured — listing available channels:")
-            for guild in self._client.guilds:
-                for channel in guild.text_channels:
-                    logger.info("  #%s (id: %d) in %s", channel.name, channel.id, guild.name)
 
     async def _handle_message(self, message: Message) -> None:
         try:
             if message.author == self._client.user:
                 return
             if self._target_channels and message.channel.id not in self._target_channels:
+                if self._msg_count == 0:
+                    logger.debug(
+                        "Skipping message from #%s (id=%d), not in target channels %s",
+                        message.channel, message.channel.id, self._target_channels,
+                    )
                 return
 
             content = message.content.strip()
             if not content:
+                logger.debug("Skipping empty message %s in #%s", message.id, message.channel)
                 return
 
             channel_id = str(message.channel.id)
