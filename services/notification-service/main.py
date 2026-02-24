@@ -44,13 +44,22 @@ async def _persist_notification(event: dict, title: str, body: str, priority: st
 
 
 async def _run_notification_service(service):
-    try:
-        await service.start()
-        await service.run()
-    except asyncio.CancelledError:
-        pass
-    except Exception:
-        logger.exception("Notification service error")
+    import itertools
+    for attempt in itertools.count(1):
+        try:
+            await service.start()
+            logger.info("Notification service connected to Kafka (attempt %d)", attempt)
+            await service.run()
+            break
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            delay = min(5 * (2 ** (attempt - 1)), 60)
+            logger.exception(
+                "Notification service startup failed (attempt %d), retrying in %ds",
+                attempt, delay,
+            )
+            await asyncio.sleep(delay)
 
 
 @asynccontextmanager

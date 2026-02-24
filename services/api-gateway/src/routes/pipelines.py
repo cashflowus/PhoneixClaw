@@ -15,6 +15,7 @@ from shared.models.trade import (
     Channel,
     DataSource,
     RawMessage,
+    Trade,
     TradePipeline,
     TradingAccount,
 )
@@ -225,6 +226,15 @@ async def pipeline_diagnostics(
         except Exception as e:
             results["audit_writer"] = {"error": str(e), "status": "unreachable"}
 
+        for svc_name, svc_port in [
+            ("trade_parser", 8006), ("trade_gateway", 8007), ("trade_executor", 8008),
+        ]:
+            try:
+                resp = await client.get(f"http://{svc_name.replace('_', '-')}:{svc_port}/health")
+                results[svc_name] = resp.json()
+            except Exception as e:
+                results[svc_name] = {"error": str(e), "status": "unreachable"}
+
     try:
         from shared.kafka_utils.producer import KafkaProducerWrapper
         p = KafkaProducerWrapper()
@@ -337,6 +347,131 @@ async def test_pipeline(
         "stage": "db_write",
         "detail": "Message reached Kafka but did not appear in DB within 10s. Audit-writer may be down.",
     }
+
+
+@router.post("/{pipeline_id}/test-trade")
+async def test_trade_pipeline(
+    pipeline_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Admin-only: simulate a full trade flow through the pipeline.
+
+    Publishes a realistic BTO message to Kafka, then tracks it
+    through parsing, gateway approval, and (if paper mode) execution.
+    Returns status at each stage.
+    """
+    if not getattr(request.state, "is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    pipeline = await _get_pipeline(pipeline_id, request, session)
+    await session.refresh(pipeline, ["data_source", "channel", "trading_account"])
+
+    if not pipeline.trading_account:
+        raise HTTPException(status_code=400, detail="Pipeline has no trading account")
+
+    is_paper = pipeline.trading_account.paper_mode if pipeline.trading_account else True
+    if not is_paper:
+        raise HTTPException(
+            status_code=400,
+            detail="Trade test is only allowed on paper-mode accounts to avoid real money trades",
+        )
+
+    test_id = f"trade-test-{uuid.uuid4().hex[:12]}"
+    trade_msg = "BTO SPY 600C 12/31 @ 0.01"
+    test_content = f"[TRADE TEST {test_id}] {trade_msg}"
+
+    stages: dict = {"test_id": test_id, "paper_mode": is_paper}
+
+    from shared.kafka_utils.producer import KafkaProducerWrapper
+    producer = KafkaProducerWrapper()
+    try:
+        await producer.start()
+        raw_msg = {
+            "content": test_content,
+            "message_id": test_id,
+            "source_message_id": test_id,
+            "author": "trade-test",
+            "channel_name": pipeline.channel.display_name if pipeline.channel else "test",
+            "channel_id": pipeline.channel.channel_identifier if pipeline.channel else "",
+            "guild_id": "",
+            "user_id": str(pipeline.user_id),
+            "data_source_id": str(pipeline.data_source_id),
+            "pipeline_id": str(pipeline.id),
+            "source": "test",
+            "source_type": "test",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        headers = [
+            ("user_id", str(pipeline.user_id).encode("utf-8")),
+            ("pipeline_id", str(pipeline.id).encode("utf-8")),
+        ]
+        await producer.send_and_wait("raw-messages", value=raw_msg, key=test_id, headers=headers)
+        stages["kafka_publish"] = "ok"
+    except Exception as e:
+        stages["kafka_publish"] = f"FAILED: {e}"
+        return {"success": False, "stage": "kafka_publish", **stages}
+    finally:
+        await producer.stop()
+
+    for i in range(20):
+        await asyncio.sleep(0.5)
+        result = await session.execute(
+            select(RawMessage).where(RawMessage.source_message_id == test_id)
+        )
+        if result.scalar_one_or_none():
+            stages["audit_writer"] = f"ok ({round((i + 1) * 0.5, 1)}s)"
+            break
+    else:
+        stages["audit_writer"] = "FAILED: message not in DB after 10s"
+        return {"success": False, "stage": "audit_writer", **stages}
+
+    for i in range(30):
+        await asyncio.sleep(0.5)
+        result = await session.execute(
+            select(Trade).where(Trade.source_message_id == test_id)
+        )
+        trade = result.scalar_one_or_none()
+        if trade:
+            stages["trade_parser"] = f"ok ({round((i + 1) * 0.5, 1)}s)"
+            stages["trade_status"] = trade.status
+            stages["trade_id"] = str(trade.trade_id)
+            if trade.broker_order_id:
+                stages["broker_order_id"] = trade.broker_order_id
+            if trade.fill_price:
+                stages["fill_price"] = float(trade.fill_price)
+            if trade.error_message:
+                stages["error_message"] = trade.error_message
+            if trade.rejection_reason:
+                stages["rejection_reason"] = trade.rejection_reason
+            if trade.status in ("EXECUTED", "APPROVED", "PENDING", "REJECTED", "ERROR"):
+                stages["trade_gateway"] = "ok"
+            break
+    else:
+        stages["trade_parser"] = "FAILED: no trade record after 15s"
+        return {"success": False, "stage": "trade_parser", **stages}
+
+    if trade and trade.status in ("APPROVED", "PENDING"):
+        for i in range(40):
+            await asyncio.sleep(0.5)
+            await session.refresh(trade)
+            if trade.status not in ("APPROVED", "PENDING"):
+                stages["trade_executor"] = f"ok ({round((i + 1) * 0.5, 1)}s)"
+                stages["trade_status"] = trade.status
+                if trade.broker_order_id:
+                    stages["broker_order_id"] = trade.broker_order_id
+                if trade.error_message:
+                    stages["error_message"] = trade.error_message
+                break
+        else:
+            stages["trade_executor"] = f"TIMEOUT: still {trade.status} after 20s"
+
+    overall = all(
+        v == "ok" or (isinstance(v, str) and v.startswith("ok"))
+        for k, v in stages.items()
+        if k in ("kafka_publish", "audit_writer", "trade_parser", "trade_gateway")
+    )
+    return {"success": overall, "stage": "complete", **stages}
 
 
 @router.get("/{pipeline_id}", response_model=PipelineResponse)
