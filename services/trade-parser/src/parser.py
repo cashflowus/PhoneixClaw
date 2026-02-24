@@ -2,6 +2,52 @@ import re
 from datetime import datetime, timedelta
 from typing import Any
 
+_REPLY_PATTERN = re.compile(
+    r"(?:↩️\s*)?Reply\s+to:\s*>?\s*.*?(?=@here|@everyone|\n[A-Z]|\bSold\b|\bBought\b|\bSell\b|\bBuy\b|\bBTO\b|\bSTC\b|\bSTO\b|\bBTC\b|$)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+_INDEX_TICKERS = {"SPX", "NDX", "XSP", "RUT", "VIX", "DJX", "OEX"}
+
+_COMMON_OPTION_TICKERS = {
+    "SPY", "QQQ", "IWM", "DIA", "AAPL", "TSLA", "AMZN", "MSFT",
+    "NVDA", "META", "GOOGL", "GOOG", "AMD", "NFLX", "COST", "BA",
+}
+
+
+def strip_reply_context(text: str) -> str:
+    """Remove quoted reply-to text so only the author's new message is parsed.
+
+    Discord reply messages arrive as:
+      **LABEL :** ↩️ Reply to:
+      > LABEL : Bought SPX 6900C at 4.50
+      @here Sold most SPX 6900C at 5.80
+
+    We strip everything between "Reply to:" and the next actionable sentence
+    so the parser only sees the new content.
+    """
+    if "reply to" not in text.lower():
+        return text
+
+    lines = text.split("\n")
+    cleaned: list[str] = []
+    skip = False
+    for line in lines:
+        stripped = line.strip()
+        if re.search(r"reply\s+to:?", stripped, re.IGNORECASE):
+            skip = True
+            continue
+        if skip:
+            if stripped.startswith(">") or stripped.startswith("**") and ":" in stripped and not re.search(
+                r"\b(?:sold|bought|sell|buy|bto|stc|sto|btc)\b", stripped, re.IGNORECASE
+            ):
+                continue
+            skip = False
+        cleaned.append(line)
+
+    result = "\n".join(cleaned).strip()
+    return result if result else text
+
 
 def parse_trade_message(text: str) -> dict[str, Any]:
     """
@@ -14,6 +60,7 @@ def parse_trade_message(text: str) -> dict[str, Any]:
     - "Sold 50% SPX 6950C at 6.50"
     - Time references: "0DTE", "weekly", "4hr", "2 week"
     """
+    text = strip_reply_context(text)
     text_upper = text.upper().strip()
     actions: list[dict[str, Any]] = []
 
@@ -70,6 +117,7 @@ def parse_trade_message(text: str) -> dict[str, Any]:
         })
 
     if actions:
+        _apply_default_expiration(actions)
         result: dict[str, Any] = {"actions": actions, "raw_message": text}
         if timeframe:
             result["timeframe"] = timeframe
@@ -97,12 +145,23 @@ def parse_trade_message(text: str) -> dict[str, Any]:
         if action:
             actions.append(action)
 
+    _apply_default_expiration(actions)
     result2: dict[str, Any] = {"actions": actions, "raw_message": text}
     if timeframe:
         result2["timeframe"] = timeframe
     if inferred_expiration:
         result2["inferred_expiration"] = True
     return result2
+
+
+def _apply_default_expiration(actions: list[dict[str, Any]]) -> None:
+    """Default to 0DTE (today) for index options and common ETF/stock options missing expiration."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    for action in actions:
+        if action.get("expiration") is None:
+            ticker = action.get("ticker", "").upper()
+            if ticker in _INDEX_TICKERS or ticker in _COMMON_OPTION_TICKERS:
+                action["expiration"] = today
 
 
 def _extract_expiration(text: str) -> str | None:

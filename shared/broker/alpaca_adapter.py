@@ -12,6 +12,26 @@ ALPACA_LIVE_BASE = "https://api.alpaca.markets"
 ALPACA_DATA_BASE = "https://data.alpaca.markets"
 
 
+class AlpacaOrderError(Exception):
+    """Raised when Alpaca rejects an order, carrying the human-readable detail."""
+
+
+def _raise_with_detail(resp: httpx.Response, *, symbol: str = "") -> None:
+    """Raise with Alpaca's JSON error body instead of a generic HTTP message."""
+    if resp.status_code < 400:
+        return
+    detail = ""
+    try:
+        body = resp.json()
+        detail = body.get("message") or body.get("detail") or str(body)
+    except Exception:
+        detail = resp.text[:500]
+    prefix = f"[{symbol}] " if symbol else ""
+    msg = f"{prefix}Alpaca {resp.status_code}: {detail}"
+    logger.error("Alpaca order error: %s", msg)
+    raise AlpacaOrderError(msg)
+
+
 class AlpacaBrokerAdapter:
     """BrokerAdapter implementation for Alpaca using async httpx."""
 
@@ -51,7 +71,7 @@ class AlpacaBrokerAdapter:
             "time_in_force": "day",
         }
         resp = await self._client.post("/v2/orders", json=payload)
-        resp.raise_for_status()
+        _raise_with_detail(resp, symbol=symbol)
         data = resp.json()
         logger.info("Order placed: %s %d %s @ %.2f (ID: %s)", side, qty, symbol, price, data["id"])
         return data["id"]
@@ -71,7 +91,7 @@ class AlpacaBrokerAdapter:
             "stop_loss": {"stop_price": str(stop_loss)},
         }
         resp = await self._client.post("/v2/orders", json=payload)
-        resp.raise_for_status()
+        _raise_with_detail(resp, symbol=symbol)
         return resp.json()["id"]
 
     async def cancel_order(self, order_id: str) -> bool:

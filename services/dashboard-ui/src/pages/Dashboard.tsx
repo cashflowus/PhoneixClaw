@@ -1,11 +1,14 @@
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { TrendingUp, CheckCircle2, XCircle, AlertTriangle, Loader2, Download } from 'lucide-react'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { TrendingUp, CheckCircle2, XCircle, AlertTriangle, Loader2, Download, Search } from 'lucide-react'
 import { exportToCSV } from '@/lib/csv-export'
 
 interface Trade {
@@ -16,23 +19,47 @@ interface Trade {
   price: number
   status: string
   created_at: string
+  error_message?: string | null
+  rejection_reason?: string | null
+  raw_message?: string | null
+  option_type?: string
+  expiration?: string
 }
 
-const statusBadge = (status: string) => {
-  switch (status) {
-    case 'EXECUTED':
-      return <Badge variant="success">Executed</Badge>
-    case 'ERROR':
-      return <Badge variant="destructive">Error</Badge>
-    case 'REJECTED':
-      return <Badge variant="warning">Rejected</Badge>
-    case 'APPROVED':
-      return <Badge className="bg-blue-500/15 text-blue-600 border-blue-500/30">Approved</Badge>
-    case 'PENDING':
-      return <Badge variant="outline">Pending</Badge>
-    default:
-      return <Badge variant="secondary">{status}</Badge>
+const statusBadge = (status: string, errorMessage?: string | null, rejectionReason?: string | null) => {
+  const reason = rejectionReason || errorMessage
+  const badge = (() => {
+    switch (status) {
+      case 'EXECUTED':
+        return <Badge variant="success">Executed</Badge>
+      case 'ERROR':
+        return <Badge variant="destructive">Error</Badge>
+      case 'REJECTED':
+        return <Badge variant="warning">Rejected</Badge>
+      case 'APPROVED':
+        return <Badge className="bg-blue-500/15 text-blue-600 border-blue-500/30">Approved</Badge>
+      case 'PENDING':
+        return <Badge variant="outline">Pending</Badge>
+      default:
+        return <Badge variant="secondary">{status}</Badge>
+    }
+  })()
+
+  if (reason && (status === 'ERROR' || status === 'REJECTED')) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="cursor-help">{badge}</span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs">
+          <p className="text-xs font-medium">{status === 'REJECTED' ? 'Rejection Reason' : 'Error Details'}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{reason}</p>
+        </TooltipContent>
+      </Tooltip>
+    )
   }
+
+  return badge
 }
 
 const kpiCards = [
@@ -43,15 +70,31 @@ const kpiCards = [
 ] as const
 
 export default function Dashboard() {
+  const [searchQuery, setSearchQuery] = useState('')
   const { data: trades, isLoading: tradesLoading, isError: tradesError, refetch: refetchTrades } = useQuery<Trade[]>({
     queryKey: ['trades'],
-    queryFn: () => axios.get('/api/v1/trades?limit=20').then((r) => r.data),
+    queryFn: () => axios.get('/api/v1/trades?limit=50').then((r) => r.data),
     refetchInterval: 5000,
   })
   const { data: metrics, isError: metricsError } = useQuery({
     queryKey: ['metrics'],
     queryFn: () => axios.get('/api/v1/metrics/daily?days=7').then((r) => r.data),
   })
+
+  const filteredTrades = useMemo(() => {
+    if (!trades) return []
+    if (!searchQuery.trim()) return trades
+    const q = searchQuery.toLowerCase()
+    return trades.filter((t) => {
+      const searchable = [
+        t.ticker, t.action, t.status, t.option_type,
+        t.strike?.toString(), t.price?.toFixed(2),
+        t.error_message, t.rejection_reason, t.raw_message,
+        t.created_at ? new Date(t.created_at).toLocaleString() : '',
+      ].filter(Boolean).join(' ').toLowerCase()
+      return searchable.includes(q)
+    })
+  }, [trades, searchQuery])
 
   const stats = {
     total: trades?.length || 0,
@@ -106,7 +149,7 @@ export default function Dashboard() {
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                 <XAxis dataKey="date" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
                 <YAxis className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                <Tooltip
+                <RechartsTooltip
                   contentStyle={{
                     backgroundColor: 'hsl(var(--card))',
                     border: '1px solid hsl(var(--border))',
@@ -122,29 +165,41 @@ export default function Dashboard() {
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Recent Trades</CardTitle>
-          {trades && trades.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 gap-1 text-xs"
-              onClick={() => {
-                const headers = ['Ticker', 'Action', 'Strike', 'Price', 'Status', 'Time']
-                const rows = trades.map(t => [
-                  t.ticker,
-                  t.action,
-                  String(t.strike),
-                  t.price?.toFixed(2) ?? '',
-                  t.status,
-                  t.created_at ? new Date(t.created_at).toLocaleString() : '',
-                ])
-                exportToCSV('recent-trades', headers, rows)
-              }}
-            >
-              <Download className="h-3 w-3" /> Export CSV
-            </Button>
-          )}
+        <CardHeader className="flex flex-row items-center justify-between gap-4">
+          <CardTitle className="text-base shrink-0">Recent Trades</CardTitle>
+          <div className="flex items-center gap-2 flex-1 justify-end">
+            <div className="relative max-w-xs w-full">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search trades..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-8 pl-8 text-sm"
+              />
+            </div>
+            {trades && trades.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1 text-xs shrink-0"
+                onClick={() => {
+                  const headers = ['Ticker', 'Action', 'Strike', 'Price', 'Status', 'Error', 'Time']
+                  const rows = (filteredTrades).map(t => [
+                    t.ticker,
+                    t.action,
+                    String(t.strike),
+                    t.price?.toFixed(2) ?? '',
+                    t.status,
+                    t.rejection_reason || t.error_message || '',
+                    t.created_at ? new Date(t.created_at).toLocaleString() : '',
+                  ])
+                  exportToCSV('recent-trades', headers, rows)
+                }}
+              >
+                <Download className="h-3 w-3" /> Export CSV
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -159,7 +214,7 @@ export default function Dashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(trades || []).map((t) => (
+              {filteredTrades.map((t) => (
                 <TableRow key={t.trade_id}>
                   <TableCell className="font-medium">{t.ticker}</TableCell>
                   <TableCell>
@@ -169,16 +224,16 @@ export default function Dashboard() {
                   </TableCell>
                   <TableCell>{t.strike}</TableCell>
                   <TableCell>${t.price?.toFixed(2)}</TableCell>
-                  <TableCell>{statusBadge(t.status)}</TableCell>
+                  <TableCell>{statusBadge(t.status, t.error_message, t.rejection_reason)}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {t.created_at ? new Date(t.created_at).toLocaleString() : '—'}
                   </TableCell>
                 </TableRow>
               ))}
-              {(!trades || trades.length === 0) && (
+              {filteredTrades.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                    No trades yet. Connect a data source to get started.
+                    {searchQuery ? 'No trades match your search.' : 'No trades yet. Connect a data source to get started.'}
                   </TableCell>
                 </TableRow>
               )}

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
   CartesianGrid,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
   ArrowLeft, TrendingUp, TrendingDown, Activity, BarChart3,
   Clock, CheckCircle2, XCircle, AlertTriangle, Loader2,
@@ -114,21 +115,40 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-function statusBadge(status: string) {
-  switch (status) {
-    case 'EXECUTED':
-      return <Badge variant="default" className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20">Executed</Badge>
-    case 'ERROR':
-      return <Badge variant="destructive">Error</Badge>
-    case 'REJECTED':
-      return <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30">Rejected</Badge>
-    case 'APPROVED':
-      return <Badge className="bg-blue-500/15 text-blue-600 border-blue-500/30">Approved</Badge>
-    case 'PENDING':
-      return <Badge variant="outline">Pending</Badge>
-    default:
-      return <Badge variant="secondary">{status}</Badge>
+function statusBadge(status: string, errorMessage?: string | null, rejectionReason?: string | null) {
+  const reason = rejectionReason || errorMessage
+  const badge = (() => {
+    switch (status) {
+      case 'EXECUTED':
+        return <Badge variant="default" className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20">Executed</Badge>
+      case 'ERROR':
+        return <Badge variant="destructive">Error</Badge>
+      case 'REJECTED':
+        return <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30">Rejected</Badge>
+      case 'APPROVED':
+        return <Badge className="bg-blue-500/15 text-blue-600 border-blue-500/30">Approved</Badge>
+      case 'PENDING':
+        return <Badge variant="outline">Pending</Badge>
+      default:
+        return <Badge variant="secondary">{status}</Badge>
+    }
+  })()
+
+  if (reason && (status === 'ERROR' || status === 'REJECTED')) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="cursor-help">{badge}</span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs">
+          <p className="text-xs font-medium">{status === 'REJECTED' ? 'Rejection Reason' : 'Error Details'}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{reason}</p>
+        </TooltipContent>
+      </Tooltip>
+    )
   }
+
+  return badge
 }
 
 export default function PipelineDetail() {
@@ -308,7 +328,7 @@ export default function PipelineDetail() {
                     tickLine={false}
                     width={60}
                   />
-                  <Tooltip
+                  <RechartsTooltip
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null
                       const d = payload[0].payload as PerformancePoint
@@ -493,7 +513,7 @@ export default function PipelineDetail() {
                           </span>
                         ) : '—'}
                       </TableCell>
-                      <TableCell>{statusBadge(t.status)}</TableCell>
+                      <TableCell>{statusBadge(t.status, t.error_message, t.rejection_reason)}</TableCell>
                       <TableCell className="text-right text-muted-foreground text-xs">
                         {t.execution_latency_ms ? `${t.execution_latency_ms}ms` : '—'}
                       </TableCell>
