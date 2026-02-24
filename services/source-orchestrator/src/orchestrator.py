@@ -276,6 +276,7 @@ class SourceOrchestrator:
             auth_type=auth_type,
             producer=self._producer,
             data_source_id=data_source_id,
+            pipeline_id=pipeline_id,
             on_connected=_mark_connected,
         )
         try:
@@ -292,11 +293,19 @@ class SourceOrchestrator:
             raise
 
     async def run(self, poll_interval: float = 30.0):
+        cycle = 0
         while self._running:
             try:
                 result = await self.reconcile()
+                cycle += 1
                 if result["started"] or result["stopped"] or result["dead_cleaned"]:
                     logger.info("Reconciliation: %s", result)
+                elif cycle % 10 == 0:
+                    logger.info(
+                        "Reconciliation heartbeat: %d active workers, %d in backoff",
+                        len(self._active_workers),
+                        len(self._backoff),
+                    )
             except Exception:
                 logger.exception("Reconciliation failed")
             await asyncio.sleep(poll_interval)

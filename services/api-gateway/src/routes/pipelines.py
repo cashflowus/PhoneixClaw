@@ -1,10 +1,12 @@
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.models.database import get_session
@@ -12,6 +14,7 @@ from shared.models.trade import (
     AccountSourceMapping,
     Channel,
     DataSource,
+    RawMessage,
     TradePipeline,
     TradingAccount,
 )
@@ -196,6 +199,144 @@ async def create_pipeline(
     await session.commit()
     await session.refresh(pipeline, ["data_source", "channel", "trading_account"])
     return _pipeline_response(pipeline)
+
+
+@router.get("/diagnostics")
+async def pipeline_diagnostics(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Admin-only endpoint that checks all pipeline infrastructure health."""
+    if not getattr(request.state, "is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    results: dict = {}
+
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        try:
+            resp = await client.get("http://source-orchestrator:8002/debug/workers")
+            results["orchestrator"] = resp.json()
+        except Exception as e:
+            results["orchestrator"] = {"error": str(e), "status": "unreachable"}
+
+        try:
+            resp = await client.get("http://audit-writer:8012/health")
+            results["audit_writer"] = resp.json()
+        except Exception as e:
+            results["audit_writer"] = {"error": str(e), "status": "unreachable"}
+
+    try:
+        from shared.kafka_utils.producer import KafkaProducerWrapper
+        p = KafkaProducerWrapper()
+        await p.start()
+        await p.stop()
+        results["kafka"] = {"status": "reachable"}
+    except Exception as e:
+        results["kafka"] = {"status": "unreachable", "error": str(e)}
+
+    total_count = (await session.execute(
+        select(func.count(RawMessage.id))
+    )).scalar() or 0
+    recent_result = await session.execute(
+        select(RawMessage).order_by(desc(RawMessage.created_at)).limit(5)
+    )
+    recent_msgs = recent_result.scalars().all()
+    results["raw_messages"] = {
+        "total_count": total_count,
+        "recent": [
+            {
+                "id": str(m.id),
+                "content": (m.content or "")[:80],
+                "channel_name": m.channel_name,
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+            }
+            for m in recent_msgs
+        ],
+    }
+
+    pipeline_count = (await session.execute(
+        select(func.count(TradePipeline.id))
+    )).scalar() or 0
+    enabled_count = (await session.execute(
+        select(func.count(TradePipeline.id)).where(TradePipeline.enabled.is_(True))
+    )).scalar() or 0
+    results["pipelines"] = {
+        "total": pipeline_count,
+        "enabled": enabled_count,
+    }
+
+    return results
+
+
+@router.post("/{pipeline_id}/test")
+async def test_pipeline(
+    pipeline_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Admin-only: publish a test message through the pipeline and verify it reaches the DB."""
+    if not getattr(request.state, "is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    pipeline = await _get_pipeline(pipeline_id, request, session)
+    await session.refresh(pipeline, ["data_source", "channel"])
+
+    test_id = f"test-{uuid.uuid4().hex[:12]}"
+    test_content = f"[PIPELINE TEST] {test_id}"
+
+    from shared.kafka_utils.producer import KafkaProducerWrapper
+    producer = KafkaProducerWrapper()
+    try:
+        await producer.start()
+        raw_msg = {
+            "content": test_content,
+            "message_id": test_id,
+            "source_message_id": test_id,
+            "author": "pipeline-test",
+            "channel_name": pipeline.channel.display_name if pipeline.channel else "test",
+            "channel_id": pipeline.channel.channel_identifier if pipeline.channel else "",
+            "guild_id": "",
+            "user_id": str(pipeline.user_id),
+            "data_source_id": str(pipeline.data_source_id),
+            "pipeline_id": str(pipeline.id),
+            "source": "test",
+            "source_type": "test",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        headers = [
+            ("user_id", str(pipeline.user_id).encode("utf-8")),
+            ("pipeline_id", str(pipeline.id).encode("utf-8")),
+        ]
+        await producer.send_and_wait("raw-messages", value=raw_msg, key=test_id, headers=headers)
+        kafka_ok = True
+    except Exception as e:
+        logger.exception("Test message Kafka publish failed")
+        return {"success": False, "stage": "kafka_publish", "error": str(e)}
+    finally:
+        await producer.stop()
+
+    if not kafka_ok:
+        return {"success": False, "stage": "kafka_publish"}
+
+    for i in range(20):
+        await asyncio.sleep(0.5)
+        result = await session.execute(
+            select(RawMessage).where(RawMessage.source_message_id == test_id)
+        )
+        found = result.scalar_one_or_none()
+        if found:
+            return {
+                "success": True,
+                "latency_seconds": round((i + 1) * 0.5, 1),
+                "message_id": str(found.id),
+                "stage": "complete",
+            }
+
+    return {
+        "success": False,
+        "stage": "db_write",
+        "detail": "Message reached Kafka but did not appear in DB within 10s. Audit-writer may be down.",
+    }
 
 
 @router.get("/{pipeline_id}", response_model=PipelineResponse)

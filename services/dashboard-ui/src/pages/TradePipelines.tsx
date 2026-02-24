@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
+import { useAuth } from '@/hooks/useAuth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,7 +18,8 @@ import {
 import {
   Plus, Loader2, Play, Square, Trash2, RefreshCw, Workflow,
   Database, Hash, Wallet, AlertCircle, CheckCircle2, XCircle,
-  ChevronRight, Search, Server, ChevronLeft,
+  ChevronRight, Search, Server, ChevronLeft, Activity, FlaskConical,
+  ChevronDown, ChevronUp,
 } from 'lucide-react'
 
 interface Source {
@@ -98,12 +100,15 @@ function channelDisplayName(ch: Channel): string {
 
 export default function TradePipelines() {
   const queryClient = useQueryClient()
+  const { isAdmin } = useAuth()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [step, setStep] = useState(1)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedGuild, setSelectedGuild] = useState<string>('')
   const [channelSearch, setChannelSearch] = useState('')
+  const [diagOpen, setDiagOpen] = useState(false)
+  const [testingPipeline, setTestingPipeline] = useState<string | null>(null)
 
   const [form, setForm] = useState({
     name: '',
@@ -136,6 +141,18 @@ export default function TradePipelines() {
     queryKey: ['pipeline-channels', form.data_source_id],
     queryFn: () => axios.get(`/api/v1/sources/${form.data_source_id}/channels`).then(r => r.data),
     enabled: !!form.data_source_id,
+  })
+
+  const { data: diagnostics, isLoading: diagLoading, refetch: refetchDiag } = useQuery({
+    queryKey: ['pipeline-diagnostics'],
+    queryFn: () => axios.get('/api/v1/pipelines/diagnostics').then(r => r.data),
+    enabled: isAdmin && diagOpen,
+    refetchInterval: diagOpen ? 15_000 : false,
+  })
+
+  const testMutation = useMutation({
+    mutationFn: (pipelineId: string) => axios.post(`/api/v1/pipelines/${pipelineId}/test`).then(r => r.data),
+    onSettled: () => setTestingPipeline(null),
   })
 
   const { data: accounts } = useQuery<Account[]>({
@@ -581,6 +598,134 @@ export default function TradePipelines() {
         </div>
       </div>
 
+      {/* Admin Diagnostics Panel */}
+      {isAdmin && (
+        <Card>
+          <button
+            className="flex items-center justify-between w-full p-4 text-left"
+            onClick={() => { setDiagOpen(o => !o); if (!diagOpen) refetchDiag() }}
+          >
+            <div className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-muted-foreground" />
+              <span className="font-medium text-sm">Pipeline Diagnostics</span>
+              {diagnostics && (
+                <Badge variant={
+                  diagnostics.orchestrator?.active_workers && !diagnostics.orchestrator?.error
+                    ? 'default' : 'destructive'
+                } className="text-[10px]">
+                  {diagnostics.orchestrator?.error ? 'Orchestrator Down' :
+                    `${diagnostics.orchestrator?.worker_count ?? 0} workers`}
+                </Badge>
+              )}
+            </div>
+            {diagOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+          {diagOpen && (
+            <CardContent className="pt-0 pb-4 space-y-4">
+              {diagLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading diagnostics...
+                </div>
+              ) : diagnostics ? (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {/* Orchestrator */}
+                  <div className="rounded-lg border p-3 space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs font-medium">
+                      <div className={`h-2 w-2 rounded-full ${
+                        diagnostics.orchestrator?.running ? 'bg-green-500' : 'bg-red-500'
+                      }`} />
+                      Source Orchestrator
+                    </div>
+                    {diagnostics.orchestrator?.error ? (
+                      <p className="text-xs text-red-500">{diagnostics.orchestrator.error}</p>
+                    ) : (
+                      <>
+                        <p className="text-xs text-muted-foreground">
+                          Workers: {diagnostics.orchestrator?.worker_count ?? 0}
+                        </p>
+                        {diagnostics.orchestrator?.active_workers && Object.entries(diagnostics.orchestrator.active_workers).map(([k, v]: [string, any]) => (
+                          <div key={k} className="flex items-center gap-1.5 text-xs">
+                            <div className={`h-1.5 w-1.5 rounded-full ${v.alive ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <span className="truncate font-mono">{k.replace('pipe:', '').slice(0, 8)}...</span>
+                            <Badge variant="outline" className="text-[9px] ml-auto">{v.status}</Badge>
+                          </div>
+                        ))}
+                        {diagnostics.orchestrator?.backoff && Object.keys(diagnostics.orchestrator.backoff).length > 0 && (
+                          <div className="text-xs text-yellow-600">
+                            {Object.keys(diagnostics.orchestrator.backoff).length} worker(s) in backoff
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  {/* Audit Writer */}
+                  <div className="rounded-lg border p-3 space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs font-medium">
+                      <div className={`h-2 w-2 rounded-full ${
+                        diagnostics.audit_writer?.status === 'ready' ? 'bg-green-500' : 'bg-red-500'
+                      }`} />
+                      Audit Writer
+                    </div>
+                    {diagnostics.audit_writer?.error ? (
+                      <p className="text-xs text-red-500">{diagnostics.audit_writer.error}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Status: {diagnostics.audit_writer?.status ?? 'unknown'}
+                      </p>
+                    )}
+                  </div>
+                  {/* Kafka */}
+                  <div className="rounded-lg border p-3 space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs font-medium">
+                      <div className={`h-2 w-2 rounded-full ${
+                        diagnostics.kafka?.status === 'reachable' ? 'bg-green-500' : 'bg-red-500'
+                      }`} />
+                      Kafka
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {diagnostics.kafka?.status === 'reachable' ? 'Connected' : diagnostics.kafka?.error || 'Unreachable'}
+                    </p>
+                  </div>
+                  {/* Raw Messages */}
+                  <div className="rounded-lg border p-3 space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs font-medium">
+                      <Database className="h-3 w-3" />
+                      Raw Messages
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Total: {diagnostics.raw_messages?.total_count ?? 0}
+                    </p>
+                    {diagnostics.raw_messages?.recent?.length > 0 && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        Latest: {diagnostics.raw_messages.recent[0]?.created_at
+                          ? new Date(diagnostics.raw_messages.recent[0].created_at).toLocaleString()
+                          : 'N/A'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Failed to load diagnostics</p>
+              )}
+              <div className="flex gap-2 pt-1">
+                <Button variant="outline" size="sm" onClick={() => refetchDiag()}>
+                  <RefreshCw className="mr-1 h-3 w-3" /> Refresh
+                </Button>
+                {testMutation.data && (
+                  <div className={`flex items-center gap-1.5 text-xs px-3 py-1 rounded-lg border ${
+                    testMutation.data.success ? 'text-green-700 border-green-300 bg-green-50 dark:text-green-400 dark:border-green-800 dark:bg-green-900/20' : 'text-red-700 border-red-300 bg-red-50 dark:text-red-400 dark:border-red-800 dark:bg-red-900/20'
+                  }`}>
+                    {testMutation.data.success
+                      ? <><CheckCircle2 className="h-3 w-3" /> Test passed ({testMutation.data.latency_seconds}s)</>
+                      : <><XCircle className="h-3 w-3" /> Test failed: {testMutation.data.stage} - {testMutation.data.detail || testMutation.data.error}</>}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          )}
+        </Card>
+      )}
+
       {/* Pipeline list */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
@@ -643,6 +788,18 @@ export default function TradePipelines() {
                           title="Start pipeline"
                         >
                           <Play className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {isAdmin && (
+                        <Button
+                          variant="ghost" size="icon" className="h-8 w-8"
+                          onClick={() => { setTestingPipeline(p.id); testMutation.mutate(p.id) }}
+                          disabled={testingPipeline === p.id}
+                          title="Test pipeline end-to-end"
+                        >
+                          {testingPipeline === p.id
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <FlaskConical className="h-4 w-4" />}
                         </Button>
                       )}
                       <Button

@@ -46,6 +46,7 @@ class DiscordIngestor:
         auth_type: str = "user_token",
         producer: KafkaProducerWrapper | None = None,
         data_source_id: str | None = None,
+        pipeline_id: str | None = None,
         on_connected: "asyncio.coroutines.coroutine | None" = None,
     ) -> None:
         self._token = token
@@ -54,8 +55,10 @@ class DiscordIngestor:
         self._auth_type = auth_type
         self._producer = producer or KafkaProducerWrapper()
         self._data_source_id = data_source_id
+        self._pipeline_id = pipeline_id
         self._on_connected = on_connected
         self._dedup_cache: set[str] = set()
+        self._msg_count = 0
 
         self._client = discord.Client()
 
@@ -123,6 +126,7 @@ class DiscordIngestor:
                 "guild_id": guild_id,
                 "user_id": self._user_id,
                 "data_source_id": self._data_source_id,
+                "pipeline_id": self._pipeline_id,
                 "source": "discord",
                 "source_type": "discord",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -132,13 +136,19 @@ class DiscordIngestor:
                 ("user_id", self._user_id.encode("utf-8")),
                 ("channel_id", channel_id.encode("utf-8")),
             ]
+            if self._pipeline_id:
+                headers.append(("pipeline_id", self._pipeline_id.encode("utf-8")))
 
             for attempt in range(1, KAFKA_SEND_RETRIES + 1):
                 try:
                     await self._producer.send(
                         "raw-messages", value=raw_msg, key=msg_key, headers=headers,
                     )
-                    logger.debug("Published message %s to raw-messages", msg_key)
+                    self._msg_count += 1
+                    logger.info(
+                        "Published message %s to raw-messages (pipeline=%s, total=%d)",
+                        msg_key, self._pipeline_id, self._msg_count,
+                    )
                     break
                 except Exception:
                     if attempt == KAFKA_SEND_RETRIES:

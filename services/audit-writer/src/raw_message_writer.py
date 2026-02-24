@@ -2,6 +2,10 @@ import asyncio
 import logging
 import time
 import uuid
+from collections import defaultdict
+from datetime import datetime, timezone
+
+from sqlalchemy import text
 
 from shared.kafka_utils.consumer import KafkaConsumerWrapper
 from shared.models.database import AsyncSessionLocal
@@ -44,12 +48,44 @@ class RawMessageWriterService:
         if len(self._buffer) >= self.batch_size or (now - self._last_flush) >= self.flush_interval:
             await self._flush()
 
+    async def _update_pipeline_counters(self, pipeline_counts: dict[str, int]):
+        """Batch-increment messages_count and last_message_at for pipelines."""
+        if not pipeline_counts:
+            return
+        try:
+            async with AsyncSessionLocal() as session:
+                now = datetime.now(timezone.utc)
+                for pipe_id_str, count in pipeline_counts.items():
+                    try:
+                        pipe_uuid = uuid.UUID(pipe_id_str)
+                    except (ValueError, AttributeError):
+                        continue
+                    await session.execute(
+                        text(
+                            "UPDATE trade_pipelines "
+                            "SET messages_count = COALESCE(messages_count, 0) + :cnt, "
+                            "    last_message_at = :ts, "
+                            "    updated_at = :ts "
+                            "WHERE id = :pid"
+                        ),
+                        {"cnt": count, "ts": now, "pid": pipe_uuid},
+                    )
+                await session.commit()
+                logger.info(
+                    "Updated pipeline counters: %s",
+                    {k: v for k, v in pipeline_counts.items()},
+                )
+        except Exception:
+            logger.exception("Failed to update pipeline counters")
+
     async def _flush(self):
         if not self._buffer:
             return
         batch = self._buffer[:]
         self._buffer.clear()
         self._last_flush = time.monotonic()
+
+        pipeline_counts: dict[str, int] = defaultdict(int)
 
         for attempt in range(1, MAX_FLUSH_RETRIES + 1):
             try:
@@ -75,6 +111,11 @@ class RawMessageWriterService:
                         except (ValueError, AttributeError):
                             logger.warning("Invalid data_source_id %s, setting to None", ds_id_raw)
                             parsed_ds_id = None
+
+                        pipe_id = msg.get("pipeline_id")
+                        if pipe_id:
+                            pipeline_counts[pipe_id] += 1
+
                         rm = RawMessage(
                             user_id=parsed_user_id,
                             data_source_id=parsed_ds_id,
@@ -90,6 +131,8 @@ class RawMessageWriterService:
                     await session.commit()
                 self._total_written += written
                 logger.info("Flushed %d raw messages (total=%d)", written, self._total_written)
+
+                await self._update_pipeline_counters(pipeline_counts)
                 return
             except Exception:
                 self._total_errors += len(batch)
