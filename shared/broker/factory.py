@@ -12,5 +12,8 @@ def create_broker_adapter(broker_type: str, credentials_encrypted: bytes, paper_
     if not adapter_class:
         raise ValueError(f"Unsupported broker type: {broker_type}")
     if broker_type.lower() == "alpaca":
-        return adapter_class(api_key=creds["api_key"], secret_key=creds["secret_key"], paper=paper_mode)
+        secret = creds.get("secret_key") or creds.get("api_secret") or creds.get("secret")
+        if not secret:
+            raise ValueError("Missing secret_key/api_secret in credentials")
+        return adapter_class(api_key=creds["api_key"], secret_key=secret, paper=paper_mode)
     return adapter_class(**creds)
