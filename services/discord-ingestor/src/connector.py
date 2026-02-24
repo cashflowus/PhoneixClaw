@@ -60,16 +60,33 @@ class DiscordIngestor:
         self._dedup_cache: set[str] = set()
         self._msg_count = 0
 
-        intents = discord.Intents.all()
-        self._client = discord.Client(intents=intents)
+        try:
+            intents = discord.Intents.all()
+        except AttributeError:
+            intents = None
+        self._client = discord.Client(**({"intents": intents} if intents else {}))
+
+        ingestor_self = self
 
         @self._client.event
         async def on_ready():
-            await self._handle_ready()
+            await ingestor_self._handle_ready()
 
         @self._client.event
         async def on_message(message: Message):
-            await self._handle_message(message)
+            await ingestor_self._handle_message(message)
+
+        original_dispatch = self._client.dispatch
+
+        def _patched_dispatch(event: str, *args, **kwargs):
+            if event == "message" and ingestor_self._msg_count == 0:
+                logger.info("DISPATCH: event=%s args_count=%d", event, len(args))
+            elif event not in ("socket_raw_receive", "socket_raw_send", "typing"):
+                if ingestor_self._msg_count == 0:
+                    logger.debug("DISPATCH: event=%s", event)
+            return original_dispatch(event, *args, **kwargs)
+
+        self._client.dispatch = _patched_dispatch
 
     async def _handle_ready(self) -> None:
         guilds = self._client.guilds
