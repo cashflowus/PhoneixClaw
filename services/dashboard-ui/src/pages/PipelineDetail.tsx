@@ -182,6 +182,11 @@ export default function PipelineDetail() {
     refetchInterval: 10_000,
   })
 
+  const visibleTrades = useMemo(
+    () => (trades ?? []).filter((t) => t.ticker !== '_CONTEXT'),
+    [trades],
+  )
+
   const { data: messages } = useQuery<RawMsg[]>({
     queryKey: ['pipeline-messages', pipelineId],
     queryFn: () => axios.get(`/api/v1/pipelines/${pipelineId}/messages?limit=20`).then(r => r.data),
@@ -456,12 +461,12 @@ export default function PipelineDetail() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between py-4">
               <CardTitle className="text-base">Trade History</CardTitle>
-              {trades && trades.length > 0 && (
+              {visibleTrades.length > 0 && (
                 <Button
                   variant="outline" size="sm" className="h-7 gap-1 text-xs"
                   onClick={() => {
                     const headers = ['Ticker', 'Action', 'Type', 'Strike', 'Price', 'Fill', 'P&L', 'Status', 'Latency', 'Time']
-                    const rows = trades.map(t => [
+                    const rows = visibleTrades.map(t => [
                       t.ticker, t.action, t.option_type, String(t.strike),
                       t.price.toFixed(2), t.fill_price?.toFixed(2) ?? '',
                       t.realized_pnl?.toFixed(2) ?? '', t.status,
@@ -492,7 +497,7 @@ export default function PipelineDetail() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {trades && trades.length > 0 ? trades.map(t => (
+                  {visibleTrades.length > 0 ? visibleTrades.map(t => (
                     <TableRow key={t.trade_id}>
                       <TableCell className="font-semibold">{t.ticker}</TableCell>
                       <TableCell>

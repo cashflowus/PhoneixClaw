@@ -83,9 +83,10 @@ export default function Dashboard() {
 
   const filteredTrades = useMemo(() => {
     if (!trades) return []
-    if (!searchQuery.trim()) return trades
+    const visible = trades.filter((t) => t.ticker !== '_CONTEXT')
+    if (!searchQuery.trim()) return visible
     const q = searchQuery.toLowerCase()
-    return trades.filter((t) => {
+    return visible.filter((t) => {
       const searchable = [
         t.ticker, t.action, t.status, t.option_type,
         t.strike?.toString(), t.price?.toFixed(2),

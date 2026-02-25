@@ -111,17 +111,7 @@ function SidebarContent({
   return (
     <div className="flex h-full flex-col">
       <div className={cn('flex items-center gap-3 border-b border-border px-4 py-5', collapsed && 'justify-center px-2')}>
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" className="h-5 w-5">
-            <defs>
-              <linearGradient id="phoenix" x1="0" y1="1" x2="1" y2="0">
-                <stop offset="0%" stopColor="#EA580C"/>
-                <stop offset="100%" stopColor="#EAB308"/>
-              </linearGradient>
-            </defs>
-            <path d="M32 4C28 12 20 16 16 20C12 24 10 30 12 36C14 30 18 26 22 24C18 32 16 40 20 48C24 44 26 38 28 32C28 38 30 44 34 50C36 44 36 38 34 32C38 38 42 44 44 48C48 40 46 32 42 24C46 26 50 30 52 36C54 30 52 24 48 20C44 16 36 12 32 4Z" fill="url(#phoenix)"/>
-          </svg>
-        </div>
+        <img src="/phoenix-logo.png" alt="PhoenixTrade" className="h-8 w-8" />
         {!collapsed && <span className="text-lg font-bold tracking-tight">PhoenixTrade</span>}
       </div>
 
