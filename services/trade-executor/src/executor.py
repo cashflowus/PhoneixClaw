@@ -14,7 +14,7 @@ from shared.kafka_utils.consumer import KafkaConsumerWrapper
 from shared.kafka_utils.dlq import DeadLetterQueue
 from shared.kafka_utils.producer import KafkaProducerWrapper
 from shared.models.database import AsyncSessionLocal
-from shared.models.trade import AccountSourceMapping, TradePipeline, TradingAccount
+from shared.models.trade import AccountSourceMapping, Channel, TradePipeline, TradingAccount
 from shared.retry import RetryExhaustedError, retry_async
 
 logger = logging.getLogger(__name__)
@@ -67,27 +67,38 @@ class TradeExecutorService:
             return self.broker
 
         ta_id = trade.get("trading_account_id")
-        if not ta_id:
-            channel_id = trade.get("channel_id")
-            user_id = trade.get("user_id")
-            if channel_id and user_id:
-                try:
-                    ch_uuid = uuid.UUID(channel_id)
-                except (ValueError, TypeError):
-                    ch_uuid = None
-                if ch_uuid:
-                    async with AsyncSessionLocal() as session:
-                        from sqlalchemy import select
-                        result = await session.execute(
-                            select(AccountSourceMapping).where(
-                                AccountSourceMapping.channel_id == ch_uuid,
-                                AccountSourceMapping.enabled.is_(True),
-                            )
-                        )
-                        mapping = result.scalar_one_or_none()
-                        if mapping:
-                            ta_id = str(mapping.trading_account_id)
-                            trade["trading_account_id"] = ta_id
+        channel_id_raw = trade.get("channel_id")
+        ch_uuid: uuid.UUID | None = None
+        if channel_id_raw:
+            try:
+                ch_uuid = uuid.UUID(channel_id_raw)
+            except (ValueError, TypeError):
+                ch_uuid = None
+
+        if not ta_id and ch_uuid is None and channel_id_raw and trade.get("user_id"):
+            async with AsyncSessionLocal() as session:
+                from sqlalchemy import select
+                result = await session.execute(
+                    select(Channel).where(Channel.channel_identifier == channel_id_raw).limit(1)
+                )
+                ch = result.scalar_one_or_none()
+                if ch:
+                    ch_uuid = ch.id
+                    trade["_channel_uuid"] = str(ch.id)
+
+        if not ta_id and ch_uuid and trade.get("user_id"):
+            async with AsyncSessionLocal() as session:
+                from sqlalchemy import select
+                result = await session.execute(
+                    select(AccountSourceMapping).where(
+                        AccountSourceMapping.channel_id == ch_uuid,
+                        AccountSourceMapping.enabled.is_(True),
+                    )
+                )
+                mapping = result.scalar_one_or_none()
+                if mapping:
+                    ta_id = str(mapping.trading_account_id)
+                    trade["trading_account_id"] = ta_id
 
         if not ta_id:
             async with AsyncSessionLocal() as session:
@@ -115,26 +126,36 @@ class TradeExecutorService:
                 return None
 
             paper_mode = account.paper_mode
+            pipeline_ch_uuid = ch_uuid
 
-            channel_id = trade.get("channel_id")
-            if channel_id:
+            if pipeline_ch_uuid is None and channel_id_raw:
                 try:
-                    from sqlalchemy import select
-                    result = await session.execute(
-                        select(TradePipeline).where(
-                            TradePipeline.trading_account_id == uuid.UUID(ta_id),
-                            TradePipeline.channel_id == uuid.UUID(channel_id),
-                        )
-                    )
-                    pipeline = result.scalar_one_or_none()
-                    if pipeline and pipeline.paper_mode:
-                        paper_mode = True
-                        logger.info(
-                            "Pipeline %s overrides paper_mode=True for account %s",
-                            pipeline.id, ta_id,
-                        )
+                    pipeline_ch_uuid = uuid.UUID(channel_id_raw)
                 except (ValueError, TypeError):
                     pass
+                if pipeline_ch_uuid is None:
+                    result = await session.execute(
+                        select(Channel).where(Channel.channel_identifier == channel_id_raw).limit(1)
+                    )
+                    ch = result.scalar_one_or_none()
+                    if ch:
+                        pipeline_ch_uuid = ch.id
+
+            if pipeline_ch_uuid:
+                from sqlalchemy import select
+                result = await session.execute(
+                    select(TradePipeline).where(
+                        TradePipeline.trading_account_id == uuid.UUID(ta_id),
+                        TradePipeline.channel_id == pipeline_ch_uuid,
+                    )
+                )
+                pipeline = result.scalar_one_or_none()
+                if pipeline is not None:
+                    paper_mode = pipeline.paper_mode
+                    logger.info(
+                        "Pipeline %s paper_mode=%s for account %s",
+                        pipeline.id, paper_mode, ta_id,
+                    )
 
             cache_key = f"{ta_id}:{'paper' if paper_mode else 'live'}"
 

@@ -184,11 +184,12 @@ export default function Dashboard() {
                 size="sm"
                 className="h-8 gap-1 text-xs shrink-0"
                 onClick={() => {
-                  const headers = ['Ticker', 'Action', 'Strike', 'Price', 'Status', 'Error', 'Time']
+                  const headers = ['Ticker', 'Action', 'Strike', 'Type', 'Price', 'Status', 'Error', 'Time']
                   const rows = (filteredTrades).map(t => [
                     t.ticker,
                     t.action,
                     String(t.strike),
+                    t.option_type === 'PUT' ? 'Put' : t.option_type === 'CALL' ? 'Call' : '',
                     t.price?.toFixed(2) ?? '',
                     t.status,
                     t.rejection_reason || t.error_message || '',
@@ -209,6 +210,7 @@ export default function Dashboard() {
                 <TableHead>Ticker</TableHead>
                 <TableHead>Action</TableHead>
                 <TableHead>Strike</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Time</TableHead>
@@ -224,6 +226,9 @@ export default function Dashboard() {
                     </span>
                   </TableCell>
                   <TableCell>{t.strike}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {t.option_type === 'PUT' ? 'Put' : t.option_type === 'CALL' ? 'Call' : '—'}
+                  </TableCell>
                   <TableCell>${t.price?.toFixed(2)}</TableCell>
                   <TableCell>{statusBadge(t.status, t.error_message, t.rejection_reason)}</TableCell>
                   <TableCell className="text-muted-foreground">
@@ -233,7 +238,7 @@ export default function Dashboard() {
               ))}
               {filteredTrades.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                     {searchQuery ? 'No trades match your search.' : 'No trades yet. Connect a data source to get started.'}
                   </TableCell>
                 </TableRow>
