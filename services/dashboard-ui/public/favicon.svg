@@ -1,11 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#6366f1"/>
-      <stop offset="100%" stop-color="#8b5cf6"/>
+    <linearGradient id="g" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#EA580C"/>
+      <stop offset="100%" stop-color="#EAB308"/>
     </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
-  <polyline points="14,44 26,32 34,38 50,20" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <polyline points="40,20 50,20 50,30" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M32 4C28 12 20 16 16 20C12 24 10 30 12 36C14 30 18 26 22 24C18 32 16 40 20 48C24 44 26 38 28 32C28 38 30 44 34 50C36 44 36 38 34 32C38 38 42 44 44 48C48 40 46 32 42 24C46 26 50 30 52 36C54 30 52 24 48 20C44 16 36 12 32 4Z" fill="url(#g)"/>
+  <path d="M32 18C30 22 28 26 28 30C28 26 30 22 34 18C33 18 32 18 32 18Z" fill="url(#g)" opacity="0.6"/>
 </svg>

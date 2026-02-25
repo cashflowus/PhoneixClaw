@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { TrendingUp, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -36,7 +36,15 @@ export default function Login() {
       <Card className="w-full max-w-md relative border-border/50 shadow-2xl">
         <CardHeader className="text-center space-y-4">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <TrendingUp className="h-6 w-6" />
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" className="h-6 w-6">
+              <defs>
+                <linearGradient id="phoenixLogin" x1="0" y1="1" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#EA580C"/>
+                  <stop offset="100%" stopColor="#EAB308"/>
+                </linearGradient>
+              </defs>
+              <path d="M32 4C28 12 20 16 16 20C12 24 10 30 12 36C14 30 18 26 22 24C18 32 16 40 20 48C24 44 26 38 28 32C28 38 30 44 34 50C36 44 36 38 34 32C38 38 42 44 44 48C48 40 46 32 42 24C46 26 50 30 52 36C54 30 52 24 48 20C44 16 36 12 32 4Z" fill="url(#phoenixLogin)"/>
+            </svg>
           </div>
           <div>
             <CardTitle className="text-2xl">Welcome back</CardTitle>
