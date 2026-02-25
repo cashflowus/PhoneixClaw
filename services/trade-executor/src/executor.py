@@ -14,7 +14,7 @@ from shared.kafka_utils.consumer import KafkaConsumerWrapper
 from shared.kafka_utils.dlq import DeadLetterQueue
 from shared.kafka_utils.producer import KafkaProducerWrapper
 from shared.models.database import AsyncSessionLocal
-from shared.models.trade import AccountSourceMapping, Channel, TradePipeline, TradingAccount
+from shared.models.trade import AccountSourceMapping, Channel, Position, TradePipeline, TradingAccount
 from shared.retry import RetryExhaustedError, retry_async
 
 logger = logging.getLogger(__name__)
@@ -208,6 +208,59 @@ class TradeExecutorService:
             logger.warning("Broker health check inconclusive for %s: %s", cache_key, e)
             self._verified_accounts.add(cache_key)
 
+    async def _create_dry_run_position(self, trade: dict, fill_price: float, quantity: int) -> None:
+        """Create a simulated Position for dry-run BUY trades so they appear on the Positions page."""
+        user_id = trade.get("user_id")
+        ta_id = trade.get("trading_account_id")
+        if not user_id or not ta_id:
+            return
+        exp = None
+        if trade.get("expiration"):
+            try:
+                exp = datetime.strptime(trade["expiration"], "%Y-%m-%d")
+            except (ValueError, TypeError):
+                pass
+        try:
+            async with AsyncSessionLocal() as session:
+                from sqlalchemy import select
+                existing = await session.execute(
+                    select(Position).where(
+                        Position.user_id == uuid.UUID(user_id),
+                        Position.broker_symbol == (trade.get("broker_symbol") or ""),
+                        Position.status == "OPEN",
+                    )
+                )
+                pos = existing.scalar_one_or_none()
+                if pos:
+                    total_cost = float(pos.total_cost) + (fill_price * quantity * 100)
+                    total_qty = pos.quantity + quantity
+                    pos.avg_entry_price = total_cost / (total_qty * 100) if total_qty else fill_price
+                    pos.quantity = total_qty
+                    pos.total_cost = total_cost
+                    await session.commit()
+                else:
+                    new_pos = Position(
+                        user_id=uuid.UUID(user_id),
+                        trading_account_id=uuid.UUID(ta_id),
+                        ticker=trade.get("ticker", ""),
+                        strike=trade.get("strike", 0),
+                        option_type=trade.get("option_type", "CALL"),
+                        expiration=exp or datetime.now(timezone.utc),
+                        quantity=quantity,
+                        avg_entry_price=fill_price,
+                        total_cost=fill_price * quantity * 100,
+                        profit_target=trade.get("profit_target", 0.30),
+                        stop_loss=trade.get("stop_loss", 0.20),
+                        high_water_mark=fill_price,
+                        broker_symbol=trade.get("broker_symbol", ""),
+                        status="OPEN",
+                    )
+                    session.add(new_pos)
+                    await session.commit()
+                logger.info("[DRY RUN] Position created/updated for %s", trade.get("ticker"))
+        except Exception:
+            logger.exception("Failed to create dry-run position for trade %s", trade.get("trade_id"))
+
     async def _handle_trade(self, trade: dict, headers: dict) -> None:
         trade_id = trade.get("trade_id", "unknown")
         start_time = time.monotonic()
@@ -261,6 +314,8 @@ class TradeExecutorService:
             trade["buffer_pct_used"] = buffer_pct
             trade["broker_symbol"] = symbol
             await self._publish_result(trade, "EXECUTED", start_time=start_time)
+            if action.upper() == "BUY":
+                await self._create_dry_run_position(trade, buffered_price, quantity)
             logger.info("[DRY RUN] Trade %s: %s %d %s @ %.2f", trade_id, action, quantity, symbol, buffered_price)
             return
 

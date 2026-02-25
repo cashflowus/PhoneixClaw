@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { TrendingUp, CheckCircle2, XCircle, AlertTriangle, Loader2, Download, Search } from 'lucide-react'
+import { TrendingUp, CheckCircle2, XCircle, AlertTriangle, Loader2, Download, Search, Clock } from 'lucide-react'
 import { exportToCSV } from '@/lib/csv-export'
 
 interface Trade {
@@ -65,6 +65,7 @@ const statusBadge = (status: string, errorMessage?: string | null, rejectionReas
 const kpiCards = [
   { key: 'total', label: 'Total Trades', icon: TrendingUp, color: 'text-primary' },
   { key: 'executed', label: 'Executed', icon: CheckCircle2, color: 'text-emerald-500' },
+  { key: 'approved', label: 'Approved', icon: Clock, color: 'text-blue-500' },
   { key: 'rejected', label: 'Rejected', icon: AlertTriangle, color: 'text-amber-500' },
   { key: 'errored', label: 'Errors', icon: XCircle, color: 'text-red-500' },
 ] as const
@@ -100,6 +101,7 @@ export default function Dashboard() {
   const stats = {
     total: trades?.length || 0,
     executed: trades?.filter((t) => t.status === 'EXECUTED').length || 0,
+    approved: trades?.filter((t) => t.status === 'APPROVED').length || 0,
     rejected: trades?.filter((t) => t.status === 'REJECTED').length || 0,
     errored: trades?.filter((t) => t.status === 'ERROR').length || 0,
   }
@@ -117,7 +119,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {kpiCards.map(({ key, label, icon: Icon, color }) => (
           <Card key={key}>
             <CardContent className="p-5">
