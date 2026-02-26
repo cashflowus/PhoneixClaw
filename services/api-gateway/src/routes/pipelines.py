@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.crypto.credentials import encrypt_credentials
 from shared.models.database import get_session
 from shared.models.trade import (
+    AITradeDecision,
     AccountSourceMapping,
     Channel,
     DataSource,
@@ -33,6 +34,9 @@ class PipelineCreate(BaseModel):
     trading_account_id: str
     auto_approve: bool = True
     paper_mode: bool = False
+    pipeline_type: str = "trade"
+    trigger_config: dict = {}
+    market_hours_mode: str = "regular_only"
 
 
 class PipelineUpdate(BaseModel):
@@ -40,6 +44,9 @@ class PipelineUpdate(BaseModel):
     trading_account_id: str | None = None
     auto_approve: bool | None = None
     paper_mode: bool | None = None
+    pipeline_type: str | None = None
+    trigger_config: dict | None = None
+    market_hours_mode: str | None = None
 
 
 class ChatPipelineCreate(BaseModel):
@@ -65,6 +72,9 @@ class PipelineResponse(BaseModel):
     error_message: str | None = None
     auto_approve: bool
     paper_mode: bool
+    pipeline_type: str = "trade"
+    trigger_config: dict = {}
+    market_hours_mode: str = "regular_only"
     last_message_at: str | None = None
     messages_count: int
     trades_count: int
@@ -89,6 +99,9 @@ def _pipeline_response(p: TradePipeline) -> PipelineResponse:
         error_message=p.error_message,
         auto_approve=p.auto_approve,
         paper_mode=p.paper_mode,
+        pipeline_type=p.pipeline_type or "trade",
+        trigger_config=p.trigger_config or {},
+        market_hours_mode=p.market_hours_mode or "regular_only",
         last_message_at=p.last_message_at.isoformat() if p.last_message_at else None,
         messages_count=p.messages_count or 0,
         trades_count=p.trades_count or 0,
@@ -189,6 +202,9 @@ async def create_pipeline(
         trading_account_id=ta_id,
         auto_approve=req.auto_approve,
         paper_mode=req.paper_mode,
+        pipeline_type=req.pipeline_type,
+        trigger_config=req.trigger_config,
+        market_hours_mode=req.market_hours_mode,
         enabled=True,
         status="STOPPED",
     )
@@ -892,3 +908,51 @@ async def stop_pipeline(
     await session.commit()
     await session.refresh(pipeline, ["data_source", "channel", "trading_account"])
     return _pipeline_response(pipeline)
+
+
+ai_router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
+
+
+@ai_router.get("/decisions")
+async def list_ai_decisions(
+    request: Request,
+    ticker: str | None = Query(None),
+    decision: str | None = Query(None),
+    limit: int = Query(50, le=200),
+    offset: int = Query(0, ge=0),
+    session: AsyncSession = Depends(get_session),
+):
+    user_id = request.state.user_id
+    stmt = (
+        select(AITradeDecision)
+        .where(AITradeDecision.user_id == uuid.UUID(user_id))
+        .order_by(desc(AITradeDecision.created_at))
+    )
+    if ticker:
+        stmt = stmt.where(AITradeDecision.ticker == ticker.upper())
+    if decision:
+        stmt = stmt.where(AITradeDecision.decision == decision)
+    stmt = stmt.offset(offset).limit(limit)
+    result = await session.execute(stmt)
+    rows = result.scalars().all()
+
+    count_stmt = select(func.count(AITradeDecision.id)).where(
+        AITradeDecision.user_id == uuid.UUID(user_id)
+    )
+    total = (await session.execute(count_stmt)).scalar() or 0
+
+    return {
+        "total": total,
+        "decisions": [
+            {
+                "id": str(d.id),
+                "trigger_type": d.trigger_type,
+                "ticker": d.ticker,
+                "decision": d.decision,
+                "decision_rationale": d.decision_rationale,
+                "trade_params": d.trade_params,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+            }
+            for d in rows
+        ],
+    }

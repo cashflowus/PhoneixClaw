@@ -176,6 +176,51 @@ services:
         limits:
           memory: 1536M
 
+  sentiment-analyzer:
+    build:
+      context: .
+      dockerfile: services/sentiment-analyzer/Dockerfile
+    environment: *common-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  news-aggregator:
+    build:
+      context: .
+      dockerfile: services/news-aggregator/Dockerfile
+    environment: *common-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  option-chain-analyzer:
+    build:
+      context: .
+      dockerfile: services/option-chain-analyzer/Dockerfile
+    environment: *common-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  ai-trade-recommender:
+    build:
+      context: .
+      dockerfile: services/ai-trade-recommender/Dockerfile
+    environment: *common-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  strategy-agent:
+    build:
+      context: .
+      dockerfile: services/strategy-agent/Dockerfile
+    environment: *common-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
   dashboard-ui:
     build:
       context: services/dashboard-ui

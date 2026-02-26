@@ -164,7 +164,7 @@ export default function Backtesting() {
         if (run?.status === 'completed') {
           const pnl = (run.summary as Record<string, number> | null)?.total_pnl ?? 0
           setBtSuccess(`Backtest "${run.name || run.id.slice(0, 8)}" completed — P&L $${pnl.toFixed(2)}`)
-          qc.invalidateQueries({ queryKey: ['unread-count'] })
+          qc.invalidateQueries({ queryKey: ['notifications-unread'] })
           qc.invalidateQueries({ queryKey: ['notifications'] })
         } else if (run?.status === 'failed') {
           setBtError(`Backtest "${run.name || run.id.slice(0, 8)}" failed: ${run.error_message || 'Unknown error'}`)

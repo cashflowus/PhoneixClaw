@@ -19,6 +19,13 @@ import AccessManagement from './pages/AccessManagement'
 import SprintBoard from './pages/SprintBoard'
 import TaskDetail from './pages/TaskDetail'
 import Notifications from './pages/Notifications'
+import TickerSentiment from './pages/TickerSentiment'
+import TrendingNews from './pages/TrendingNews'
+import AIDecisions from './pages/AIDecisions'
+import AdvancedPipelines from './pages/AdvancedPipelines'
+import PipelineEditorPage from './pages/PipelineEditor'
+import StrategyBuilder from './pages/StrategyBuilder'
+import ModelHub from './pages/ModelHub'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuth()
@@ -49,6 +56,13 @@ export default function App() {
           <Route path="backtest" element={<Backtesting />} />
           <Route path="pipelines" element={<TradePipelines />} />
           <Route path="pipelines/:pipelineId" element={<PipelineDetail />} />
+          <Route path="sentiment" element={<TickerSentiment />} />
+          <Route path="news" element={<TrendingNews />} />
+          <Route path="ai-decisions" element={<AIDecisions />} />
+          <Route path="advanced-pipelines" element={<AdvancedPipelines />} />
+          <Route path="advanced-pipelines/:pipelineId" element={<PipelineEditorPage />} />
+          <Route path="strategies" element={<StrategyBuilder />} />
+          <Route path="model-hub" element={<ModelHub />} />
           <Route path="messages" element={<RawMessages />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="system" element={<System />} />

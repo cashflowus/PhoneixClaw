@@ -200,6 +200,7 @@ class SourceOrchestrator:
                     channel_ids = [ch_id]
                     data_source_id = str(source.id)
                     pipeline_id = str(pipeline.id)
+                    data_purpose = getattr(source, "data_purpose", "trades") or "trades"
 
                     await self._update_pipeline_status(pipeline_id, "CONNECTING")
 
@@ -211,6 +212,7 @@ class SourceOrchestrator:
                             auth_type=source.auth_type,
                             data_source_id=data_source_id,
                             pipeline_id=pipeline_id,
+                            source_type=data_purpose,
                         )
                     )
                     self._active_workers[wkey] = {"task": task, "status": "connecting", "pipeline_id": pipeline_id}
@@ -220,6 +222,7 @@ class SourceOrchestrator:
                     )
                 else:
                     channel_ids = self._parse_channel_ids(creds.get("channel_ids", ""))
+                    data_purpose = getattr(source, "data_purpose", "trades") or "trades"
                     await self._update_source_status(wkey, "CONNECTING")
                     task = asyncio.create_task(
                         self._run_ingestor(
@@ -228,6 +231,7 @@ class SourceOrchestrator:
                             user_id=str(source.user_id),
                             auth_type=source.auth_type,
                             data_source_id=wkey,
+                            source_type=data_purpose,
                         )
                     )
                     self._active_workers[wkey] = {"task": task, "status": "connecting"}
@@ -255,6 +259,7 @@ class SourceOrchestrator:
         self, token: str, channel_ids: list[int],
         user_id: str, auth_type: str, data_source_id: str,
         pipeline_id: str | None = None,
+        source_type: str = "trades",
     ):
         from services.discord_ingestor.src.connector import DiscordIngestor
 
@@ -278,6 +283,7 @@ class SourceOrchestrator:
             data_source_id=data_source_id,
             pipeline_id=pipeline_id,
             on_connected=_mark_connected,
+            source_type=source_type,
         )
         try:
             await ingestor.start()

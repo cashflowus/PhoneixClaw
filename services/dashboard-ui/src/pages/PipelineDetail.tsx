@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
@@ -188,13 +188,15 @@ export default function PipelineDetail() {
     queryFn: () => axios.get('/api/v1/accounts').then(r => r.data),
   })
 
-  if (pipeline && !settingsLoaded) {
-    setEditName(pipeline.name)
-    setEditAccount(pipeline.trading_account_id)
-    setEditAutoApprove(pipeline.auto_approve)
-    setEditPaperMode(pipeline.paper_mode)
-    setSettingsLoaded(true)
-  }
+  useEffect(() => {
+    if (pipeline && !settingsLoaded) {
+      setEditName(pipeline.name)
+      setEditAccount(pipeline.trading_account_id)
+      setEditAutoApprove(pipeline.auto_approve)
+      setEditPaperMode(pipeline.paper_mode)
+      setSettingsLoaded(true)
+    }
+  }, [pipeline, settingsLoaded])
 
   const updateMutation = useMutation({
     mutationFn: (data: { name?: string; trading_account_id?: string; auto_approve?: boolean; paper_mode?: boolean }) =>

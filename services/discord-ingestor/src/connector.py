@@ -48,6 +48,7 @@ class DiscordIngestor:
         data_source_id: str | None = None,
         pipeline_id: str | None = None,
         on_connected: "asyncio.coroutines.coroutine | None" = None,
+        source_type: str = "trades",
     ) -> None:
         self._token = token
         self._target_channels = set(target_channels)
@@ -57,6 +58,8 @@ class DiscordIngestor:
         self._data_source_id = data_source_id
         self._pipeline_id = pipeline_id
         self._on_connected = on_connected
+        self._source_type = source_type
+        self._kafka_topic = "raw-sentiment-messages" if source_type == "sentiment" else "raw-messages"
         self._dedup_cache: set[str] = set()
         self._msg_count = 0
 
@@ -183,6 +186,7 @@ class DiscordIngestor:
             except AttributeError:
                 guild_id = ""
 
+            msg_timestamp = (message.created_at or datetime.now(timezone.utc)).isoformat()
             raw_msg = {
                 "content": content,
                 "message_id": str(message.id),
@@ -195,8 +199,10 @@ class DiscordIngestor:
                 "data_source_id": self._data_source_id,
                 "pipeline_id": self._pipeline_id,
                 "source": "discord",
-                "source_type": "discord",
-                "timestamp": (message.created_at or datetime.now(timezone.utc)).isoformat(),
+                "source_type": self._source_type,
+                "is_bot": message.author.bot if hasattr(message.author, "bot") else False,
+                "timestamp": msg_timestamp,
+                "message_timestamp": msg_timestamp,
             }
 
             headers = [
@@ -209,12 +215,12 @@ class DiscordIngestor:
             for attempt in range(1, KAFKA_SEND_RETRIES + 1):
                 try:
                     await self._producer.send(
-                        "raw-messages", value=raw_msg, key=msg_key, headers=headers,
+                        self._kafka_topic, value=raw_msg, key=msg_key, headers=headers,
                     )
                     self._msg_count += 1
                     logger.info(
-                        "Published message %s to raw-messages (pipeline=%s, total=%d)",
-                        msg_key, self._pipeline_id, self._msg_count,
+                        "Published message %s to %s (pipeline=%s, total=%d)",
+                        msg_key, self._kafka_topic, self._pipeline_id, self._msg_count,
                     )
                     break
                 except Exception:

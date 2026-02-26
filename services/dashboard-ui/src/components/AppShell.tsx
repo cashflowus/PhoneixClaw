@@ -31,6 +31,12 @@ import {
   Workflow,
   KanbanSquare,
   Bell,
+  HeartPulse,
+  Newspaper,
+  Brain,
+  Boxes,
+  FlaskConical,
+  Package,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -47,6 +53,12 @@ const baseNavItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/positions', icon: TrendingUp, label: 'Positions' },
   { to: '/pipelines', icon: Workflow, label: 'Trade Pipelines' },
+  { to: '/sentiment', icon: HeartPulse, label: 'Sentiment' },
+  { to: '/news', icon: Newspaper, label: 'Trending News' },
+  { to: '/ai-decisions', icon: Brain, label: 'AI Decisions' },
+  { to: '/advanced-pipelines', icon: Boxes, label: 'Pipeline Builder' },
+  { to: '/strategies', icon: FlaskConical, label: 'Strategy Builder' },
+  { to: '/model-hub', icon: Package, label: 'Model Hub' },
   { to: '/backtest', icon: LineChart, label: 'Backtesting' },
   { to: '/sources', icon: Database, label: 'Data Sources' },
   { to: '/accounts', icon: Wallet, label: 'Trading Accounts' },
@@ -188,6 +200,12 @@ const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
   '/positions': 'Positions',
   '/pipelines': 'Trade Pipelines',
+  '/sentiment': 'Ticker Sentiment',
+  '/news': 'Trending News',
+  '/ai-decisions': 'AI Decisions',
+  '/advanced-pipelines': 'Pipeline Builder',
+  '/strategies': 'Strategy Builder',
+  '/model-hub': 'Model Hub',
   '/backtest': 'Backtesting',
   '/sources': 'Data Sources',
   '/accounts': 'Trading Accounts',
@@ -197,6 +215,7 @@ const pageTitles: Record<string, string> = {
   '/access': 'Access Management',
   '/admin': 'Admin Panel',
   '/board': 'Sprint Board',
+  '/notifications': 'Notifications',
 }
 
 function getInitials(name: string | null | undefined, email: string | null | undefined): string {

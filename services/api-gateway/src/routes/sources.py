@@ -23,6 +23,7 @@ class SourceCreate(BaseModel):
     credentials: dict
     server_id: str | None = None
     server_name: str | None = None
+    data_purpose: str = "trades"
 
 class SourceResponse(BaseModel):
     id: str
@@ -33,6 +34,7 @@ class SourceResponse(BaseModel):
     connection_status: str
     server_id: str | None = None
     server_name: str | None = None
+    data_purpose: str = "trades"
     created_at: str
     owner_email: str | None = None
     owner_name: str | None = None
@@ -133,6 +135,7 @@ async def create_source(req: SourceCreate, request: Request, session: AsyncSessi
         credentials_encrypted=encrypt_credentials(req.credentials),
         server_id=req.server_id,
         server_name=req.server_name,
+        data_purpose=req.data_purpose or "trades",
     )
     session.add(source)
     await session.commit()
@@ -397,6 +400,7 @@ def _source_response(
         enabled=s.enabled, connection_status=s.connection_status,
         server_id=getattr(s, "server_id", None),
         server_name=getattr(s, "server_name", None),
+        data_purpose=getattr(s, "data_purpose", "trades") or "trades",
         created_at=s.created_at.isoformat(),
         owner_email=owner_email,
         owner_name=owner_name,

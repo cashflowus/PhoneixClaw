@@ -11,7 +11,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { TrendingUp, CheckCircle2, XCircle, AlertTriangle, Loader2, Download, Search, Clock, Eye } from 'lucide-react'
+import { TrendingUp, CheckCircle2, XCircle, AlertTriangle, Loader2, Download, Search, Clock, Eye, HeartPulse, Newspaper, Brain } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { exportToCSV } from '@/lib/csv-export'
 
 interface Trade {
@@ -116,6 +117,7 @@ const kpiCards = [
 ] as const
 
 export default function Dashboard() {
+  const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState('')
   const [viewTrade, setViewTrade] = useState<Trade | null>(null)
   const { data: trades, isLoading: tradesLoading, isError: tradesError, refetch: refetchTrades } = useQuery<Trade[]>({
@@ -126,6 +128,24 @@ export default function Dashboard() {
   const { data: metrics, isError: metricsError } = useQuery({
     queryKey: ['metrics'],
     queryFn: () => axios.get('/api/v1/metrics/daily?days=7').then((r) => r.data),
+  })
+
+  const { data: sentimentTickers } = useQuery({
+    queryKey: ['dashboard-sentiment'],
+    queryFn: () => axios.get('/api/v1/sentiment/tickers?limit=5').then(r => r.data).catch(() => []),
+    refetchInterval: 60_000,
+  })
+
+  const { data: newsHeadlines } = useQuery({
+    queryKey: ['dashboard-news'],
+    queryFn: () => axios.get('/api/v1/news/headlines?limit=5').then(r => r.data).catch(() => []),
+    refetchInterval: 60_000,
+  })
+
+  const { data: aiDecisions } = useQuery({
+    queryKey: ['dashboard-ai-decisions'],
+    queryFn: () => axios.get('/api/v1/ai/decisions?limit=5').then(r => r.data).catch(() => []),
+    refetchInterval: 60_000,
   })
 
   const filteredTrades = useMemo(() => {
@@ -196,6 +216,68 @@ export default function Dashboard() {
             <div key={key}>{card}</div>
           )
         })}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/sentiment')}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <HeartPulse className="h-4 w-4 text-pink-500" />
+              <span className="text-xs font-semibold uppercase tracking-wide">Sentiment</span>
+            </div>
+            {sentimentTickers && sentimentTickers.length > 0 ? (
+              <div className="space-y-1">
+                {sentimentTickers.slice(0, 3).map((t: any) => (
+                  <div key={t.ticker} className="flex items-center justify-between text-xs">
+                    <span className="font-mono font-medium">{t.ticker}</span>
+                    <Badge variant="outline" className="text-[10px]">{t.sentiment_label}</Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">No sentiment data yet</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/news')}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Newspaper className="h-4 w-4 text-blue-500" />
+              <span className="text-xs font-semibold uppercase tracking-wide">Trending News</span>
+            </div>
+            {newsHeadlines && newsHeadlines.length > 0 ? (
+              <div className="space-y-1">
+                {newsHeadlines.slice(0, 3).map((h: any, i: number) => (
+                  <p key={i} className="text-xs truncate text-muted-foreground">{h.title}</p>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">No news data yet</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate('/ai-decisions')}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Brain className="h-4 w-4 text-purple-500" />
+              <span className="text-xs font-semibold uppercase tracking-wide">AI Decisions</span>
+            </div>
+            {aiDecisions && aiDecisions.length > 0 ? (
+              <div className="space-y-1">
+                {aiDecisions.slice(0, 3).map((d: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <span className="font-mono font-medium">{d.ticker}</span>
+                    <Badge variant="outline" className="text-[10px]">{d.decision}</Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">No AI decisions yet</p>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {tradesLoading && (

@@ -31,6 +31,7 @@ interface Source {
   enabled: boolean
   server_id?: string | null
   server_name?: string | null
+  data_purpose: string
   created_at: string
   owner_email?: string | null
   owner_name?: string | null
@@ -50,7 +51,7 @@ const AUTH_HELP: Record<string, string> = {
 
 const emptyForm = {
   display_name: '', source_type: 'discord', auth_type: 'user_token', token: '',
-  server_id: '', server_name: '',
+  server_id: '', server_name: '', data_purpose: 'trades' as 'trades' | 'sentiment',
 }
 
 export default function DataSources() {
@@ -174,6 +175,7 @@ export default function DataSources() {
       credentials,
       server_id: form.server_id || null,
       server_name: form.server_name || null,
+      data_purpose: form.data_purpose,
     })
   }
 
@@ -231,6 +233,26 @@ export default function DataSources() {
                     onChange={(e) => setForm({ ...form, display_name: e.target.value })}
                     placeholder="e.g. Trading Alerts Server"
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label>Data Purpose</Label>
+                  <div className="flex gap-3">
+                    {([['trades', 'Trades', 'Receive trade signals to execute'], ['sentiment', 'Sentiment', 'Analyze message sentiment per ticker']] as const).map(([val, label, desc]) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setForm({ ...form, data_purpose: val })}
+                        className={`flex-1 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                          form.data_purpose === val
+                            ? 'border-primary bg-primary/10 ring-1 ring-primary/20'
+                            : 'border-border text-muted-foreground hover:border-primary/50'
+                        }`}
+                      >
+                        <p className="text-sm font-medium">{label}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">{desc}</p>
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Platform</Label>
@@ -446,12 +468,15 @@ export default function DataSources() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-              <div className="mt-4 flex items-center gap-2">
+              <div className="mt-4 flex items-center gap-2 flex-wrap">
                 <Badge variant={s.connection_status === 'CONNECTED' ? 'default' : s.connection_status === 'ERROR' ? 'destructive' : 'secondary'}>
                   {s.connection_status === 'CONNECTING' ? <><Loader2 className="mr-1 h-3 w-3 animate-spin" /> Connecting</> : s.connection_status}
                 </Badge>
                 <Badge variant={s.enabled ? 'default' : 'outline'} className="text-xs">
                   {s.enabled ? 'Active' : 'Stopped'}
+                </Badge>
+                <Badge variant="outline" className={`text-xs ${s.data_purpose === 'sentiment' ? 'border-purple-500/40 text-purple-600 dark:text-purple-400' : 'border-blue-500/40 text-blue-600 dark:text-blue-400'}`}>
+                  {s.data_purpose === 'sentiment' ? 'Sentiment' : 'Trades'}
                 </Badge>
               </div>
             </CardContent>

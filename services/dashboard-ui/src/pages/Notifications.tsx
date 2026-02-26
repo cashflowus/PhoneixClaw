@@ -34,7 +34,7 @@ export default function Notifications() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['notifications-all'] })
       qc.invalidateQueries({ queryKey: ['notifications'] })
-      qc.invalidateQueries({ queryKey: ['unread-count'] })
+      qc.invalidateQueries({ queryKey: ['notifications-unread'] })
     },
   })
 

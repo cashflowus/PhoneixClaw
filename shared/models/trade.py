@@ -141,6 +141,7 @@ class DataSource(Base):
     credentials_encrypted = Column(LargeBinary, nullable=False)
     server_id = Column(String(100), nullable=True)
     server_name = Column(String(200), nullable=True)
+    data_purpose = Column(String(20), nullable=False, default="trades")
     enabled = Column(Boolean, nullable=False, default=True)
     connection_status = Column(String(20), nullable=False, default="DISCONNECTED")
     last_connected_at = Column(DateTime(timezone=True), nullable=True)
@@ -213,6 +214,9 @@ class TradePipeline(Base):
     error_message = Column(Text, nullable=True)
     auto_approve = Column(Boolean, nullable=False, default=True)
     paper_mode = Column(Boolean, nullable=False, default=False)
+    pipeline_type = Column(String(20), nullable=False, default="trade")
+    trigger_config = Column(JSONB, nullable=False, default=dict)
+    market_hours_mode = Column(String(20), nullable=False, default="regular_only")
     last_message_at = Column(DateTime(timezone=True), nullable=True)
     messages_count = Column(Integer, nullable=False, default=0)
     trades_count = Column(Integer, nullable=False, default=0)
@@ -523,4 +527,245 @@ class BoardTask(Base):
 
     __table_args__ = (
         Index("idx_board_task_status", "status", "position"),
+    )
+
+
+# ── Phase 2 Models ──────────────────────────────────────────────────────────
+
+
+class UserWatchlist(Base):
+    __tablename__ = "user_watchlist"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    ticker = Column(String(10), nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "ticker", name="uq_watchlist_user_ticker"),
+        Index("idx_watchlist_user", "user_id"),
+    )
+
+
+class ModelRegistry(Base):
+    __tablename__ = "model_registry"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(100), nullable=False, unique=True)
+    model_type = Column(String(30), nullable=False)  # sentiment, llm, strategy, option_analyzer
+    provider = Column(String(30), nullable=False)  # finbert, ollama, custom
+    model_identifier = Column(String(200), nullable=False)  # ProsusAI/finbert, mistral, etc.
+    version = Column(String(30), nullable=True)
+    description = Column(Text, nullable=True)
+    config = Column(JSONB, nullable=False, default=dict)
+    input_schema = Column(JSONB, nullable=True)
+    output_schema = Column(JSONB, nullable=True)
+    status = Column(String(20), nullable=False, default="available")  # available, downloading, error, disabled
+    health_status = Column(String(20), nullable=False, default="unknown")
+    last_health_check = Column(DateTime(timezone=True), nullable=True)
+    performance_metrics = Column(JSONB, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class SentimentMessage(Base):
+    __tablename__ = "sentiment_messages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    data_source_id = Column(UUID(as_uuid=True), ForeignKey("data_sources.id", ondelete="SET NULL"), nullable=True)
+    channel_name = Column(String(200), nullable=True)
+    author = Column(String(200), nullable=True)
+    content = Column(Text, nullable=False)
+    ticker = Column(String(10), nullable=True, index=True)
+    sentiment_label = Column(String(20), nullable=True)  # Very Bullish..Very Bearish
+    sentiment_score = Column(Numeric(6, 4), nullable=True)  # -1.0 to 1.0
+    confidence = Column(Numeric(5, 4), nullable=True)
+    source_message_id = Column(String(100), nullable=True)
+    raw_metadata = Column(JSONB, nullable=False, default=dict)
+    message_timestamp = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    __table_args__ = (
+        Index("idx_sentiment_msg_ticker", "ticker", "created_at"),
+        Index("idx_sentiment_msg_user", "user_id", "created_at"),
+    )
+
+
+class TickerSentiment(Base):
+    __tablename__ = "ticker_sentiment"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ticker = Column(String(10), nullable=False, index=True)
+    period_start = Column(DateTime(timezone=True), nullable=False)
+    period_end = Column(DateTime(timezone=True), nullable=False)
+    sentiment_label = Column(String(20), nullable=False)
+    sentiment_score = Column(Numeric(6, 4), nullable=False)
+    message_count = Column(Integer, nullable=False, default=0)
+    bullish_count = Column(Integer, nullable=False, default=0)
+    bearish_count = Column(Integer, nullable=False, default=0)
+    neutral_count = Column(Integer, nullable=False, default=0)
+    mention_change_pct = Column(Numeric(8, 2), nullable=True)
+    sources = Column(JSONB, nullable=False, default=dict)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("ticker", "period_start", name="uq_ticker_sentiment_period"),
+        Index("idx_ticker_sentiment_time", "period_start", "period_end"),
+    )
+
+
+class SentimentAlert(Base):
+    __tablename__ = "sentiment_alerts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    ticker = Column(String(10), nullable=True)
+    alert_type = Column(String(30), nullable=False)  # threshold, flip, spike
+    config = Column(JSONB, nullable=False, default=dict)
+    enabled = Column(Boolean, nullable=False, default=True)
+    last_triggered_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class NewsHeadline(Base):
+    __tablename__ = "news_headlines"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source_api = Column(String(30), nullable=False)  # finnhub, newsapi, reddit, etc.
+    title = Column(Text, nullable=False)
+    summary = Column(Text, nullable=True)
+    url = Column(Text, nullable=True)
+    image_url = Column(Text, nullable=True)
+    author = Column(String(200), nullable=True)
+    tickers = Column(JSONB, nullable=False, default=list)  # ["AAPL", "MSFT"]
+    category = Column(String(50), nullable=True)
+    sentiment_label = Column(String(20), nullable=True)
+    sentiment_score = Column(Numeric(6, 4), nullable=True)
+    importance_score = Column(Numeric(5, 2), nullable=True)
+    cluster_id = Column(String(100), nullable=True, index=True)
+    cluster_size = Column(Integer, nullable=False, default=1)
+    published_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    __table_args__ = (
+        Index("idx_news_created", "created_at"),
+        Index("idx_news_source", "source_api", "created_at"),
+        Index("idx_news_cluster", "cluster_id"),
+    )
+
+
+class NewsConnection(Base):
+    __tablename__ = "news_connections"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_api = Column(String(30), nullable=False)
+    display_name = Column(String(100), nullable=False)
+    api_key_encrypted = Column(LargeBinary, nullable=True)
+    config = Column(JSONB, nullable=False, default=dict)
+    enabled = Column(Boolean, nullable=False, default=True)
+    last_poll_at = Column(DateTime(timezone=True), nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "source_api", name="uq_news_conn_user_source"),
+    )
+
+
+class AdvancedPipeline(Base):
+    __tablename__ = "advanced_pipelines"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    flow_json = Column(JSONB, nullable=False, default=dict)
+    status = Column(String(20), nullable=False, default="draft")  # draft, active, paused, error
+    version = Column(Integer, nullable=False, default=1)
+    enabled = Column(Boolean, nullable=False, default=False)
+    last_run_at = Column(DateTime(timezone=True), nullable=True)
+    error_message = Column(Text, nullable=True)
+    tags = Column(JSONB, nullable=False, default=list)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    __table_args__ = (Index("idx_adv_pipeline_user", "user_id"),)
+
+
+class AdvancedPipelineVersion(Base):
+    __tablename__ = "advanced_pipeline_versions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    pipeline_id = Column(
+        UUID(as_uuid=True), ForeignKey("advanced_pipelines.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version = Column(Integer, nullable=False)
+    flow_json = Column(JSONB, nullable=False, default=dict)
+    change_summary = Column(Text, nullable=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("pipeline_id", "version", name="uq_pipeline_version"),
+    )
+
+
+class StrategyModel(Base):
+    __tablename__ = "strategy_models"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    strategy_text = Column(Text, nullable=False)
+    parsed_config = Column(JSONB, nullable=False, default=dict)
+    features = Column(JSONB, nullable=False, default=list)
+    backtest_summary = Column(JSONB, nullable=True)
+    status = Column(String(20), nullable=False, default="draft")  # draft, backtesting, ready, deployed, failed
+    deployed_pipeline_id = Column(UUID(as_uuid=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class OptionAnalysisLog(Base):
+    __tablename__ = "option_analysis_log"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ticker = Column(String(10), nullable=False, index=True)
+    direction = Column(String(10), nullable=False)  # bullish/bearish
+    input_context = Column(JSONB, nullable=False, default=dict)
+    recommended_contracts = Column(JSONB, nullable=False, default=list)
+    multi_leg_suggestions = Column(JSONB, nullable=False, default=list)
+    gex_snapshot = Column(JSONB, nullable=True)
+    rationale = Column(Text, nullable=True)
+    outcome = Column(JSONB, nullable=True)
+    user_feedback = Column(String(20), nullable=True)  # good, bad, neutral
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    __table_args__ = (Index("idx_option_analysis_ticker", "ticker", "created_at"),)
+
+
+class AITradeDecision(Base):
+    __tablename__ = "ai_trade_decisions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    pipeline_id = Column(UUID(as_uuid=True), nullable=True)
+    trigger_type = Column(String(30), nullable=False)  # sentiment, news, strategy
+    trigger_data = Column(JSONB, nullable=False, default=dict)
+    ticker = Column(String(10), nullable=True)
+    decision = Column(String(20), nullable=False)  # trade, skip, manual_confirm
+    decision_rationale = Column(Text, nullable=True)
+    trade_params = Column(JSONB, nullable=True)
+    option_analysis_id = Column(UUID(as_uuid=True), nullable=True)
+    trade_id = Column(UUID(as_uuid=True), nullable=True)
+    outcome = Column(JSONB, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    __table_args__ = (
+        Index("idx_ai_decision_user", "user_id", "created_at"),
+        Index("idx_ai_decision_ticker", "ticker", "created_at"),
     )
