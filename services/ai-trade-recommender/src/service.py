@@ -114,7 +114,7 @@ class AITradeRecommenderService:
                 top_contract = analysis["contracts"][0]
                 trade_msg = {
                     "ticker": ticker,
-                    "action": "BTO",
+                    "action": "BTO" if direction in ("bullish", "very_bullish") else "STO",
                     "asset_type": "option",
                     "contract_type": top_contract.get("option_type", "call"),
                     "strike": top_contract.get("strike"),
@@ -189,7 +189,7 @@ class AITradeRecommenderService:
                     decision=data.get("decision", "unknown"),
                     decision_rationale=data.get("decision_rationale"),
                     trade_params=data.get("trade_params"),
-                    option_analysis_id=uuid.UUID(data["analysis"]["analysis_id"]) if data.get("analysis", {}).get("analysis_id") else None,
+                    option_analysis_id=uuid.UUID(data["analysis"]["analysis_id"]) if (data.get("analysis") or {}).get("analysis_id") else None,
                 )
                 session.add(log)
                 await session.commit()

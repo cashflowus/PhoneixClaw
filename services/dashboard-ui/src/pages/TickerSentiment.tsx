@@ -23,7 +23,7 @@ import {
   Eye, TrendingUp, TrendingDown, Minus, Search, Star, Loader2, ArrowUpRight, ArrowDownRight, XCircle,
 } from 'lucide-react'
 import { AreaChart, Area, ResponsiveContainer } from 'recharts'
-import { WatchlistButton } from '@/components/WatchlistButton'
+import WatchlistButton from '@/components/WatchlistButton'
 
 interface TickerData {
   ticker: string
