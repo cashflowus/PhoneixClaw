@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Outlet, NavLink, useLocation } from 'react-router-dom'
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { useAuth } from '../hooks/useAuth'
@@ -222,6 +222,7 @@ export default function AppShell() {
   const { logout, isAdmin, user } = useAuth()
   const qc = useQueryClient()
   const location = useLocation()
+  const navigate = useNavigate()
   const pageTitle = pageTitles[location.pathname]
     || (location.pathname.startsWith('/board/') ? 'Task Detail' : 'PhoenixTrade')
   const navItems = isAdmin ? [...baseNavItems, ...adminNavItems] : baseNavItems
@@ -305,7 +306,7 @@ export default function AppShell() {
                 <div className="border-b px-4 py-3">
                   <p className="text-sm font-semibold">Notifications</p>
                 </div>
-                <ScrollArea className="max-h-80">
+                <ScrollArea className="h-80">
                   {notifications && notifications.length > 0 ? (
                     <div className="divide-y">
                       {notifications.map(n => (
@@ -327,6 +328,14 @@ export default function AppShell() {
                     </div>
                   )}
                 </ScrollArea>
+                <div className="border-t px-4 py-2">
+                  <button
+                    className="text-xs text-primary hover:underline w-full text-center"
+                    onClick={() => { setBellOpen(false); navigate('/notifications') }}
+                  >
+                    View All Notifications
+                  </button>
+                </div>
               </PopoverContent>
             </Popover>
           </div>

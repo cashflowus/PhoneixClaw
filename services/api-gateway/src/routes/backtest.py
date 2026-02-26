@@ -1,6 +1,7 @@
+import asyncio
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -10,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.backtest.discord_fetcher import fetch_channel_history
 from shared.backtest.engine import run_backtest
 from shared.crypto.credentials import decrypt_credentials
-from shared.models.database import get_session
-from shared.models.trade import BacktestRun, BacktestTrade, Channel, DataSource, TradingAccount
+from shared.models.database import AsyncSessionLocal, get_session
+from shared.models.trade import BacktestRun, BacktestTrade, Channel, DataSource, NotificationLog, TradingAccount
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,123 @@ def _trade_response(t: BacktestTrade) -> dict:
     }
 
 
+async def _run_backtest_background(
+    run_id: uuid.UUID,
+    user_id: str,
+    creds_encrypted: str,
+    auth_type: str,
+    channel_identifier: str,
+    start_dt: datetime,
+    end_dt: datetime,
+    profit_target: float,
+    stop_loss: float,
+    run_name: str | None,
+) -> None:
+    """Execute backtest in background, update DB when done, and create notification."""
+    async with AsyncSessionLocal() as session:
+        run = await session.get(BacktestRun, run_id)
+        if not run:
+            return
+        try:
+            creds = decrypt_credentials(creds_encrypted)
+            token = creds.get("user_token") or creds.get("bot_token", "")
+            if not token:
+                raise ValueError("No Discord token in credentials")
+
+            channel_id_int = int(channel_identifier.strip())
+
+            messages = await fetch_channel_history(
+                channel_id=channel_id_int,
+                after=start_dt,
+                before=end_dt,
+                token=token,
+                auth_type=auth_type,
+            )
+
+            trade_dicts, summary = run_backtest(
+                messages,
+                profit_target=profit_target,
+                stop_loss=stop_loss,
+            )
+
+            run.status = "completed"
+            run.summary = summary
+            run.error_message = None
+
+            for td in trade_dicts:
+                exp = None
+                if td.get("expiration"):
+                    try:
+                        exp = datetime.strptime(td["expiration"], "%Y-%m-%d")
+                    except (ValueError, TypeError):
+                        pass
+                bt = BacktestTrade(
+                    backtest_run_id=run.id,
+                    trade_id=uuid.UUID(td["trade_id"]),
+                    ticker=td["ticker"],
+                    strike=td["strike"],
+                    option_type=td["option_type"],
+                    expiration=exp,
+                    action=td["action"],
+                    quantity=td["quantity"],
+                    entry_price=td["entry_price"],
+                    exit_price=td.get("exit_price"),
+                    entry_ts=td["entry_ts"],
+                    exit_ts=td.get("exit_ts"),
+                    exit_reason=td.get("exit_reason"),
+                    realized_pnl=td.get("realized_pnl"),
+                    raw_message=td.get("raw_message"),
+                )
+                session.add(bt)
+
+            total_pnl = summary.get("total_pnl", 0) if summary else 0
+            total_trades = summary.get("total_trades", 0) if summary else 0
+            notif = NotificationLog(
+                user_id=uuid.UUID(user_id),
+                notification_type="backtest",
+                channel="in_app",
+                priority="normal",
+                title="Backtest Completed",
+                body=f"{run_name or 'Backtest'}: {total_trades} trades, P&L ${total_pnl:.2f}",
+                status="SENT",
+                read=False,
+            )
+            session.add(notif)
+
+        except ValueError as e:
+            run.status = "failed"
+            run.error_message = str(e)[:500]
+            logger.warning("Backtest failed (user=%s): %s", user_id, e)
+            notif = NotificationLog(
+                user_id=uuid.UUID(user_id),
+                notification_type="backtest",
+                channel="in_app",
+                priority="normal",
+                title="Backtest Failed",
+                body=f"{run_name or 'Backtest'}: {str(e)[:200]}",
+                status="SENT",
+                read=False,
+            )
+            session.add(notif)
+        except Exception as e:
+            run.status = "failed"
+            run.error_message = str(e)[:500]
+            logger.exception("Backtest failed for run %s", run.id)
+            notif = NotificationLog(
+                user_id=uuid.UUID(user_id),
+                notification_type="backtest",
+                channel="in_app",
+                priority="normal",
+                title="Backtest Failed",
+                body=f"{run_name or 'Backtest'}: {str(e)[:200]}",
+                status="SENT",
+                read=False,
+            )
+            session.add(notif)
+
+        await session.commit()
+
+
 @router.post("", response_model=BacktestRunResponse, status_code=201)
 async def create_and_run_backtest(
     req: BacktestCreate,
@@ -134,70 +252,21 @@ async def create_and_run_backtest(
     await session.commit()
     await session.refresh(run)
 
-    try:
-        creds = decrypt_credentials(data_source.credentials_encrypted)
-        token = creds.get("user_token") or creds.get("bot_token", "")
-        if not token:
-            raise ValueError("No Discord token in credentials")
-
-        channel_id_int = int(channel.channel_identifier.strip())
-        auth_type = data_source.auth_type or "user_token"
-
-        messages = await fetch_channel_history(
-            channel_id=channel_id_int,
-            after=start_dt,
-            before=end_dt,
-            token=token,
-            auth_type=auth_type,
-        )
-
-        trade_dicts, summary = run_backtest(
-            messages,
+    asyncio.create_task(
+        _run_backtest_background(
+            run_id=run.id,
+            user_id=user_id,
+            creds_encrypted=data_source.credentials_encrypted,
+            auth_type=data_source.auth_type or "user_token",
+            channel_identifier=channel.channel_identifier,
+            start_dt=start_dt,
+            end_dt=end_dt,
             profit_target=req.profit_target,
             stop_loss=req.stop_loss,
+            run_name=req.name,
         )
+    )
 
-        run.status = "completed"
-        run.summary = summary
-        run.error_message = None
-
-        for td in trade_dicts:
-            exp = None
-            if td.get("expiration"):
-                try:
-                    exp = datetime.strptime(td["expiration"], "%Y-%m-%d")
-                except (ValueError, TypeError):
-                    pass
-            bt = BacktestTrade(
-                backtest_run_id=run.id,
-                trade_id=uuid.UUID(td["trade_id"]),
-                ticker=td["ticker"],
-                strike=td["strike"],
-                option_type=td["option_type"],
-                expiration=exp,
-                action=td["action"],
-                quantity=td["quantity"],
-                entry_price=td["entry_price"],
-                exit_price=td.get("exit_price"),
-                entry_ts=td["entry_ts"],
-                exit_ts=td.get("exit_ts"),
-                exit_reason=td.get("exit_reason"),
-                realized_pnl=td.get("realized_pnl"),
-                raw_message=td.get("raw_message"),
-            )
-            session.add(bt)
-
-    except ValueError as e:
-        run.status = "failed"
-        run.error_message = str(e)[:500]
-        logger.warning("Backtest failed (user=%s): %s", user_id, e)
-    except Exception as e:
-        run.status = "failed"
-        run.error_message = str(e)[:500]
-        logger.exception("Backtest failed for run %s", run.id)
-
-    await session.commit()
-    await session.refresh(run)
     return _run_response(run)
 
 

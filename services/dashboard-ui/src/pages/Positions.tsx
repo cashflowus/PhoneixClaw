@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Loader2, TrendingUp, TrendingDown, DollarSign, XCircle, Download } from 'lucide-react'
+import { Loader2, TrendingUp, TrendingDown, DollarSign, XCircle, Download, Clock } from 'lucide-react'
 import { exportToCSV } from '@/lib/csv-export'
 
 interface Position {
@@ -55,8 +55,35 @@ export default function Positions() {
     }
   }
 
+  interface PendingOrder {
+    order_id: string
+    symbol: string
+    ticker: string
+    strike: number
+    option_type: string
+    expiration: string | null
+    side: string
+    qty: number
+    filled_qty: number
+    order_type: string
+    limit_price: number | null
+    status: string
+    submitted_at: string | null
+    filled_avg_price: number | null
+    account_name?: string
+  }
+
+  const { data: pendingOrders = [], isLoading: ordersLoading } = useQuery<PendingOrder[]>({
+    queryKey: ['pending-orders'],
+    queryFn: () => axios.get('/api/v1/positions/orders').then(r => r.data),
+    refetchInterval: 5000,
+  })
+
   const formatSymbol = (p: Position) =>
     p.option_type ? `${p.ticker} $${p.strike}${p.option_type === 'CALL' ? 'C' : 'P'}` : p.ticker
+
+  const formatOrderSymbol = (o: PendingOrder) =>
+    o.option_type ? `${o.ticker} $${o.strike}${o.option_type === 'CALL' ? 'C' : 'P'}` : o.ticker
 
   const totalPnl = (closedPositions ?? []).reduce((s, p) => s + (p.realized_pnl ?? 0), 0)
   const winCount = (closedPositions ?? []).filter(p => (p.realized_pnl ?? 0) > 0).length
@@ -113,6 +140,63 @@ export default function Positions() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" /> Pending Orders
+            {pendingOrders.length > 0 && (
+              <Badge variant="outline" className="ml-1">{pendingOrders.length}</Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {ordersLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+          ) : !pendingOrders.length ? (
+            <p className="text-center text-muted-foreground py-8">No pending orders</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Symbol</TableHead>
+                  <TableHead>Side</TableHead>
+                  <TableHead>Qty</TableHead>
+                  <TableHead>Filled</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Limit Price</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Submitted</TableHead>
+                  <TableHead>Account</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pendingOrders.map(o => (
+                  <TableRow key={o.order_id}>
+                    <TableCell className="font-medium">{formatOrderSymbol(o)}</TableCell>
+                    <TableCell>
+                      <Badge variant={o.side.toLowerCase() === 'buy' ? 'default' : 'secondary'}>
+                        {o.side.toUpperCase()}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{o.qty}</TableCell>
+                    <TableCell>{o.filled_qty}</TableCell>
+                    <TableCell className="text-xs">{o.order_type}</TableCell>
+                    <TableCell>{o.limit_price != null ? `$${o.limit_price.toFixed(2)}` : '—'}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{o.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {o.submitted_at ? new Date(o.submitted_at).toLocaleString() : '—'}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{o.account_name || '—'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

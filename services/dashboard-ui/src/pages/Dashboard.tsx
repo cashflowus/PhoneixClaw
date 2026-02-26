@@ -31,12 +31,29 @@ interface Trade {
   expiration?: string
 }
 
+const STATUS_DESCRIPTIONS: Record<string, string> = {
+  EXECUTED: 'Order placed at broker, awaiting fill',
+  IN_PROGRESS: 'Trade is being processed by the executor',
+  PENDING: 'Awaiting approval before execution',
+  STALE: 'Order polled for 5+ minutes without final status from broker — may still be pending',
+  FILLED: 'Order fully filled at broker',
+  PARTIAL_FILL: 'Order partially filled at broker',
+  CANCELLED: 'Order was cancelled at broker',
+  EXPIRED: 'Order expired before it could be filled',
+  ERROR: 'An error occurred while processing the trade',
+  REJECTED: 'Trade was rejected by the system or broker',
+}
+
 const statusBadge = (status: string, errorMessage?: string | null, rejectionReason?: string | null) => {
   const reason = rejectionReason || errorMessage
   const badge = (() => {
     switch (status) {
       case 'EXECUTED':
         return <Badge variant="success">Executed</Badge>
+      case 'FILLED':
+        return <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30">Filled</Badge>
+      case 'PARTIAL_FILL':
+        return <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30">Partial Fill</Badge>
       case 'ERROR':
         return <Badge variant="destructive">Error</Badge>
       case 'REJECTED':
@@ -45,20 +62,29 @@ const statusBadge = (status: string, errorMessage?: string | null, rejectionReas
         return <Badge className="bg-blue-500/15 text-blue-600 border-blue-500/30">In Progress</Badge>
       case 'PENDING':
         return <Badge variant="outline">Pending</Badge>
+      case 'STALE':
+        return <Badge className="bg-gray-500/15 text-gray-500 border-gray-400/30">Stale</Badge>
+      case 'CANCELLED':
+        return <Badge className="bg-gray-500/15 text-gray-500 border-gray-400/30">Cancelled</Badge>
+      case 'EXPIRED':
+        return <Badge className="bg-orange-500/15 text-orange-600 border-orange-500/30">Expired</Badge>
       default:
         return <Badge variant="secondary">{status}</Badge>
     }
   })()
 
-  if (reason && (status === 'ERROR' || status === 'REJECTED')) {
+  const description = STATUS_DESCRIPTIONS[status]
+  const detail = reason ? `${description || status}\n${reason}` : description
+
+  if (detail) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="cursor-help">{badge}</span>
         </TooltipTrigger>
         <TooltipContent className="max-w-xs">
-          <p className="text-xs font-medium">{status === 'REJECTED' ? 'Rejection Reason' : 'Error Details'}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{reason}</p>
+          <p className="text-xs font-medium">{status}</p>
+          <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-line">{detail}</p>
         </TooltipContent>
       </Tooltip>
     )

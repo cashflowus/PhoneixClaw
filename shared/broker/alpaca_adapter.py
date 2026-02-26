@@ -6,8 +6,8 @@ from datetime import datetime
 import httpx
 from alpaca.common.exceptions import APIError
 from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.trading.requests import LimitOrderRequest
+from alpaca.trading.enums import OrderSide, QueryOrderStatus, TimeInForce
+from alpaca.trading.requests import GetOrdersRequest, LimitOrderRequest
 
 from shared.config.base_config import config
 
@@ -204,6 +204,47 @@ class AlpacaBrokerAdapter:
         except APIError as e:
             self._handle_api_error(e, symbol=order_id)
             return {}
+
+    async def get_orders(self, status: str = "open") -> list[dict]:
+        status_map = {
+            "open": QueryOrderStatus.OPEN,
+            "closed": QueryOrderStatus.CLOSED,
+            "all": QueryOrderStatus.ALL,
+        }
+        query_status = status_map.get(status, QueryOrderStatus.OPEN)
+        try:
+            orders = await asyncio.to_thread(
+                self._client.get_orders,
+                GetOrdersRequest(status=query_status, limit=100),
+            )
+            result = []
+            for o in orders:
+                sym = str(o.symbol)
+                parsed = parse_occ_symbol(sym)
+                entry = {
+                    "order_id": str(o.id),
+                    "symbol": sym,
+                    "side": str(o.side.value) if o.side else "",
+                    "qty": float(o.qty or 0),
+                    "filled_qty": float(o.filled_qty or 0),
+                    "order_type": str(o.type.value) if o.type else "",
+                    "limit_price": float(o.limit_price) if o.limit_price else None,
+                    "status": str(o.status.value) if o.status else "",
+                    "submitted_at": o.submitted_at.isoformat() if o.submitted_at else None,
+                    "filled_avg_price": float(o.filled_avg_price) if o.filled_avg_price else None,
+                }
+                if parsed:
+                    entry.update(parsed)
+                else:
+                    entry["ticker"] = sym
+                    entry["strike"] = 0.0
+                    entry["option_type"] = ""
+                    entry["expiration"] = None
+                result.append(entry)
+            return result
+        except APIError as e:
+            self._handle_api_error(e)
+            return []
 
     async def get_positions(self) -> list[dict]:
         try:

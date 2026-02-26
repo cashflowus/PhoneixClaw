@@ -25,6 +25,10 @@ class BrokerAdapter(Protocol):
         """Get all open positions from the broker."""
         ...
 
+    async def get_orders(self, status: str = "open") -> list[dict]:
+        """Get orders from the broker. status: open, closed, all."""
+        ...
+
     async def close_position(self, symbol: str) -> bool:
         """Close (liquidate) an open position by symbol. Returns True if closed."""
         ...

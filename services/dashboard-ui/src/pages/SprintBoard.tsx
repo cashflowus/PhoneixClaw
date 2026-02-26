@@ -5,7 +5,9 @@ import axios from 'axios'
 import {
   DndContext,
   DragOverlay,
-  closestCorners,
+  closestCenter,
+  pointerWithin,
+  rectIntersection,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -13,6 +15,7 @@ import {
   type DragStartEvent,
   type DragEndEvent,
   type DragOverEvent,
+  type CollisionDetection,
 } from '@dnd-kit/core'
 import {
   SortableContext,
@@ -346,6 +349,16 @@ export default function SprintBoard() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
+  const columnIds: string[] = COLUMNS.map(c => c.id)
+
+  const collisionDetection: CollisionDetection = (args) => {
+    const pointerCollisions = pointerWithin(args)
+    if (pointerCollisions.length > 0) return pointerCollisions
+    const rectCollisions = rectIntersection(args)
+    if (rectCollisions.length > 0) return rectCollisions
+    return closestCenter(args)
+  }
+
   function handleDragStart(event: DragStartEvent) {
     const task = (event.active.data.current as { task: BoardTask } | undefined)?.task
     if (task) setActiveTask(task)
@@ -353,27 +366,26 @@ export default function SprintBoard() {
 
   function handleDragOver(event: DragOverEvent) {
     const { active, over } = event
-    if (!over || !tasks) return
+    if (!over) return
 
     const activeId = String(active.id)
     const overId = String(over.id)
 
-    const currentTasks = qc.getQueryData<BoardTask[]>(['board-tasks']) ?? tasks
+    const currentTasks = qc.getQueryData<BoardTask[]>(['board-tasks']) ?? tasks ?? []
     const activeTaskData = currentTasks.find(t => t.id === activeId)
     if (!activeTaskData) return
 
-    const isOverColumn = COLUMNS.some(c => c.id === overId)
-    const overTaskData = currentTasks.find(t => t.id === overId)
+    const isOverColumn = columnIds.includes(overId)
+    const overTaskData = !isOverColumn ? currentTasks.find(t => t.id === overId) : undefined
 
     const targetStatus = isOverColumn ? overId : overTaskData?.status
     if (!targetStatus || targetStatus === activeTaskData.status) return
 
     qc.setQueryData<BoardTask[]>(['board-tasks'], old => {
       if (!old) return old
+      const targetCount = old.filter(t => t.status === targetStatus && t.id !== activeId).length
       return old.map(t =>
-        t.id === activeId
-          ? { ...t, status: targetStatus, position: grouped[targetStatus]?.length ?? 0 }
-          : t,
+        t.id === activeId ? { ...t, status: targetStatus, position: targetCount } : t,
       )
     })
   }
@@ -381,17 +393,19 @@ export default function SprintBoard() {
   function handleDragEnd(event: DragEndEvent) {
     setActiveTask(null)
     const { active, over } = event
-    if (!over || !tasks) return
+    if (!over) return
 
     const activeId = String(active.id)
     const overId = String(over.id)
 
-    const currentTasks = qc.getQueryData<BoardTask[]>(['board-tasks']) ?? tasks
+    const currentTasks = qc.getQueryData<BoardTask[]>(['board-tasks']) ?? tasks ?? []
     const activeTaskData = currentTasks.find(t => t.id === activeId)
     if (!activeTaskData) return
 
-    const isOverColumn = COLUMNS.some(c => c.id === overId)
-    const targetStatus = isOverColumn ? overId : currentTasks.find(t => t.id === overId)?.status ?? activeTaskData.status
+    const isOverColumn = columnIds.includes(overId)
+    const targetStatus = isOverColumn
+      ? overId
+      : currentTasks.find(t => t.id === overId)?.status ?? activeTaskData.status
 
     const columnTasks = currentTasks
       .filter(t => t.status === targetStatus && t.id !== activeId)
@@ -429,7 +443,7 @@ export default function SprintBoard() {
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={collisionDetection}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}

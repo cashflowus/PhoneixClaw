@@ -116,6 +116,41 @@ def _alpaca_pos_to_response(p: dict, account_id: str) -> dict | None:
     }
 
 
+@router.get("/orders")
+async def list_orders(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Fetch pending/open orders from Alpaca for all user accounts."""
+    user_id = request.state.user_id
+    acct_stmt = select(TradingAccount).where(
+        TradingAccount.user_id == uuid.UUID(user_id),
+        TradingAccount.enabled,
+        TradingAccount.broker_type == "alpaca",
+    )
+    acct_result = await session.execute(acct_stmt)
+    accounts = acct_result.scalars().all()
+
+    all_orders: list[dict] = []
+    for account in accounts:
+        try:
+            adapter = create_broker_adapter(
+                account.broker_type, account.credentials_encrypted, account.paper_mode
+            )
+            try:
+                orders = await adapter.get_orders("open")
+                for o in orders:
+                    o["account_id"] = str(account.id)
+                    o["account_name"] = account.display_name or account.broker_type
+                all_orders.extend(orders)
+            finally:
+                await adapter.close()
+        except Exception as e:
+            logger.warning("Failed to fetch orders for account %s: %s", account.id, e)
+
+    return all_orders
+
+
 @router.get("/{position_id}")
 async def get_position(
     position_id: str,

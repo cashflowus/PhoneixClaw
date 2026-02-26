@@ -105,9 +105,12 @@ export default function Backtesting() {
     stop_loss: '20',
   })
 
+  const hasRunningBacktest = (runs?: BacktestRun[]) => runs?.some(r => r.status === 'running')
+
   const { data: runs, isLoading: runsLoading } = useQuery<BacktestRun[]>({
     queryKey: ['backtest'],
     queryFn: () => axios.get('/api/v1/backtest').then(r => r.data),
+    refetchInterval: (query) => hasRunningBacktest(query.state.data) ? 3000 : false,
   })
 
   const { data: sources } = useQuery<Source[]>({
@@ -148,14 +151,42 @@ export default function Backtesting() {
   })
 
   const [btError, setBtError] = useState<string | null>(null)
+  const [btSuccess, setBtSuccess] = useState<string | null>(null)
   const [expandedTradeId, setExpandedTradeId] = useState<number | null>(null)
+  const [prevRunningIds, setPrevRunningIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (!runs) return
+    const currentRunning = new Set(runs.filter(r => r.status === 'running').map(r => r.id))
+    for (const id of prevRunningIds) {
+      if (!currentRunning.has(id)) {
+        const run = runs.find(r => r.id === id)
+        if (run?.status === 'completed') {
+          const pnl = (run.summary as Record<string, number> | null)?.total_pnl ?? 0
+          setBtSuccess(`Backtest "${run.name || run.id.slice(0, 8)}" completed — P&L $${pnl.toFixed(2)}`)
+          qc.invalidateQueries({ queryKey: ['unread-count'] })
+          qc.invalidateQueries({ queryKey: ['notifications'] })
+        } else if (run?.status === 'failed') {
+          setBtError(`Backtest "${run.name || run.id.slice(0, 8)}" failed: ${run.error_message || 'Unknown error'}`)
+        }
+      }
+    }
+    setPrevRunningIds(currentRunning)
+  }, [runs, prevRunningIds, qc])
 
   useEffect(() => {
     if (btError) {
-      const t = setTimeout(() => setBtError(null), 5000)
+      const t = setTimeout(() => setBtError(null), 8000)
       return () => clearTimeout(t)
     }
   }, [btError])
+
+  useEffect(() => {
+    if (btSuccess) {
+      const t = setTimeout(() => setBtSuccess(null), 8000)
+      return () => clearTimeout(t)
+    }
+  }, [btSuccess])
 
   const createMutation = useMutation({
     mutationFn: (payload: object) => axios.post('/api/v1/backtest', payload),
@@ -165,6 +196,7 @@ export default function Backtesting() {
       setStep(0)
       setForm({ start_date: '', end_date: '', data_source_id: '', channel_id: '', trading_account_id: '', name: '', profit_target: '30', stop_loss: '20' })
       setSelectedRunId(res.data.id)
+      setBtSuccess('Backtest started — running in background. You will be notified when it completes.')
     },
     onError: (err: unknown) => {
       const msg = axios.isAxiosError(err) && err.response?.data?.detail
@@ -376,6 +408,13 @@ export default function Backtesting() {
         </div>
       )}
 
+      {btSuccess && (
+        <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-700 dark:text-green-400 flex items-center justify-between">
+          <span>{btSuccess}</span>
+          <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => setBtSuccess(null)}>Dismiss</Button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
@@ -401,7 +440,8 @@ export default function Backtesting() {
                       <p className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString()}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={r.status === 'completed' ? 'default' : r.status === 'failed' ? 'destructive' : 'secondary'}>
+                      <Badge variant={r.status === 'completed' ? 'default' : r.status === 'failed' ? 'destructive' : 'secondary'} className="gap-1">
+                        {r.status === 'running' && <Loader2 className="h-3 w-3 animate-spin" />}
                         {r.status}
                       </Badge>
                       {r.summary && (
