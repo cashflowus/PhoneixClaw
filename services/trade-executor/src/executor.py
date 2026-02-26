@@ -13,6 +13,7 @@ from shared.broker.factory import create_broker_adapter
 from shared.kafka_utils.consumer import KafkaConsumerWrapper
 from shared.kafka_utils.dlq import DeadLetterQueue
 from shared.kafka_utils.producer import KafkaProducerWrapper
+from sqlalchemy import select
 from shared.models.database import AsyncSessionLocal
 from shared.models.trade import AccountSourceMapping, Channel, Position, TradePipeline, TradingAccount
 from shared.retry import RetryExhaustedError, retry_async
@@ -77,7 +78,6 @@ class TradeExecutorService:
 
         if not ta_id and ch_uuid is None and channel_id_raw and trade.get("user_id"):
             async with AsyncSessionLocal() as session:
-                from sqlalchemy import select
                 result = await session.execute(
                     select(Channel).where(Channel.channel_identifier == channel_id_raw).limit(1)
                 )
@@ -88,7 +88,6 @@ class TradeExecutorService:
 
         if not ta_id and ch_uuid and trade.get("user_id"):
             async with AsyncSessionLocal() as session:
-                from sqlalchemy import select
                 result = await session.execute(
                     select(AccountSourceMapping).where(
                         AccountSourceMapping.channel_id == ch_uuid,
@@ -102,7 +101,6 @@ class TradeExecutorService:
 
         if not ta_id:
             async with AsyncSessionLocal() as session:
-                from sqlalchemy import select
                 user_id = trade.get("user_id")
                 if not user_id:
                     return None
