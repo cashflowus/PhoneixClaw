@@ -29,6 +29,13 @@ interface TradingAccountOption {
   health_status: string
 }
 
+interface NewsConnectionOption {
+  id: string
+  source_api: string
+  display_name: string
+  enabled: boolean
+}
+
 interface Props {
   node: Node | null
   onUpdate: (id: string, data: Record<string, unknown>) => void
@@ -38,6 +45,7 @@ interface Props {
 export function NodeConfigPanel({ node, onUpdate, onClose }: Props) {
   const showSourcePicker = node?.type === 'dataSource'
   const showAccountPicker = node?.type === 'broker'
+  const showNewsPicker = node?.type === 'dataSource'
 
   const { data: sources, isLoading: sourcesLoading } = useQuery<SourceOption[]>({
     queryKey: ['sources'],
@@ -51,6 +59,12 @@ export function NodeConfigPanel({ node, onUpdate, onClose }: Props) {
     enabled: showAccountPicker,
   })
 
+  const { data: newsConnections, isLoading: newsLoading } = useQuery<NewsConnectionOption[]>({
+    queryKey: ['news-connections'],
+    queryFn: () => axios.get('/api/v1/news/connections').then(r => r.data),
+    enabled: showNewsPicker,
+  })
+
   if (!node) return null
 
   const data = node.data as Record<string, unknown>
@@ -62,9 +76,8 @@ export function NodeConfigPanel({ node, onUpdate, onClose }: Props) {
   const subtype = String(data.subtype || '')
 
   const filteredSources = (sources || []).filter(s => {
-    if (subtype === 'discord') return s.source_type === 'discord' && s.data_purpose === 'trades'
-    if (subtype === 'sentiment') return s.source_type === 'discord' && s.data_purpose === 'sentiment'
-    if (subtype === 'news') return true
+    if (subtype === 'discord') return s.data_purpose === 'trades'
+    if (subtype === 'sentiment') return s.data_purpose === 'sentiment'
     return true
   })
 
@@ -146,16 +159,34 @@ export function NodeConfigPanel({ node, onUpdate, onClose }: Props) {
 
             {subtype === 'news' && (
               <div className="space-y-2">
-                <Label className="text-xs">News API</Label>
-                <Select value={String(data.news_api || 'all')} onValueChange={v => update('news_api', v)}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Sources</SelectItem>
-                    <SelectItem value="finnhub">Finnhub</SelectItem>
-                    <SelectItem value="newsapi">NewsAPI</SelectItem>
-                    <SelectItem value="alphavantage">Alpha Vantage</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label className="text-xs">News Connection</Label>
+                {newsLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Loading connections...
+                  </div>
+                ) : (newsConnections || []).length > 0 ? (
+                  <Select
+                    value={String(data.news_connection_id || 'all')}
+                    onValueChange={v => {
+                      const conn = (newsConnections || []).find(c => c.id === v)
+                      onUpdate(node.id, { ...data, news_connection_id: v, news_api: conn?.source_api || 'all' })
+                    }}
+                  >
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Configured Sources</SelectItem>
+                      {(newsConnections || []).filter(c => c.enabled).map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.display_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    No news connections configured. Add one in Trending News.
+                  </p>
+                )}
               </div>
             )}
           </>

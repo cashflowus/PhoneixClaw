@@ -172,14 +172,19 @@ async def create_source(req: SourceCreate, request: Request, session: AsyncSessi
 
     if req.selected_channels:
         for sc in req.selected_channels:
-            guild_name = sc.guild_name or ""
-            display = f"{guild_name} / #{sc.channel_name}" if guild_name else f"#{sc.channel_name}"
+            if req.source_type == "reddit":
+                display = f"r/{sc.channel_name}" if not sc.channel_name.startswith("r/") else sc.channel_name
+            elif req.source_type == "twitter":
+                display = f"@{sc.channel_name}" if not sc.channel_name.startswith("@") else sc.channel_name
+            else:
+                guild_name = sc.guild_name or ""
+                display = f"{guild_name} / #{sc.channel_name}" if guild_name else f"#{sc.channel_name}"
             ch = Channel(
                 data_source_id=source.id,
                 channel_identifier=sc.channel_id,
                 display_name=display[:100],
                 guild_id=sc.guild_id,
-                guild_name=guild_name[:200] if guild_name else None,
+                guild_name=sc.guild_name[:200] if sc.guild_name else None,
             )
             session.add(ch)
         await session.commit()
@@ -301,6 +306,12 @@ async def sync_channels(source_id: str, request: Request, session: AsyncSession 
         if created:
             await session.commit()
         logger.info("Discovered %d new channels for source %s", created, source_id)
+    elif source.source_type in ("reddit", "twitter"):
+        result = await session.execute(select(Channel).where(Channel.data_source_id == source.id))
+        existing_channels = result.scalars().all()
+        if not existing_channels:
+            await _ensure_channels_from_credentials(source, creds, session)
+            await session.commit()
     else:
         await _ensure_channels_from_credentials(source, creds, session)
         await session.commit()
@@ -310,7 +321,7 @@ async def sync_channels(source_id: str, request: Request, session: AsyncSession 
     if not channels:
         raise HTTPException(
             status_code=400,
-            detail="No channels discovered. Check that the token has access to at least one server.",
+            detail="No channels found. Add subreddits/accounts manually or check Discord token access.",
         )
     return _channel_responses(channels)
 
@@ -344,9 +355,9 @@ async def test_connection(
     status = "ERROR"
     detail = ""
 
-    if source.source_type == "discord":
-        token = creds.get("user_token") or creds.get("bot_token", "")
-        try:
+    try:
+        if source.source_type == "discord":
+            token = creds.get("user_token") or creds.get("bot_token", "")
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(
                     "https://discord.com/api/v10/users/@me",
@@ -357,12 +368,46 @@ async def test_connection(
                     detail = resp.json().get("username", "")
                 else:
                     detail = f"Discord API returned {resp.status_code}"
-        except httpx.TimeoutException:
-            detail = "Connection timed out"
-        except Exception as exc:
-            detail = str(exc)[:200]
-    else:
-        detail = f"Test not implemented for {source.source_type}"
+
+        elif source.source_type == "reddit":
+            client_id = creds.get("client_id", "")
+            client_secret = creds.get("client_secret", "")
+            user_agent = creds.get("user_agent", "PhoenixTrade/1.0")
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(
+                    "https://www.reddit.com/api/v1/access_token",
+                    data={"grant_type": "client_credentials"},
+                    auth=(client_id, client_secret),
+                    headers={"User-Agent": user_agent},
+                )
+                if resp.status_code == 200 and "access_token" in resp.json():
+                    status = "CONNECTED"
+                    detail = "Reddit OAuth credentials valid"
+                else:
+                    detail = f"Reddit OAuth returned {resp.status_code}: {resp.text[:100]}"
+
+        elif source.source_type == "twitter":
+            bearer = creds.get("bearer_token", "")
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://api.twitter.com/2/users/me",
+                    headers={"Authorization": f"Bearer {bearer}"},
+                )
+                if resp.status_code == 200:
+                    status = "CONNECTED"
+                    data_body = resp.json().get("data", {})
+                    detail = data_body.get("username", "Authenticated")
+                elif resp.status_code == 403:
+                    status = "CONNECTED"
+                    detail = "Bearer token valid (app-only auth)"
+                else:
+                    detail = f"Twitter API returned {resp.status_code}"
+        else:
+            detail = f"Test not implemented for {source.source_type}"
+    except httpx.TimeoutException:
+        detail = "Connection timed out"
+    except Exception as exc:
+        detail = str(exc)[:200]
 
     source.connection_status = status
     if status == "CONNECTED":

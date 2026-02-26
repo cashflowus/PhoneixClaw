@@ -19,8 +19,9 @@ import {
 import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { useNavigate } from 'react-router-dom'
 import {
-  Eye, TrendingUp, TrendingDown, Minus, Search, Star, Loader2, ArrowUpRight, ArrowDownRight, XCircle,
+  Eye, TrendingUp, TrendingDown, Minus, Search, Star, Loader2, ArrowUpRight, ArrowDownRight, XCircle, Settings,
 } from 'lucide-react'
 import { AreaChart, Area, ResponsiveContainer } from 'recharts'
 import WatchlistButton from '@/components/WatchlistButton'
@@ -100,6 +101,7 @@ function ChangeIndicator({ pct }: { pct: number | null }) {
 }
 
 export default function TickerSentiment() {
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [sentimentFilter, setSentimentFilter] = useState<string>('all')
   const [timeRange, setTimeRange] = useState('3h')
@@ -137,9 +139,14 @@ export default function TickerSentiment() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Ticker Sentiment</h2>
-        <p className="text-sm text-muted-foreground">Real-time sentiment analysis across all data sources</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Ticker Sentiment</h2>
+          <p className="text-sm text-muted-foreground">Real-time sentiment analysis across all data sources</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => navigate('/sources')} className="gap-1.5">
+          <Settings className="h-4 w-4" /> Configure Sources
+        </Button>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -203,7 +210,10 @@ export default function TickerSentiment() {
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <TrendingUp className="h-12 w-12 text-muted-foreground/30 mb-3" />
               <p className="text-muted-foreground font-medium">No sentiment data yet</p>
-              <p className="text-sm text-muted-foreground/70 mt-1">Configure sentiment data sources to start tracking</p>
+              <p className="text-sm text-muted-foreground/70 mt-1">Add a data source with &quot;Sentiment&quot; purpose to start tracking</p>
+              <Button variant="outline" size="sm" className="mt-4 gap-1.5" onClick={() => navigate('/sources')}>
+                <Settings className="h-4 w-4" /> Go to Data Sources
+              </Button>
             </div>
           ) : (
             <Table>

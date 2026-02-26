@@ -20,7 +20,7 @@ import {
 import {
   Plus, MoreVertical, Trash2, Database, Loader2, Plug,
   Play, Square, RefreshCw, Server, ChevronRight, ChevronLeft,
-  Hash, CheckSquare, Square as SquareIcon,
+  Hash, CheckSquare, Square as SquareIcon, X,
 } from 'lucide-react'
 
 interface Source {
@@ -52,7 +52,11 @@ interface ChannelInfo {
   category: string | null
 }
 
-const STEP_LABELS = ['Credentials', 'Server', 'Channels']
+const STEP_LABELS_BY_TYPE: Record<string, string[]> = {
+  discord: ['Credentials', 'Server', 'Channels'],
+  reddit: ['Credentials', 'Subreddits'],
+  twitter: ['Credentials', 'Accounts'],
+}
 
 const AUTH_HELP: Record<string, string> = {
   user_token:
@@ -60,9 +64,16 @@ const AUTH_HELP: Record<string, string> = {
   bot: 'Create a bot at discord.com/developers, copy the bot token. Requires admin to invite the bot.',
 }
 
+const PLATFORM_HELP: Record<string, string> = {
+  reddit: 'Create a Reddit app at reddit.com/prefs/apps. Select "script" type. Copy Client ID and Client Secret.',
+  twitter: 'Apply for a Twitter/X Developer account at developer.twitter.com. Create an app and copy the Bearer Token.',
+}
+
 const emptyForm = {
   display_name: '', source_type: 'discord', auth_type: 'user_token', token: '',
   server_id: '', server_name: '', data_purpose: 'trades' as 'trades' | 'sentiment',
+  reddit_client_id: '', reddit_client_secret: '', reddit_user_agent: '',
+  twitter_bearer_token: '',
 }
 
 export default function DataSources() {
@@ -76,6 +87,8 @@ export default function DataSources() {
   const [channels, setChannels] = useState<ChannelInfo[]>([])
   const [selectedChannels, setSelectedChannels] = useState<Set<string>>(new Set())
   const [discoveringChannels, setDiscoveringChannels] = useState(false)
+  const [manualEntries, setManualEntries] = useState<string[]>([])
+  const [manualInput, setManualInput] = useState('')
 
   const { data: sources } = useQuery<Source[]>({
     queryKey: ['sources'],
@@ -162,6 +175,8 @@ export default function DataSources() {
     setSelectedChannels(new Set())
     setDiscovering(false)
     setDiscoveringChannels(false)
+    setManualEntries([])
+    setManualInput('')
     setError(null)
   }
 
@@ -237,24 +252,46 @@ export default function DataSources() {
     }
   }
 
-  function handleSubmit() {
-    const credentials: Record<string, string> = {}
-    if (form.auth_type === 'bot') credentials.bot_token = form.token
-    else credentials.user_token = form.token
+  const addManualEntry = () => {
+    const raw = manualInput.trim().replace(/^[r\/]+|^@/, '')
+    if (!raw) return
+    const items = raw.split(/[,\n]+/).map(s => s.trim().replace(/^[r\/]+|^@/, '')).filter(Boolean)
+    setManualEntries(prev => [...new Set([...prev, ...items])])
+    setManualInput('')
+  }
 
-    const selected = channels
-      .filter(c => selectedChannels.has(c.channel_id))
-      .map(c => ({
-        channel_id: c.channel_id,
-        channel_name: c.channel_name,
-        guild_id: c.guild_id,
-        guild_name: c.guild_name,
-      }))
+  const removeManualEntry = (entry: string) => {
+    setManualEntries(prev => prev.filter(e => e !== entry))
+  }
+
+  const totalSteps = form.source_type === 'discord' ? 3 : 2
+
+  function handleSubmit() {
+    let credentials: Record<string, string> = {}
+    let selected: { channel_id: string; channel_name: string; guild_id?: string; guild_name?: string }[] = []
+
+    if (form.source_type === 'discord') {
+      if (form.auth_type === 'bot') credentials.bot_token = form.token
+      else credentials.user_token = form.token
+      selected = channels
+        .filter(c => selectedChannels.has(c.channel_id))
+        .map(c => ({ channel_id: c.channel_id, channel_name: c.channel_name, guild_id: c.guild_id, guild_name: c.guild_name }))
+    } else if (form.source_type === 'reddit') {
+      credentials = {
+        client_id: form.reddit_client_id,
+        client_secret: form.reddit_client_secret,
+        user_agent: form.reddit_user_agent || 'PhoenixTrade/1.0',
+      }
+      selected = manualEntries.map(sub => ({ channel_id: sub, channel_name: `r/${sub}` }))
+    } else if (form.source_type === 'twitter') {
+      credentials = { bearer_token: form.twitter_bearer_token }
+      selected = manualEntries.map(u => ({ channel_id: u, channel_name: `@${u}` }))
+    }
 
     createMutation.mutate({
       source_type: form.source_type,
       display_name: form.display_name,
-      auth_type: form.auth_type,
+      auth_type: form.source_type === 'reddit' ? 'oauth' : form.source_type === 'twitter' ? 'bearer' : form.auth_type,
       credentials,
       server_id: form.server_id || null,
       server_name: form.server_name || null,
@@ -272,17 +309,27 @@ export default function DataSources() {
     return colors[type] || 'bg-muted text-muted-foreground'
   }
 
-  const stepDescription = step === 1
-    ? 'Step 1: Enter your Discord credentials'
-    : step === 2
-      ? 'Step 2: Select a Discord server'
-      : 'Step 3: Choose channels to monitor'
+  const stepLabels = STEP_LABELS_BY_TYPE[form.source_type] || STEP_LABELS_BY_TYPE.discord
+
+  const stepDescription = (() => {
+    if (step === 1) {
+      if (form.source_type === 'reddit') return 'Step 1: Enter your Reddit API credentials'
+      if (form.source_type === 'twitter') return 'Step 1: Enter your Twitter/X API credentials'
+      return 'Step 1: Enter your Discord credentials'
+    }
+    if (step === 2) {
+      if (form.source_type === 'reddit') return 'Step 2: Choose subreddits to monitor'
+      if (form.source_type === 'twitter') return 'Step 2: Choose accounts to follow'
+      return 'Step 2: Select a Discord server'
+    }
+    return 'Step 3: Choose channels to monitor'
+  })()
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm text-muted-foreground">Connect Discord servers for signal ingestion</p>
+          <p className="text-sm text-muted-foreground">Connect Discord, Reddit, or Twitter for signal ingestion</p>
         </div>
         <Dialog open={open} onOpenChange={(v) => { if (!v) resetDialog(); else setOpen(true) }}>
           <DialogTrigger asChild>
@@ -301,7 +348,7 @@ export default function DataSources() {
             )}
 
             <div className="flex gap-1.5 mb-2">
-              {STEP_LABELS.map((label, i) => {
+              {stepLabels.map((label, i) => {
                 const s = i + 1
                 return (
                   <div key={s} className="flex-1 flex flex-col items-center gap-1">
@@ -347,10 +394,12 @@ export default function DataSources() {
                 </div>
                 <div className="space-y-2">
                   <Label>Platform</Label>
-                  <Select value={form.source_type} onValueChange={(v) => setForm({ ...form, source_type: v })}>
+                  <Select value={form.source_type} onValueChange={(v) => setForm({ ...form, source_type: v, auth_type: v === 'discord' ? 'user_token' : v === 'reddit' ? 'oauth' : 'bearer' })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="discord">Discord</SelectItem>
+                      <SelectItem value="reddit">Reddit</SelectItem>
+                      <SelectItem value="twitter">Twitter / X</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -390,10 +439,63 @@ export default function DataSources() {
                     </div>
                   </>
                 )}
+
+                {form.source_type === 'reddit' && (
+                  <>
+                    <p className="text-xs text-muted-foreground">{PLATFORM_HELP.reddit}</p>
+                    <div className="space-y-2">
+                      <Label htmlFor="reddit-cid">Client ID</Label>
+                      <Input
+                        id="reddit-cid"
+                        value={form.reddit_client_id}
+                        onChange={e => setForm({ ...form, reddit_client_id: e.target.value })}
+                        placeholder="e.g. a1b2c3d4e5f6g7"
+                        className="font-mono"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="reddit-cs">Client Secret</Label>
+                      <Input
+                        id="reddit-cs"
+                        type="password"
+                        value={form.reddit_client_secret}
+                        onChange={e => setForm({ ...form, reddit_client_secret: e.target.value })}
+                        placeholder="Reddit app secret"
+                        className="font-mono"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="reddit-ua">User Agent (optional)</Label>
+                      <Input
+                        id="reddit-ua"
+                        value={form.reddit_user_agent}
+                        onChange={e => setForm({ ...form, reddit_user_agent: e.target.value })}
+                        placeholder="PhoenixTrade/1.0 (default)"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {form.source_type === 'twitter' && (
+                  <>
+                    <p className="text-xs text-muted-foreground">{PLATFORM_HELP.twitter}</p>
+                    <div className="space-y-2">
+                      <Label htmlFor="twitter-bt">Bearer Token</Label>
+                      <Input
+                        id="twitter-bt"
+                        type="password"
+                        value={form.twitter_bearer_token}
+                        onChange={e => setForm({ ...form, twitter_bearer_token: e.target.value })}
+                        placeholder="Twitter API v2 Bearer Token"
+                        className="font-mono"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
-            {step === 2 && (
+            {step === 2 && form.source_type === 'discord' && (
               <div className="space-y-4 py-2">
                 {servers.length > 0 ? (
                   <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
@@ -425,6 +527,82 @@ export default function DataSources() {
                   <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-8 text-center">
                     <Server className="h-8 w-8 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground">No servers found for this account.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {step === 2 && form.source_type === 'reddit' && (
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label>Add Subreddits</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={manualInput}
+                      onChange={e => setManualInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addManualEntry() } }}
+                      placeholder="e.g. wallstreetbets, stocks, options"
+                    />
+                    <Button type="button" variant="secondary" size="sm" onClick={addManualEntry} disabled={!manualInput.trim()}>
+                      Add
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Enter subreddit names separated by commas, or press Enter after each one.</p>
+                </div>
+                {manualEntries.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {manualEntries.map(entry => (
+                      <Badge key={entry} variant="secondary" className="gap-1 pl-2.5 pr-1.5 py-1 text-xs">
+                        r/{entry}
+                        <button type="button" onClick={() => removeManualEntry(entry)} className="ml-0.5 hover:text-destructive">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {manualEntries.length === 0 && (
+                  <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-6 text-center">
+                    <Hash className="h-6 w-6 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">No subreddits added yet. Popular: wallstreetbets, stocks, options, SPACs</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {step === 2 && form.source_type === 'twitter' && (
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label>Add Twitter Accounts</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={manualInput}
+                      onChange={e => setManualInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addManualEntry() } }}
+                      placeholder="e.g. unusual_whales, DeItaone"
+                    />
+                    <Button type="button" variant="secondary" size="sm" onClick={addManualEntry} disabled={!manualInput.trim()}>
+                      Add
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Enter usernames separated by commas (without @). Press Enter after each one.</p>
+                </div>
+                {manualEntries.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {manualEntries.map(entry => (
+                      <Badge key={entry} variant="secondary" className="gap-1 pl-2.5 pr-1.5 py-1 text-xs">
+                        @{entry}
+                        <button type="button" onClick={() => removeManualEntry(entry)} className="ml-0.5 hover:text-destructive">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {manualEntries.length === 0 && (
+                  <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-6 text-center">
+                    <Hash className="h-6 w-6 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">No accounts added yet. Popular: unusual_whales, DeItaone, zaborta</p>
                   </div>
                 )}
               </div>
@@ -490,7 +668,7 @@ export default function DataSources() {
                 </Button>
               )}
               <div className="flex-1" />
-              {step === 1 && (
+              {step === 1 && form.source_type === 'discord' && (
                 <Button
                   onClick={handleDiscoverServers}
                   disabled={!form.display_name || !form.token || discovering}
@@ -500,7 +678,23 @@ export default function DataSources() {
                   {!discovering && <ChevronRight className="ml-1 h-4 w-4" />}
                 </Button>
               )}
-              {step === 2 && (
+              {step === 1 && form.source_type === 'reddit' && (
+                <Button
+                  onClick={() => setStep(2)}
+                  disabled={!form.display_name || !form.reddit_client_id || !form.reddit_client_secret}
+                >
+                  Next <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+              )}
+              {step === 1 && form.source_type === 'twitter' && (
+                <Button
+                  onClick={() => setStep(2)}
+                  disabled={!form.display_name || !form.twitter_bearer_token}
+                >
+                  Next <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+              )}
+              {step === 2 && form.source_type === 'discord' && (
                 <Button
                   onClick={handleDiscoverChannels}
                   disabled={!form.server_id || discoveringChannels}
@@ -508,6 +702,12 @@ export default function DataSources() {
                   {discoveringChannels ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
                   {discoveringChannels ? 'Loading channels...' : 'Next'}
                   {!discoveringChannels && <ChevronRight className="ml-1 h-4 w-4" />}
+                </Button>
+              )}
+              {step === 2 && form.source_type !== 'discord' && (
+                <Button onClick={handleSubmit} disabled={manualEntries.length === 0 || createMutation.isPending}>
+                  {createMutation.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+                  Create Source
                 </Button>
               )}
               {step === 3 && (
