@@ -140,7 +140,6 @@ class TradeExecutorService:
                         pipeline_ch_uuid = ch.id
 
             if pipeline_ch_uuid:
-                from sqlalchemy import select
                 result = await session.execute(
                     select(TradePipeline).where(
                         TradePipeline.trading_account_id == uuid.UUID(ta_id),
@@ -220,7 +219,6 @@ class TradeExecutorService:
                 pass
         try:
             async with AsyncSessionLocal() as session:
-                from sqlalchemy import select
                 existing = await session.execute(
                     select(Position).where(
                         Position.user_id == uuid.UUID(user_id),
