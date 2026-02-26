@@ -284,12 +284,12 @@ export default function Dashboard() {
         <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
       )}
 
-      {metrics && metrics.length > 0 && !metricsError && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Daily P&L (7 days)</CardTitle>
-          </CardHeader>
-          <CardContent>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Daily P&L (7 days)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {metrics && metrics.length > 0 && !metricsError ? (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={metrics}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
@@ -306,9 +306,15 @@ export default function Dashboard() {
                 <Bar dataKey="total_pnl" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      )}
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <TrendingUp className="h-8 w-8 text-muted-foreground/40 mb-2" />
+              <p className="text-sm text-muted-foreground">No P&L data yet</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Chart will appear once trades are executed</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-4">

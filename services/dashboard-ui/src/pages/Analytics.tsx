@@ -13,12 +13,13 @@ import {
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Loader2, XCircle } from 'lucide-react'
+import { Loader2, XCircle, BarChart3 } from 'lucide-react'
 
 export default function Analytics() {
   const { data: metrics, isLoading, isError, refetch } = useQuery({
     queryKey: ['analytics-metrics'],
     queryFn: () => axios.get('/api/v1/metrics/daily?days=30').then((r) => r.data),
+    retry: 1,
   })
 
   const cumulativePnl = (metrics || []).reduce(
@@ -59,6 +60,16 @@ export default function Analytics() {
         <XCircle className="h-10 w-10 text-destructive mb-3" />
         <p className="text-lg font-medium">Failed to load analytics</p>
         <Button variant="outline" className="mt-4" onClick={() => refetch()}>Retry</Button>
+      </div>
+    )
+  }
+
+  if (!metrics || metrics.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <BarChart3 className="h-10 w-10 text-muted-foreground/40 mb-3" />
+        <p className="text-lg font-medium">No analytics data yet</p>
+        <p className="text-sm text-muted-foreground mt-1">Analytics will populate once trades are executed and daily metrics accumulate.</p>
       </div>
     )
   }

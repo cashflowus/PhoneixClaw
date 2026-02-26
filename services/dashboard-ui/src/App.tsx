@@ -34,46 +34,44 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { token } = useAuth()
-
   return (
-    <>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <>
               <AppShell />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Dashboard />} />
-          <Route path="sources" element={<DataSources />} />
-          <Route path="accounts" element={<TradingAccounts />} />
-          <Route path="positions" element={<Positions />} />
-          <Route path="backtest" element={<Backtesting />} />
-          <Route path="pipelines" element={<TradePipelines />} />
-          <Route path="pipelines/:pipelineId" element={<PipelineDetail />} />
-          <Route path="sentiment" element={<TickerSentiment />} />
-          <Route path="news" element={<TrendingNews />} />
-          <Route path="ai-decisions" element={<AIDecisions />} />
-          <Route path="advanced-pipelines" element={<AdvancedPipelines />} />
-          <Route path="advanced-pipelines/:pipelineId" element={<PipelineEditorPage />} />
-          <Route path="strategies" element={<StrategyBuilder />} />
-          <Route path="model-hub" element={<ModelHub />} />
-          <Route path="messages" element={<RawMessages />} />
-          <Route path="analytics" element={<Analytics />} />
-          <Route path="system" element={<System />} />
-          <Route path="admin" element={<Admin />} />
-          <Route path="access" element={<AccessManagement />} />
-          <Route path="notifications" element={<Notifications />} />
-          <Route path="board" element={<SprintBoard />} />
-          <Route path="board/:taskId" element={<TaskDetail />} />
-        </Route>
-      </Routes>
-      {token && <ChatWidget />}
-    </>
+              <ChatWidget />
+            </>
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Dashboard />} />
+        <Route path="sources" element={<DataSources />} />
+        <Route path="accounts" element={<TradingAccounts />} />
+        <Route path="positions" element={<Positions />} />
+        <Route path="backtest" element={<Backtesting />} />
+        <Route path="pipelines" element={<TradePipelines />} />
+        <Route path="pipelines/:pipelineId" element={<PipelineDetail />} />
+        <Route path="sentiment" element={<TickerSentiment />} />
+        <Route path="news" element={<TrendingNews />} />
+        <Route path="ai-decisions" element={<AIDecisions />} />
+        <Route path="advanced-pipelines" element={<AdvancedPipelines />} />
+        <Route path="advanced-pipelines/:pipelineId" element={<PipelineEditorPage />} />
+        <Route path="strategies" element={<StrategyBuilder />} />
+        <Route path="model-hub" element={<ModelHub />} />
+        <Route path="messages" element={<RawMessages />} />
+        <Route path="analytics" element={<Analytics />} />
+        <Route path="system" element={<System />} />
+        <Route path="admin" element={<Admin />} />
+        <Route path="access" element={<AccessManagement />} />
+        <Route path="notifications" element={<Notifications />} />
+        <Route path="board" element={<SprintBoard />} />
+        <Route path="board/:taskId" element={<TaskDetail />} />
+      </Route>
+    </Routes>
   )
 }
