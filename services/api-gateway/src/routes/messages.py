@@ -62,6 +62,7 @@ async def list_messages(
                 "author": m.author,
                 "content": m.content,
                 "source_message_id": m.source_message_id,
+                "message_timestamp": (m.raw_metadata or {}).get("message_timestamp"),
                 "created_at": m.created_at.isoformat() if m.created_at else None,
             }
             for m in rows

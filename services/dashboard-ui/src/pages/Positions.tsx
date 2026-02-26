@@ -1,11 +1,27 @@
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Loader2, TrendingUp, TrendingDown, DollarSign, XCircle, Download, Clock } from 'lucide-react'
 import { exportToCSV } from '@/lib/csv-export'
+
+interface TradingAccount {
+  id: string
+  display_name: string
+  broker_type: string
+  paper_mode: boolean
+  enabled: boolean
+}
 
 interface Position {
   id: number | string
@@ -26,22 +42,56 @@ interface Position {
   close_reason: string | null
   realized_pnl: number | null
   account_id?: string
+  account_name?: string
   unrealized_pl?: number
   current_price?: number
+  market_value?: number
+}
+
+interface PendingOrder {
+  order_id: string
+  symbol: string
+  ticker: string
+  strike: number
+  option_type: string
+  expiration: string | null
+  side: string
+  qty: number
+  filled_qty: number
+  order_type: string
+  limit_price: number | null
+  status: string
+  submitted_at: string | null
+  filled_avg_price: number | null
+  account_name?: string
 }
 
 export default function Positions() {
   const qc = useQueryClient()
+  const [selectedAccount, setSelectedAccount] = useState<string>('all')
+
+  const { data: accounts = [] } = useQuery<TradingAccount[]>({
+    queryKey: ['trading-accounts'],
+    queryFn: () => axios.get('/api/v1/accounts').then(r => r.data),
+  })
+
+  const acctParam = selectedAccount !== 'all' ? `&account_id=${selectedAccount}` : ''
 
   const { data: openPositions, isLoading: openLoading, isError: openError, refetch: refetchOpen } = useQuery<Position[]>({
-    queryKey: ['positions', 'open'],
-    queryFn: () => axios.get('/api/v1/positions?status=OPEN').then(r => r.data),
+    queryKey: ['positions', 'open', selectedAccount],
+    queryFn: () => axios.get(`/api/v1/positions?status=OPEN${acctParam}`).then(r => r.data),
     refetchInterval: 5000,
   })
 
   const { data: closedPositions, isLoading: closedLoading, isError: closedError } = useQuery<Position[]>({
-    queryKey: ['positions', 'closed'],
-    queryFn: () => axios.get('/api/v1/positions?status=CLOSED&limit=50').then(r => r.data),
+    queryKey: ['positions', 'closed', selectedAccount],
+    queryFn: () => axios.get(`/api/v1/positions?status=CLOSED&limit=50${acctParam}`).then(r => r.data),
+  })
+
+  const { data: pendingOrders = [], isLoading: ordersLoading } = useQuery<PendingOrder[]>({
+    queryKey: ['pending-orders', selectedAccount],
+    queryFn: () => axios.get(`/api/v1/positions/orders${selectedAccount !== 'all' ? `?account_id=${selectedAccount}` : ''}`).then(r => r.data),
+    refetchInterval: 5000,
   })
 
   const closeMut = useMutation({
@@ -55,35 +105,17 @@ export default function Positions() {
     }
   }
 
-  interface PendingOrder {
-    order_id: string
-    symbol: string
-    ticker: string
-    strike: number
-    option_type: string
-    expiration: string | null
-    side: string
-    qty: number
-    filled_qty: number
-    order_type: string
-    limit_price: number | null
-    status: string
-    submitted_at: string | null
-    filled_avg_price: number | null
-    account_name?: string
+  const formatSymbol = (p: Position) => {
+    if (!p.option_type) return p.ticker
+    const exp = p.expiration ? ` ${new Date(p.expiration).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })}` : ''
+    return `${p.ticker} $${p.strike}${p.option_type === 'CALL' ? 'C' : 'P'}${exp}`
   }
 
-  const { data: pendingOrders = [], isLoading: ordersLoading } = useQuery<PendingOrder[]>({
-    queryKey: ['pending-orders'],
-    queryFn: () => axios.get('/api/v1/positions/orders').then(r => r.data),
-    refetchInterval: 5000,
-  })
-
-  const formatSymbol = (p: Position) =>
-    p.option_type ? `${p.ticker} $${p.strike}${p.option_type === 'CALL' ? 'C' : 'P'}` : p.ticker
-
-  const formatOrderSymbol = (o: PendingOrder) =>
-    o.option_type ? `${o.ticker} $${o.strike}${o.option_type === 'CALL' ? 'C' : 'P'}` : o.ticker
+  const formatOrderSymbol = (o: PendingOrder) => {
+    if (!o.option_type) return o.ticker
+    const exp = o.expiration ? ` ${new Date(o.expiration).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })}` : ''
+    return `${o.ticker} $${o.strike}${o.option_type === 'CALL' ? 'C' : 'P'}${exp}`
+  }
 
   const totalPnl = (closedPositions ?? []).reduce((s, p) => s + (p.realized_pnl ?? 0), 0)
   const winCount = (closedPositions ?? []).filter(p => (p.realized_pnl ?? 0) > 0).length
@@ -101,6 +133,23 @@ export default function Positions() {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Positions</h1>
+        <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+          <SelectTrigger className="w-[260px]">
+            <SelectValue placeholder="Select Trading Account" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Accounts</SelectItem>
+            {accounts.filter(a => a.enabled).map(a => (
+              <SelectItem key={a.id} value={a.id}>
+                {a.display_name || a.broker_type} {a.paper_mode ? '(Paper)' : '(Live)'}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-6">
@@ -209,15 +258,15 @@ export default function Positions() {
               size="sm"
               className="h-7 gap-1 text-xs"
               onClick={() => {
-                const headers = ['Symbol', 'Type', 'Qty', 'Entry', 'PT%', 'SL%', 'Opened']
+                const headers = ['Symbol', 'Type', 'Qty', 'Entry', 'Current', 'Unrealized P&L', 'Account']
                 const rows = openPositions.map(p => [
                   formatSymbol(p),
                   p.option_type,
                   String(p.quantity),
                   p.avg_entry_price.toFixed(2),
-                  `${(p.profit_target * 100).toFixed(0)}%`,
-                  `${(p.stop_loss * 100).toFixed(0)}%`,
-                  p.opened_at ? new Date(p.opened_at).toLocaleString() : '',
+                  p.current_price?.toFixed(2) ?? '',
+                  p.unrealized_pl?.toFixed(2) ?? '',
+                  p.account_name || '',
                 ])
                 exportToCSV('open-positions', headers, rows)
               }}
@@ -239,8 +288,10 @@ export default function Positions() {
                   <TableHead>Type</TableHead>
                   <TableHead>Qty</TableHead>
                   <TableHead>Entry</TableHead>
-                  <TableHead>PT / SL</TableHead>
-                  <TableHead>Opened</TableHead>
+                  <TableHead>Current</TableHead>
+                  <TableHead>Unrealized P&L</TableHead>
+                  <TableHead>Market Value</TableHead>
+                  <TableHead>Account</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -259,24 +310,20 @@ export default function Positions() {
                     </TableCell>
                     <TableCell>{p.quantity}</TableCell>
                     <TableCell>${p.avg_entry_price.toFixed(2)}</TableCell>
-                    <TableCell className="text-xs">
-                      {p.option_type ? (
-                        <>
-                          <span className="text-green-500">+{(p.profit_target * 100).toFixed(0)}%</span>
-                          {' / '}
-                          <span className="text-red-500">-{(p.stop_loss * 100).toFixed(0)}%</span>
-                        </>
-                      ) : (
-                        p.unrealized_pl != null ? (
-                          <span className={p.unrealized_pl >= 0 ? 'text-green-500' : 'text-red-500'}>
-                            ${p.unrealized_pl.toFixed(2)}
-                          </span>
-                        ) : '—'
-                      )}
+                    <TableCell>
+                      {p.current_price != null ? `$${p.current_price.toFixed(2)}` : '—'}
                     </TableCell>
-                    <TableCell className="text-xs">
-                      {p.opened_at ? new Date(p.opened_at).toLocaleString() : '—'}
+                    <TableCell>
+                      {p.unrealized_pl != null ? (
+                        <span className={p.unrealized_pl >= 0 ? 'text-green-500 font-medium' : 'text-red-500 font-medium'}>
+                          ${p.unrealized_pl.toFixed(2)}
+                        </span>
+                      ) : '—'}
                     </TableCell>
+                    <TableCell>
+                      {p.market_value != null ? `$${p.market_value.toFixed(2)}` : '—'}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{p.account_name || '—'}</TableCell>
                     <TableCell>
                       <Button
                         variant="destructive"

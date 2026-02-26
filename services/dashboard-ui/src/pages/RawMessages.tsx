@@ -32,6 +32,7 @@ interface RawMsg {
   author: string | null
   content: string
   source_message_id: string | null
+  message_timestamp: string | null
   created_at: string | null
 }
 
@@ -118,12 +119,13 @@ export default function RawMessages() {
               size="sm"
               className="h-8 gap-1 text-xs"
               onClick={() => {
-                const headers = ['Author', 'Channel', 'Source Type', 'Content', 'Time']
+                const headers = ['Author', 'Channel', 'Source Type', 'Content', 'Discord Time', 'Ingested']
                 const rows = messages.map(m => [
                   m.author || '',
                   m.channel_name || '',
                   m.source_type,
                   m.content,
+                  m.message_timestamp ? new Date(m.message_timestamp).toLocaleString() : '',
                   m.created_at ? new Date(m.created_at).toLocaleString() : '',
                 ])
                 exportToCSV('raw-messages', headers, rows)
@@ -196,9 +198,14 @@ export default function RawMessages() {
                           <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
                         </div>
                       </div>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
-                        {formatTime(msg.created_at)}
-                      </span>
+                      <div className="text-xs text-muted-foreground whitespace-nowrap shrink-0 text-right">
+                        <div>{formatTime(msg.message_timestamp || msg.created_at)}</div>
+                        {msg.message_timestamp && msg.created_at && msg.message_timestamp !== msg.created_at && (
+                          <div className="text-[10px] opacity-60" title="Ingested at">
+                            Ingested {formatTime(msg.created_at)}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

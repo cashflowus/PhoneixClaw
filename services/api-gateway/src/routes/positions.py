@@ -20,22 +20,26 @@ router = APIRouter(prefix="/api/v1/positions", tags=["positions"])
 async def list_positions(
     request: Request,
     status: str | None = Query(None),
+    account_id: str | None = Query(None),
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
 ):
     user_id = request.state.user_id
 
-    # Open positions: fetch from Alpaca for each user account
     if status == "OPEN" or status is None:
         alpaca_positions: list[dict] = []
-        acct_stmt = select(TradingAccount).where(
+        acct_filters = [
             TradingAccount.user_id == uuid.UUID(user_id),
             TradingAccount.enabled,
             TradingAccount.broker_type == "alpaca",
-        )
+        ]
+        if account_id:
+            acct_filters.append(TradingAccount.id == uuid.UUID(account_id))
+        acct_stmt = select(TradingAccount).where(*acct_filters)
         acct_result = await session.execute(acct_stmt)
         accounts = acct_result.scalars().all()
+        logger.info("Fetching positions for user %s, %d account(s)", user_id, len(accounts))
 
         for account in accounts:
             try:
@@ -44,38 +48,39 @@ async def list_positions(
                 )
                 try:
                     raw = await adapter.get_positions()
+                    logger.info("Account %s (%s) returned %d positions", account.id, account.display_name, len(raw))
                     for p in raw:
-                        parsed = _alpaca_pos_to_response(p, str(account.id))
+                        parsed = _alpaca_pos_to_response(p, str(account.id), account.display_name)
                         if parsed:
                             alpaca_positions.append(parsed)
                 finally:
                     await adapter.close()
             except Exception as e:
-                logger.warning("Failed to fetch Alpaca positions for account %s: %s", account.id, e)
+                logger.exception("Failed to fetch Alpaca positions for account %s: %s", account.id, e)
 
         if status == "OPEN":
             return alpaca_positions[:limit]
-        # status is None: return open from Alpaca, then closed from DB
-        db_stmt = select(Position).where(
-            Position.user_id == uuid.UUID(user_id),
-            Position.status == "CLOSED",
-        )
+        db_filters = [Position.user_id == uuid.UUID(user_id), Position.status == "CLOSED"]
+        if account_id:
+            db_filters.append(Position.trading_account_id == uuid.UUID(account_id))
+        db_stmt = select(Position).where(*db_filters)
         db_stmt = db_stmt.order_by(desc(Position.closed_at)).limit(limit).offset(0)
         db_result = await session.execute(db_stmt)
         db_positions = db_result.scalars().all()
-        return [_pos_response(p) for p in alpaca_positions] + [_pos_response(p) for p in db_positions]
+        return alpaca_positions + [_pos_response(p) for p in db_positions]
 
-    # Closed only: from DB
     stmt = select(Position).where(Position.user_id == uuid.UUID(user_id))
     if status:
         stmt = stmt.where(Position.status == status)
+    if account_id:
+        stmt = stmt.where(Position.trading_account_id == uuid.UUID(account_id))
     stmt = stmt.order_by(desc(Position.opened_at)).limit(limit).offset(offset)
     result = await session.execute(stmt)
     positions = result.scalars().all()
     return [_pos_response(p) for p in positions]
 
 
-def _alpaca_pos_to_response(p: dict, account_id: str) -> dict | None:
+def _alpaca_pos_to_response(p: dict, account_id: str, account_name: str | None = None) -> dict | None:
     """Convert Alpaca position dict to API response format."""
     symbol = p["symbol"]
     qty = p["qty"]
@@ -111,23 +116,29 @@ def _alpaca_pos_to_response(p: dict, account_id: str) -> dict | None:
         "close_reason": None,
         "realized_pnl": None,
         "account_id": account_id,
+        "account_name": account_name or "Alpaca",
         "unrealized_pl": p.get("unrealized_pl"),
         "current_price": p.get("current_price"),
+        "market_value": p.get("market_value"),
     }
 
 
 @router.get("/orders")
 async def list_orders(
     request: Request,
+    account_id: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
-    """Fetch pending/open orders from Alpaca for all user accounts."""
+    """Fetch pending/open orders from Alpaca for user accounts."""
     user_id = request.state.user_id
-    acct_stmt = select(TradingAccount).where(
+    acct_filters = [
         TradingAccount.user_id == uuid.UUID(user_id),
         TradingAccount.enabled,
         TradingAccount.broker_type == "alpaca",
-    )
+    ]
+    if account_id:
+        acct_filters.append(TradingAccount.id == uuid.UUID(account_id))
+    acct_stmt = select(TradingAccount).where(*acct_filters)
     acct_result = await session.execute(acct_stmt)
     accounts = acct_result.scalars().all()
 
@@ -146,7 +157,7 @@ async def list_orders(
             finally:
                 await adapter.close()
         except Exception as e:
-            logger.warning("Failed to fetch orders for account %s: %s", account.id, e)
+            logger.exception("Failed to fetch orders for account %s: %s", account.id, e)
 
     return all_orders
 

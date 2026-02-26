@@ -116,6 +116,10 @@ class RawMessageWriterService:
                         if pipe_id:
                             pipeline_counts[pipe_id] += 1
 
+                        metadata = msg.get("raw_metadata") or {}
+                        if msg.get("timestamp"):
+                            metadata["message_timestamp"] = msg["timestamp"]
+
                         rm = RawMessage(
                             user_id=parsed_user_id,
                             data_source_id=parsed_ds_id,
@@ -124,7 +128,7 @@ class RawMessageWriterService:
                             author=msg.get("author"),
                             content=msg.get("content", ""),
                             source_message_id=msg.get("source_message_id"),
-                            raw_metadata=msg.get("raw_metadata", {}),
+                            raw_metadata=metadata,
                         )
                         session.add(rm)
                         written += 1
