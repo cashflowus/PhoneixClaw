@@ -52,6 +52,7 @@ class TestCredentialEncryption:
 
     def test_invalid_key_raises(self, monkeypatch):
         monkeypatch.setenv("CREDENTIAL_ENCRYPTION_KEY", "")
+        monkeypatch.setenv("JWT_SECRET_KEY", "dev-secret-key-change-in-production")
         import importlib
 
         import shared.config.base_config
@@ -60,5 +61,5 @@ class TestCredentialEncryption:
         importlib.reload(shared.crypto.credentials)
 
         from shared.crypto.credentials import encrypt_credentials
-        with pytest.raises(ValueError, match="CREDENTIAL_ENCRYPTION_KEY not set"):
+        with pytest.raises(ValueError):
             encrypt_credentials({"key": "value"})

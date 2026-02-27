@@ -1,15 +1,17 @@
+import pytest
+
 from services.sentiment_analyzer.src.spam_filter import should_filter
 
 
 class TestSpamFilter:
-    def test_bot_message_filtered(self):
-        assert should_filter({"is_bot": True, "content": "Hello"}) is True
+    async def test_bot_message_filtered(self):
+        assert await should_filter({"is_bot": True, "content": "Hello"}) is True
 
-    def test_short_message_filtered(self):
-        assert should_filter({"is_bot": False, "content": "Hi"}) is True
+    async def test_short_message_filtered(self):
+        assert await should_filter({"is_bot": False, "content": "Hi"}) is True
 
-    def test_normal_message_passes(self):
-        assert should_filter({"is_bot": False, "content": "I think AAPL is going to break out above 200 soon"}) is False
+    async def test_normal_message_passes(self):
+        assert await should_filter({"is_bot": False, "content": "I think AAPL is going to break out above 200 soon"}) is False
 
 
 class TestTickerExtractor:
@@ -38,6 +40,7 @@ class TestTickerExtractor:
 
 class TestSentimentClassifier:
     def test_classify_returns_sentiment_result(self):
+        transformers = pytest.importorskip("transformers")
         from shared.nlp.sentiment_classifier import SentimentClassifier, SentimentLevel
         clf = SentimentClassifier()
         result = clf.classify("AAPL is doing great, earnings beat expectations!")

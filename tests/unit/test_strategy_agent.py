@@ -54,11 +54,11 @@ class TestBacktestEngine:
 
 
 class TestBenchmarkComparer:
-    def test_compare_returns_benchmarks(self):
+    async def test_compare_returns_benchmarks(self):
         metrics = {"total_return_pct": 15.0, "sharpe_ratio": 1.2}
-        result = compare_with_benchmarks(metrics, "SPY", 2)
-        assert "benchmarks" in result
+        result = await compare_with_benchmarks(metrics, "SPY", 2)
         assert "strategy" in result
+        assert "alpha" in result
 
 
 class TestReportGenerator:

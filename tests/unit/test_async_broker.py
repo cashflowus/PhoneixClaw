@@ -1,13 +1,15 @@
-import httpx
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-import respx
 
 from shared.broker.alpaca_adapter import AlpacaBrokerAdapter
 
 
 @pytest.fixture
 def adapter():
-    return AlpacaBrokerAdapter(api_key="test-key", secret_key="test-secret", paper=True)
+    with patch("shared.broker.alpaca_adapter.TradingClient"):
+        return AlpacaBrokerAdapter(api_key="test-key", secret_key="test-secret", paper=True)
 
 
 class TestAlpacaBrokerAdapter:
@@ -18,53 +20,35 @@ class TestAlpacaBrokerAdapter:
         assert "260220" in symbol
 
     @pytest.mark.asyncio
-    @respx.mock
     async def test_place_limit_order(self, adapter):
-        respx.post("https://paper-api.alpaca.markets/v2/orders").mock(
-            return_value=httpx.Response(200, json={"id": "order-123", "status": "accepted"})
-        )
+        fake_order = SimpleNamespace(id="order-123")
+        adapter._client.submit_order = MagicMock(return_value=fake_order)
         order_id = await adapter.place_limit_order("SPX260220C06940000", 1, "BUY", 4.80)
         assert order_id == "order-123"
 
     @pytest.mark.asyncio
-    @respx.mock
     async def test_get_account(self, adapter):
-        respx.get("https://paper-api.alpaca.markets/v2/account").mock(
-            return_value=httpx.Response(
-                200,
-                json={
-                    "buying_power": "50000.00",
-                    "cash": "50000.00",
-                    "equity": "50000.00",
-                    "portfolio_value": "50000.00",
-                },
-            )
+        fake_account = SimpleNamespace(
+            buying_power="50000.00", cash="50000.00",
+            equity="50000.00", portfolio_value="50000.00",
         )
+        adapter._client.get_account = MagicMock(return_value=fake_account)
         account = await adapter.get_account()
         assert account["buying_power"] == 50000.0
 
     @pytest.mark.asyncio
-    @respx.mock
     async def test_cancel_order(self, adapter):
-        respx.delete("https://paper-api.alpaca.markets/v2/orders/order-456").mock(
-            return_value=httpx.Response(204)
-        )
+        adapter._client.cancel_order_by_id = MagicMock(return_value=None)
         result = await adapter.cancel_order("order-456")
         assert result is True
 
     @pytest.mark.asyncio
-    @respx.mock
     async def test_get_order_status(self, adapter):
-        respx.get("https://paper-api.alpaca.markets/v2/orders/order-789").mock(
-            return_value=httpx.Response(
-                200,
-                json={
-                    "status": "filled",
-                    "filled_qty": "1",
-                    "filled_avg_price": "4.90",
-                },
-            )
+        from alpaca.trading.enums import OrderStatus
+        fake_order = SimpleNamespace(
+            status=OrderStatus.FILLED, filled_qty="1", filled_avg_price="4.90",
         )
+        adapter._client.get_order_by_id = MagicMock(return_value=fake_order)
         status = await adapter.get_order_status("order-789")
         assert status["status"] == "filled"
         assert status["filled_qty"] == 1

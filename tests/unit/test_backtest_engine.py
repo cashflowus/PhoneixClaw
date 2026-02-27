@@ -36,7 +36,7 @@ class TestRunBacktest:
         assert trades[0]["option_type"] == "CALL"
 
     def test_buy_then_sell_produces_executed_trade(self):
-        """BUY followed by SELL produces executed trade with PnL."""
+        """BUY followed by SELL produces executed trade with PnL (x100 options multiplier)."""
         msgs = [
             self._msg("BTO AAPL 190C 3/21 @ 2.50", datetime(2025, 1, 15, 10, 0, 0, tzinfo=timezone.utc)),
             self._msg("STC AAPL 190C @ 3.00", datetime(2025, 1, 15, 11, 0, 0, tzinfo=timezone.utc)),
@@ -45,7 +45,7 @@ class TestRunBacktest:
         assert summary["executed_trades"] == 1
         assert summary["total_trades"] == 1
         assert trades[0]["exit_reason"] == "MANUAL"
-        assert trades[0]["realized_pnl"] == 0.5  # 3.00 - 2.50
+        assert trades[0]["realized_pnl"] == 50.0  # (3.00 - 2.50) * 100
         assert trades[0]["entry_price"] == 2.50
         assert trades[0]["exit_price"] == 3.00
 
@@ -57,7 +57,7 @@ class TestRunBacktest:
         ]
         trades, summary = run_backtest(msgs)
         assert summary["executed_trades"] == 1
-        assert trades[0]["realized_pnl"] == pytest.approx(1.2)  # 6.00 - 4.80
+        assert trades[0]["realized_pnl"] == pytest.approx(120.0)  # (6.00 - 4.80) * 100
 
     def test_multiple_buys_then_sells_fifo(self):
         """Multiple BUYs then SELLs close in FIFO order."""
@@ -67,37 +67,30 @@ class TestRunBacktest:
             self._msg("STC SPY 500C @ 2.50", datetime(2025, 1, 15, 11, 0, 0, tzinfo=timezone.utc)),
         ]
         trades, summary = run_backtest(msgs)
-        # First SELL closes first BUY (2.00 entry) -> PnL = 0.50
+        # First SELL closes first BUY (2.00 entry) -> PnL = (2.50 - 2.00) * 100 = 50
         assert summary["executed_trades"] == 1
         assert trades[0]["entry_price"] == 2.0
-        assert trades[0]["realized_pnl"] == 0.5
+        assert trades[0]["realized_pnl"] == 50.0
         # Second position closes at 0 PnL (EXPIRED)
         assert summary["total_trades"] == 2
         assert trades[1]["exit_reason"] == "EXPIRED"
         assert trades[1]["realized_pnl"] == 0.0
 
     def test_put_option_pnl_calculation(self):
-        """PUT: profit when exit < entry."""
+        """PUT option premium: BUY at 3.00, SELL at 4.00.
+
+        Engine applies take-profit at 30%: tp = 3.00 * 1.30 = 3.90.
+        Since 4.00 >= 3.90, exit is capped at 3.90 (TAKE_PROFIT).
+        PnL = (3.90 - 3.00) * 100 = 90.0
+        """
         msgs = [
             self._msg("BTO AAPL 180P 3/21 @ 3.00", datetime(2025, 1, 15, 10, 0, 0, tzinfo=timezone.utc)),
             self._msg("STC AAPL 180P @ 4.00", datetime(2025, 1, 15, 11, 0, 0, tzinfo=timezone.utc)),
         ]
         trades, summary = run_backtest(msgs)
-        # PUT: pnl = (entry - exit) = (3 - 4) = -1 for short, but we're long put: profit when price goes up
-        # Engine: pnl = (entry - price) for PUT when we're long
-        # pnl = (3 - 4) * 1 = -1? No - for long put, profit when underlying drops. Option value up = profit.
-        # In engine: pnl = (entry - price) * 1 for PUT -> (3 - 4) = -1. That's wrong for long put.
-        # Actually: long put profit = exit_price - entry_price (option premium gain)
-        # Let me check engine again: pnl = (price - entry) * 1 if CALL else (entry - price) * 1
-        # For PUT: (entry - price) = (3 - 4) = -1. So we lose when put goes from 3 to 4? No.
-        # Long put: buy at 3, sell at 4 -> profit = 1. So it should be (price - entry) for both.
-        # The engine has: pnl = (price - entry) * 1 if CALL else (entry - price) * 1
-        # For PUT with entry=3, exit=4: (entry - price) = -1. That's a loss. But we sold higher!
-        # I think the engine has it backwards for PUT. Long put profit = exit - entry = 4 - 3 = 1.
-        # Let me just assert what the engine actually produces.
         assert summary["executed_trades"] == 1
-        # Engine formula: pnl = (entry - price) for PUT. 3 - 4 = -1. So we get -1.
-        assert trades[0]["realized_pnl"] == -1.0  # Engine's current formula
+        assert trades[0]["exit_reason"] == "TAKE_PROFIT"
+        assert trades[0]["realized_pnl"] == pytest.approx(90.0)
 
     def test_ignores_non_trade_messages(self):
         """Messages that don't parse as trades are skipped."""

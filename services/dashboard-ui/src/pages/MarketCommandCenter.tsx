@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
-import { Responsive, WidthProvider, Layout } from 'react-grid-layout'
+import { ResponsiveGridLayout, useContainerWidth, type LayoutItem } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 
@@ -27,8 +27,6 @@ import PlatformSentimentWidget from '@/components/market-widgets/PlatformSentime
 import TradingViewChartWidget from '@/components/market-widgets/TradingViewChartWidget'
 import RSSFeedWidget from '@/components/market-widgets/RSSFeedWidget'
 import MarketClockWidget from '@/components/market-widgets/MarketClockWidget'
-
-const ResponsiveGridLayout = WidthProvider(Responsive)
 
 const WIDGET_COMPONENTS: Record<string, React.ComponentType> = {
   'fear-greed': FearGreedWidget,
@@ -60,7 +58,7 @@ const WIDGETS_KEY = 'market-dashboard-widgets'
 
 const DEFAULT_WIDGETS = ['fear-greed', 'global-indices', 'top-movers', 'breaking-news', 'mag7', 'sector-perf']
 
-const DEFAULT_LAYOUT: Layout[] = [
+const DEFAULT_LAYOUT: LayoutItem[] = [
   { i: 'fear-greed', x: 0, y: 0, w: 3, h: 4, minW: 2, minH: 3 },
   { i: 'global-indices', x: 3, y: 0, w: 5, h: 4, minW: 4, minH: 3 },
   { i: 'top-movers', x: 8, y: 0, w: 4, h: 4, minW: 3, minH: 3 },
@@ -77,7 +75,7 @@ function loadSavedWidgets(): string[] {
   return DEFAULT_WIDGETS
 }
 
-function loadSavedLayout(): Layout[] {
+function loadSavedLayout(): LayoutItem[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) return JSON.parse(saved)
@@ -91,11 +89,13 @@ function getWidgetDef(id: string): WidgetDef | undefined {
 
 export default function MarketCommandCenter() {
   const [activeWidgets, setActiveWidgets] = useState<string[]>(loadSavedWidgets)
-  const [layouts, setLayouts] = useState<Layout[]>(loadSavedLayout)
+  const [layouts, setLayouts] = useState<LayoutItem[]>(loadSavedLayout)
+  const { width, containerRef, mounted } = useContainerWidth()
 
-  const handleLayoutChange = useCallback((newLayout: Layout[]) => {
-    setLayouts(newLayout)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newLayout))
+  const handleLayoutChange = useCallback((newLayout: readonly LayoutItem[]) => {
+    const mutable = [...newLayout]
+    setLayouts(mutable)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(mutable))
   }, [])
 
   const handleAddWidget = useCallback((widgetId: string) => {
@@ -105,7 +105,7 @@ export default function MarketCommandCenter() {
 
     const maxY = layouts.reduce((max, l) => Math.max(max, l.y + l.h), 0)
 
-    const newLayout: Layout = {
+    const newLayout: LayoutItem = {
       i: widgetId,
       x: 0,
       y: maxY,
@@ -148,24 +148,23 @@ export default function MarketCommandCenter() {
         <WidgetCatalog activeWidgetIds={activeWidgets} onAddWidget={handleAddWidget} />
       </div>
 
-      <div className="p-2">
+      <div className="p-2" ref={containerRef as React.RefObject<HTMLDivElement>}>
         {activeWidgets.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
             <p className="text-sm mb-2">No widgets added yet</p>
             <p className="text-xs">Click "Add Widget" to build your market dashboard</p>
           </div>
-        ) : (
+        ) : mounted ? (
           <ResponsiveGridLayout
             className="layout"
+            width={width}
             layouts={{ lg: filteredLayouts }}
             breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
             cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
             rowHeight={40}
-            draggableHandle=".drag-handle"
+            dragConfig={{ enabled: true, handle: '.drag-handle' }}
+            resizeConfig={{ enabled: true }}
             onLayoutChange={handleLayoutChange}
-            isResizable
-            isDraggable
-            compactType="vertical"
             margin={[8, 8]}
           >
             {activeWidgets.map(widgetId => {
@@ -186,7 +185,7 @@ export default function MarketCommandCenter() {
               )
             })}
           </ResponsiveGridLayout>
-        )}
+        ) : null}
       </div>
     </div>
   )

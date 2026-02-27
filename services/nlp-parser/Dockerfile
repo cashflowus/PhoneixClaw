@@ -15,15 +15,21 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # ─── Models stage (cached unless deps change) ────────────────────────
 FROM deps AS models
 
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && \
+    update-ca-certificates && rm -rf /var/lib/apt/lists/*
+
 RUN python -m spacy download en_core_web_sm
 
-RUN python -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; \
+RUN mkdir -p /root/.cache/huggingface && \
+    (python -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; \
     AutoTokenizer.from_pretrained('ProsusAI/finbert'); \
-    AutoModelForSequenceClassification.from_pretrained('ProsusAI/finbert')"
+    AutoModelForSequenceClassification.from_pretrained('ProsusAI/finbert')" || \
+    echo "WARN: finbert download failed — will lazy-load at runtime")
 
 RUN python -c "from transformers import AutoModelForSeq2SeqLM, AutoTokenizer; \
     AutoTokenizer.from_pretrained('google/flan-t5-small'); \
-    AutoModelForSeq2SeqLM.from_pretrained('google/flan-t5-small')"
+    AutoModelForSeq2SeqLM.from_pretrained('google/flan-t5-small')" || \
+    echo "WARN: flan-t5-small download failed — will lazy-load at runtime"
 
 # ─── Runtime stage ───────────────────────────────────────────────────
 FROM python:3.12-slim
