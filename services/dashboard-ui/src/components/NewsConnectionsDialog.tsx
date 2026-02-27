@@ -30,6 +30,10 @@ const SOURCES: Record<string, { label: string; needsKey: boolean; description: s
   alpha_vantage: { label: 'Alpha Vantage', needsKey: true, description: 'News sentiment from Alpha Vantage' },
   seekingalpha: { label: 'Seeking Alpha', needsKey: true, description: 'Market news via RapidAPI' },
   reddit: { label: 'Reddit', needsKey: false, description: 'Trending posts from finance subreddits' },
+  google_news: { label: 'Google News', needsKey: false, description: 'Financial news via Google News RSS (free)' },
+  polygon: { label: 'Polygon.io', needsKey: true, description: 'Market news with ticker tagging from Polygon' },
+  benzinga: { label: 'Benzinga', needsKey: true, description: 'Earnings, analyst ratings & market-moving news' },
+  yahoo_finance: { label: 'Yahoo Finance', needsKey: false, description: 'Financial news via Yahoo Finance RSS (free)' },
 }
 
 interface Props {

@@ -9,7 +9,11 @@ from shared.config.base_config import config
 
 logger = logging.getLogger(__name__)
 
-PUBLIC_PATHS = {"/health", "/auth/register", "/auth/login", "/auth/refresh", "/docs", "/openapi.json"}
+PUBLIC_PATHS = {
+    "/health", "/auth/register", "/auth/login", "/auth/refresh",
+    "/auth/verify-email", "/auth/resend-verification", "/auth/mfa/verify",
+    "/docs", "/openapi.json",
+}
 
 _rate_limiter = None
 _rate_limiter_initialized = False

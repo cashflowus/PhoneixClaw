@@ -295,6 +295,13 @@ async def _run_migrations():
              '{}'::jsonb, 'available', 'unknown')
         ON CONFLICT (name) DO NOTHING""",
         "ALTER TABLE ai_trade_decisions ALTER COLUMN user_id DROP NOT NULL",
+        # ── Email verification & MFA ──
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(255)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMPTZ",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret VARCHAR(255)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE",
+        "UPDATE users SET email_verified = TRUE WHERE email_verified = FALSE",
     ]
     async with engine.begin() as conn:
         for sql in migrations:

@@ -9,14 +9,23 @@ export interface UserProfile {
   is_active: boolean
   is_admin: boolean
   created_at: string
+  mfa_enabled?: boolean
+}
+
+export interface LoginResult {
+  success: boolean
+  requires_mfa?: boolean
+  mfa_session?: string
+  email_not_verified?: boolean
 }
 
 interface AuthContextType {
   token: string | null
   isAdmin: boolean
   user: UserProfile | null
-  login: (email: string, password: string) => Promise<void>
-  register: (email: string, password: string, name?: string) => Promise<void>
+  login: (email: string, password: string) => Promise<LoginResult>
+  register: (email: string, password: string, name?: string) => Promise<{ status: string }>
+  verifyMfa: (mfaSession: string, code: string) => Promise<void>
   logout: () => void
 }
 
@@ -103,30 +112,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [token, user, fetchProfile])
 
-  const login = useCallback(async (email: string, password: string) => {
-    const res = await axios.post('/auth/login', { email, password })
-    const t = res.data.access_token
+  const _storeTokens = useCallback(async (data: { access_token: string; refresh_token: string }) => {
+    const t = data.access_token
     localStorage.setItem('token', t)
-    localStorage.setItem('refresh_token', res.data.refresh_token)
+    localStorage.setItem('refresh_token', data.refresh_token)
     setToken(t)
     setIsAdmin(!!parseJwtPayload(t).admin)
     axios.defaults.headers.common['Authorization'] = `Bearer ${t}`
     await fetchProfile()
   }, [fetchProfile])
 
+  const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
+    try {
+      const res = await axios.post('/auth/login', { email, password })
+
+      if (res.data.requires_mfa) {
+        return { success: false, requires_mfa: true, mfa_session: res.data.mfa_session }
+      }
+
+      await _storeTokens(res.data)
+      return { success: true }
+    } catch (err) {
+      if (err instanceof AxiosError && err.response?.status === 403) {
+        const detail = err.response.data?.detail || ''
+        if (detail.toLowerCase().includes('not verified')) {
+          return { success: false, email_not_verified: true }
+        }
+      }
+      throw err
+    }
+  }, [_storeTokens])
+
   const register = useCallback(async (email: string, password: string, name?: string) => {
     const res = await axios.post('/auth/register', { email, password, name })
-    const t = res.data.access_token
-    localStorage.setItem('token', t)
-    localStorage.setItem('refresh_token', res.data.refresh_token)
-    setToken(t)
-    axios.defaults.headers.common['Authorization'] = `Bearer ${t}`
-    await fetchProfile()
-  }, [fetchProfile])
+    return res.data
+  }, [])
+
+  const verifyMfa = useCallback(async (mfaSession: string, code: string) => {
+    const res = await axios.post('/auth/mfa/verify', { mfa_session: mfaSession, totp_code: code })
+    await _storeTokens(res.data)
+  }, [_storeTokens])
 
   if (token) {
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
   }
 
-  return <AuthContext.Provider value={{ token, isAdmin, user, login, register, logout }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ token, isAdmin, user, login, register, verifyMfa, logout }}>{children}</AuthContext.Provider>
 }

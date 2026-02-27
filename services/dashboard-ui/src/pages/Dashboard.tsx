@@ -11,7 +11,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import { TrendingUp, CheckCircle2, XCircle, AlertTriangle, Loader2, Download, Search, Clock, Eye, HeartPulse, Newspaper, Brain } from 'lucide-react'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { TrendingUp, CheckCircle2, XCircle, AlertTriangle, Loader2, Download, Search, Clock, Eye, HeartPulse, Newspaper, Brain, Copy, Check } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { exportToCSV } from '@/lib/csv-export'
 
@@ -120,6 +121,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState('')
   const [viewTrade, setViewTrade] = useState<Trade | null>(null)
+  const [copied, setCopied] = useState(false)
   const { data: trades, isLoading: tradesLoading, isError: tradesError, refetch: refetchTrades } = useQuery<Trade[]>({
     queryKey: ['trades'],
     queryFn: () => axios.get('/api/v1/trades?limit=50').then((r) => r.data),
@@ -428,53 +430,108 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      <Dialog open={!!viewTrade} onOpenChange={v => { if (!v) setViewTrade(null) }}>
+      <Dialog open={!!viewTrade} onOpenChange={v => { if (!v) { setViewTrade(null); setCopied(false) } }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Raw Message</DialogTitle>
+            <DialogTitle>Trade Details</DialogTitle>
           </DialogHeader>
           {viewTrade && (
             <div className="space-y-4">
-              <div className="rounded-lg border bg-muted/30 p-3 space-y-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">Ticker:</span>
-                  <span className="font-medium">{viewTrade.ticker}</span>
-                  <span className={viewTrade.action === 'BUY' || viewTrade.action === 'BTO' ? 'text-emerald-500 font-medium' : 'text-red-500 font-medium'}>
-                    {viewTrade.action}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">Source:</span>
-                  <span className="font-medium capitalize">{viewTrade.source || 'Unknown'}</span>
-                  {viewTrade.source_author && (
-                    <>
-                      <span className="text-muted-foreground">by</span>
-                      <span className="font-medium">{viewTrade.source_author}</span>
-                    </>
+              <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                  <div>
+                    <span className="text-muted-foreground text-xs">Ticker</span>
+                    <p className="font-medium">{viewTrade.ticker}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground text-xs">Action</span>
+                    <p className={viewTrade.action === 'BUY' || viewTrade.action === 'BTO' ? 'text-emerald-500 font-medium' : 'text-red-500 font-medium'}>
+                      {viewTrade.action}
+                    </p>
+                  </div>
+                  {viewTrade.option_type && (
+                    <div>
+                      <span className="text-muted-foreground text-xs">Option Type</span>
+                      <p className="font-medium">{viewTrade.option_type === 'CALL' ? 'Call' : viewTrade.option_type === 'PUT' ? 'Put' : viewTrade.option_type}</p>
+                    </div>
                   )}
-                </div>
-                {viewTrade.account_name && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">Account:</span>
-                    <span className="font-medium">{viewTrade.account_name}</span>
+                  {viewTrade.strike != null && (
+                    <div>
+                      <span className="text-muted-foreground text-xs">Strike</span>
+                      <p className="font-medium">${viewTrade.strike}</p>
+                    </div>
+                  )}
+                  {viewTrade.price != null && (
+                    <div>
+                      <span className="text-muted-foreground text-xs">Price</span>
+                      <p className="font-medium">${viewTrade.price?.toFixed(2)}</p>
+                    </div>
+                  )}
+                  {viewTrade.expiration && (
+                    <div>
+                      <span className="text-muted-foreground text-xs">Expiration</span>
+                      <p className="font-medium">{viewTrade.expiration}</p>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-muted-foreground text-xs">Status</span>
+                    <div className="mt-0.5">{statusBadge(viewTrade.status, viewTrade.error_message, viewTrade.rejection_reason)}</div>
                   </div>
-                )}
-                {viewTrade.pipeline_name && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">Pipeline:</span>
-                    <span className="font-medium">{viewTrade.pipeline_name}</span>
+                  <div>
+                    <span className="text-muted-foreground text-xs">Source</span>
+                    <p className="font-medium capitalize">{viewTrade.source || 'Unknown'}{viewTrade.source_author ? ` — ${viewTrade.source_author}` : ''}</p>
                   </div>
-                )}
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">Time:</span>
-                  <span>{viewTrade.created_at ? new Date(viewTrade.created_at).toLocaleString() : '—'}</span>
+                  {viewTrade.account_name && (
+                    <div>
+                      <span className="text-muted-foreground text-xs">Account</span>
+                      <p className="font-medium">{viewTrade.account_name}</p>
+                    </div>
+                  )}
+                  {viewTrade.pipeline_name && (
+                    <div>
+                      <span className="text-muted-foreground text-xs">Pipeline</span>
+                      <p className="font-medium">{viewTrade.pipeline_name}</p>
+                    </div>
+                  )}
+                  <div className="col-span-2">
+                    <span className="text-muted-foreground text-xs">Time</span>
+                    <p className="font-medium">{viewTrade.created_at ? new Date(viewTrade.created_at).toLocaleString() : '—'}</p>
+                  </div>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <p className="text-sm font-medium text-muted-foreground">Original Message</p>
-                <div className="rounded-lg border bg-muted/20 p-4 text-sm font-mono whitespace-pre-wrap break-words min-h-[60px]">
-                  {viewTrade.raw_message || <span className="text-muted-foreground italic">No raw message available</span>}
+
+              {(viewTrade.error_message || viewTrade.rejection_reason) && (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm">
+                  <p className="text-xs font-medium text-red-500 mb-1">{viewTrade.rejection_reason ? 'Rejection Reason' : 'Error'}</p>
+                  <p className="text-red-600 text-xs">{viewTrade.rejection_reason || viewTrade.error_message}</p>
                 </div>
+              )}
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-muted-foreground">Original Message</p>
+                  {viewTrade.raw_message && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1.5 text-xs"
+                      onClick={() => {
+                        navigator.clipboard.writeText(viewTrade.raw_message || '').then(() => {
+                          setCopied(true)
+                          setTimeout(() => setCopied(false), 2000)
+                        })
+                      }}
+                    >
+                      {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                      {copied ? 'Copied' : 'Copy'}
+                    </Button>
+                  )}
+                </div>
+                <ScrollArea className="max-h-60">
+                  <div className="rounded-lg border bg-muted/20 p-4 text-sm font-mono whitespace-pre-wrap break-words min-h-[60px]">
+                    {viewTrade.raw_message || <span className="text-muted-foreground italic">No raw message available</span>}
+                  </div>
+                </ScrollArea>
               </div>
             </div>
           )}

@@ -39,6 +39,10 @@ const SOURCE_ICONS: Record<string, { label: string; color: string }> = {
   alpha_vantage: { label: 'AV', color: 'bg-purple-500/15 text-purple-600' },
   seekingalpha: { label: 'SA', color: 'bg-orange-500/15 text-orange-600' },
   reddit: { label: 'RD', color: 'bg-red-500/15 text-red-600' },
+  google_news: { label: 'GN', color: 'bg-sky-500/15 text-sky-600' },
+  polygon: { label: 'PG', color: 'bg-indigo-500/15 text-indigo-600' },
+  benzinga: { label: 'BZ', color: 'bg-amber-500/15 text-amber-600' },
+  yahoo_finance: { label: 'YF', color: 'bg-violet-500/15 text-violet-600' },
 }
 
 function timeAgo(dateStr: string | null): string {

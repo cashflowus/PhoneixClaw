@@ -1,15 +1,65 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Activity, Bell, CheckCircle2, XCircle, ShieldAlert, Power, Loader2 } from 'lucide-react'
+import { Activity, Bell, CheckCircle2, XCircle, ShieldAlert, Power, Loader2, MessageCircle, Save, ShieldCheck } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
+
+interface NotifPrefs {
+  email_enabled: boolean
+  whatsapp_enabled: boolean
+  whatsapp_phone_number_id: string
+  whatsapp_access_token: string
+  whatsapp_to_number: string
+}
 
 export default function System() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
+  const { user } = useAuth()
   const [killMsg, setKillMsg] = useState<string | null>(null)
+  const [notifForm, setNotifForm] = useState<NotifPrefs>({
+    email_enabled: true,
+    whatsapp_enabled: false,
+    whatsapp_phone_number_id: '',
+    whatsapp_access_token: '',
+    whatsapp_to_number: '',
+  })
+  const [notifSaved, setNotifSaved] = useState(false)
+
+  const { data: notifPrefs } = useQuery<NotifPrefs>({
+    queryKey: ['notification-prefs'],
+    queryFn: () => axios.get('/api/v1/notifications/preferences').then(r => r.data),
+  })
+
+  useEffect(() => {
+    if (notifPrefs) {
+      setNotifForm(prev => ({
+        ...prev,
+        email_enabled: notifPrefs.email_enabled,
+        whatsapp_enabled: notifPrefs.whatsapp_enabled,
+        whatsapp_phone_number_id: notifPrefs.whatsapp_phone_number_id || '',
+        whatsapp_to_number: notifPrefs.whatsapp_to_number || '',
+        whatsapp_access_token: '',
+      }))
+    }
+  }, [notifPrefs])
+
+  const saveNotifMut = useMutation({
+    mutationFn: (data: Partial<NotifPrefs>) => axios.patch('/api/v1/notifications/preferences', data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['notification-prefs'] })
+      setNotifSaved(true)
+      setTimeout(() => setNotifSaved(false), 2000)
+    },
+  })
 
   const { data: health, isLoading: healthLoading, isError: healthError, refetch: refetchHealth } = useQuery({
     queryKey: ['system-health'],
@@ -72,6 +122,122 @@ export default function System() {
           {!tradingEnabled && (
             <Badge variant="destructive" className="mt-3">KILL SWITCH ACTIVE</Badge>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center gap-2">
+          <ShieldCheck className="h-5 w-5 text-primary" />
+          <CardTitle className="text-base">Security</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Two-Factor Authentication</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {user?.mfa_enabled
+                  ? 'MFA is enabled. Your account is secured with an authenticator app.'
+                  : 'Add an extra layer of security with an authenticator app.'}
+              </p>
+              {user?.mfa_enabled && (
+                <Badge variant="success" className="mt-1.5 text-[10px]">Enabled</Badge>
+              )}
+            </div>
+            <Button variant="outline" size="sm" onClick={() => navigate('/mfa-setup')}>
+              {user?.mfa_enabled ? 'Manage' : 'Set Up'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center gap-2">
+          <MessageCircle className="h-5 w-5 text-emerald-500" />
+          <CardTitle className="text-base">Notification Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Email Notifications</p>
+              <p className="text-xs text-muted-foreground">Daily trade reports at market close</p>
+            </div>
+            <Switch
+              checked={notifForm.email_enabled}
+              onCheckedChange={v => {
+                setNotifForm(f => ({ ...f, email_enabled: v }))
+                saveNotifMut.mutate({ email_enabled: v })
+              }}
+            />
+          </div>
+
+          <div className="border-t pt-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">WhatsApp Trade Alerts</p>
+                <p className="text-xs text-muted-foreground">Get instant alerts when trades are executed</p>
+              </div>
+              <Switch
+                checked={notifForm.whatsapp_enabled}
+                onCheckedChange={v => setNotifForm(f => ({ ...f, whatsapp_enabled: v }))}
+              />
+            </div>
+
+            {notifForm.whatsapp_enabled && (
+              <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+                <p className="text-xs text-muted-foreground">
+                  Configure your WhatsApp Business Cloud API credentials. You need a Meta Business account with WhatsApp Business API access.
+                </p>
+                <div className="space-y-2">
+                  <Label className="text-xs">Phone Number ID</Label>
+                  <Input
+                    value={notifForm.whatsapp_phone_number_id}
+                    onChange={e => setNotifForm(f => ({ ...f, whatsapp_phone_number_id: e.target.value }))}
+                    placeholder="e.g. 123456789012345"
+                    className="font-mono text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Access Token</Label>
+                  <Input
+                    type="password"
+                    value={notifForm.whatsapp_access_token}
+                    onChange={e => setNotifForm(f => ({ ...f, whatsapp_access_token: e.target.value }))}
+                    placeholder={notifPrefs?.whatsapp_access_token ? '••••  (already set, leave blank to keep)' : 'Enter your access token'}
+                    className="font-mono text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Recipient Phone Number</Label>
+                  <Input
+                    value={notifForm.whatsapp_to_number}
+                    onChange={e => setNotifForm(f => ({ ...f, whatsapp_to_number: e.target.value }))}
+                    placeholder="e.g. 14155238886"
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-[10px] text-muted-foreground">Include country code without + sign</p>
+                </div>
+                <Button
+                  size="sm"
+                  className="gap-1.5"
+                  disabled={saveNotifMut.isPending}
+                  onClick={() => {
+                    const payload: Partial<NotifPrefs> = {
+                      whatsapp_enabled: true,
+                      whatsapp_phone_number_id: notifForm.whatsapp_phone_number_id,
+                      whatsapp_to_number: notifForm.whatsapp_to_number,
+                    }
+                    if (notifForm.whatsapp_access_token) {
+                      payload.whatsapp_access_token = notifForm.whatsapp_access_token
+                    }
+                    saveNotifMut.mutate(payload)
+                  }}
+                >
+                  {saveNotifMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : notifSaved ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <Save className="h-3.5 w-3.5" />}
+                  {notifSaved ? 'Saved' : 'Save WhatsApp Settings'}
+                </Button>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

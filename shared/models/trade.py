@@ -86,6 +86,11 @@ class User(Base):
     is_admin = Column(Boolean, nullable=False, default=False)
     role = Column(String(30), nullable=False, default="trader")
     permissions = Column(JSONB, nullable=False, default=lambda: dict(DEFAULT_PERMISSIONS))
+    email_verified = Column(Boolean, nullable=False, default=False)
+    email_verification_token = Column(String(255), nullable=True)
+    email_verification_expires = Column(DateTime(timezone=True), nullable=True)
+    mfa_secret = Column(String(255), nullable=True)
+    mfa_enabled = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
 

@@ -14,10 +14,14 @@ from shared.nlp.sentiment_classifier import SentimentClassifier
 from shared.nlp.ticker_extractor import TickerExtractor
 
 from .adapters.alpha_vantage import AlphaVantageAdapter
+from .adapters.benzinga import BenzingaAdapter
 from .adapters.finnhub import FinnhubAdapter
+from .adapters.google_news import GoogleNewsAdapter
 from .adapters.newsapi import NewsApiAdapter
+from .adapters.polygon import PolygonAdapter
 from .adapters.reddit import RedditAdapter
 from .adapters.seekingalpha import SeekingAlphaAdapter
+from .adapters.yahoo_finance import YahooFinanceAdapter
 from .importance_ranker import rank_headlines
 from .retention import purge_old_news
 from .story_clusterer import cluster_headlines
@@ -30,6 +34,10 @@ ADAPTERS = {
     "alpha_vantage": AlphaVantageAdapter(),
     "reddit": RedditAdapter(),
     "seekingalpha": SeekingAlphaAdapter(),
+    "google_news": GoogleNewsAdapter(),
+    "polygon": PolygonAdapter(),
+    "benzinga": BenzingaAdapter(),
+    "yahoo_finance": YahooFinanceAdapter(),
 }
 
 POLL_INTERVAL_SECONDS = 600

@@ -1,7 +1,24 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  sortableKeyboardCoordinates,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from './ThemeProvider'
 import { Button } from './ui/button'
@@ -37,6 +54,8 @@ import {
   Boxes,
   FlaskConical,
   Package,
+  GripVertical,
+  RotateCcw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -49,7 +68,9 @@ interface Notification {
   created_at: string | null
 }
 
-const baseNavItems = [
+type NavItemData = { to: string; icon: React.ElementType; label: string }
+
+const DEFAULT_NAV_ITEMS: NavItemData[] = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/positions', icon: TrendingUp, label: 'Positions' },
   { to: '/pipelines', icon: Workflow, label: 'Trade Pipelines' },
@@ -67,13 +88,95 @@ const baseNavItems = [
   { to: '/system', icon: Settings, label: 'System' },
 ]
 
-const adminNavItems = [
+const ICON_MAP: Record<string, React.ElementType> = Object.fromEntries(
+  DEFAULT_NAV_ITEMS.map(i => [i.to, i.icon])
+)
+
+const adminNavItems: NavItemData[] = [
   { to: '/access', icon: UserCog, label: 'Access Management' },
   { to: '/admin', icon: ShieldCheck, label: 'Admin Panel' },
   { to: '/board', icon: KanbanSquare, label: 'Sprint Board' },
 ]
 
-function NavItem({
+const NAV_ORDER_KEY = 'nav-order'
+
+function loadNavOrder(): NavItemData[] {
+  try {
+    const stored = localStorage.getItem(NAV_ORDER_KEY)
+    if (!stored) return DEFAULT_NAV_ITEMS
+    const paths: string[] = JSON.parse(stored)
+    const labelMap = Object.fromEntries(DEFAULT_NAV_ITEMS.map(i => [i.to, i.label]))
+    const known = new Set(DEFAULT_NAV_ITEMS.map(i => i.to))
+    const ordered = paths
+      .filter(p => known.has(p))
+      .map(p => ({ to: p, icon: ICON_MAP[p], label: labelMap[p] }))
+    DEFAULT_NAV_ITEMS.forEach(item => {
+      if (!paths.includes(item.to)) ordered.push(item)
+    })
+    return ordered
+  } catch {
+    return DEFAULT_NAV_ITEMS
+  }
+}
+
+function saveNavOrder(items: NavItemData[]) {
+  localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(items.map(i => i.to)))
+}
+
+function SortableNavItem({
+  item,
+  collapsed,
+}: {
+  item: NavItemData
+  collapsed: boolean
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.to })
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
+  const Icon = item.icon
+
+  const link = (
+    <div ref={setNodeRef} style={style} className="group relative flex items-center">
+      {!collapsed && (
+        <button
+          {...attributes}
+          {...listeners}
+          className="absolute -left-0.5 opacity-0 group-hover:opacity-60 transition-opacity cursor-grab active:cursor-grabbing p-0.5"
+          tabIndex={-1}
+        >
+          <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+        </button>
+      )}
+      <NavLink
+        to={item.to}
+        end={item.to === '/'}
+        className={({ isActive }) =>
+          cn(
+            'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 w-full',
+            isActive
+              ? 'bg-primary/10 text-primary shadow-sm'
+              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+            collapsed && 'justify-center px-2',
+          )
+        }
+      >
+        <Icon className="h-5 w-5 shrink-0" />
+        {!collapsed && <span>{item.label}</span>}
+      </NavLink>
+    </div>
+  )
+
+  if (collapsed) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{link}</TooltipTrigger>
+        <TooltipContent side="right">{item.label}</TooltipContent>
+      </Tooltip>
+    )
+  }
+  return link
+}
+
+function StaticNavItem({
   to,
   icon: Icon,
   label,
@@ -118,7 +221,10 @@ function SidebarContent({
   collapsed,
   onCollapse,
   onLogout,
-  navItems,
+  sortableItems,
+  onReorder,
+  onReset,
+  adminItems,
   displayName = 'User',
   initials = 'U',
   role,
@@ -126,12 +232,29 @@ function SidebarContent({
   collapsed: boolean
   onCollapse?: () => void
   onLogout: () => void
-  navItems: typeof baseNavItems
+  sortableItems: NavItemData[]
+  onReorder: (items: NavItemData[]) => void
+  onReset: () => void
+  adminItems: NavItemData[]
   displayName?: string
   initials?: string
   role?: string
 }) {
   const { theme, setTheme } = useTheme()
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIdx = sortableItems.findIndex(i => i.to === active.id)
+    const newIdx = sortableItems.findIndex(i => i.to === over.id)
+    if (oldIdx === -1 || newIdx === -1) return
+    const reordered = arrayMove(sortableItems, oldIdx, newIdx)
+    onReorder(reordered)
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -142,10 +265,39 @@ function SidebarContent({
 
       <ScrollArea className="flex-1 px-3 py-4">
         <nav className="space-y-1">
-          {navItems.map((item) => (
-            <NavItem key={item.to} {...item} collapsed={collapsed} />
-          ))}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={sortableItems.map(i => i.to)} strategy={verticalListSortingStrategy}>
+              {sortableItems.map((item) => (
+                <SortableNavItem key={item.to} item={item} collapsed={collapsed} />
+              ))}
+            </SortableContext>
+          </DndContext>
+
+          {adminItems.length > 0 && (
+            <>
+              <Separator className="my-2" />
+              {adminItems.map((item) => (
+                <StaticNavItem key={item.to} {...item} collapsed={collapsed} />
+              ))}
+            </>
+          )}
         </nav>
+
+        {!collapsed && (
+          <div className="mt-3 flex justify-center">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={onReset}
+                  className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors flex items-center gap-1"
+                >
+                  <RotateCcw className="h-3 w-3" /> Reset order
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Restore default menu order</TooltipContent>
+            </Tooltip>
+          </div>
+        )}
       </ScrollArea>
 
       <div className="mt-auto border-t border-border p-3 space-y-2">
@@ -216,6 +368,7 @@ const pageTitles: Record<string, string> = {
   '/admin': 'Admin Panel',
   '/board': 'Sprint Board',
   '/notifications': 'Notifications',
+  '/mfa-setup': 'Two-Factor Authentication',
 }
 
 function getInitials(name: string | null | undefined, email: string | null | undefined): string {
@@ -238,15 +391,26 @@ export default function AppShell() {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [bellOpen, setBellOpen] = useState(false)
+  const [sortableItems, setSortableItems] = useState<NavItemData[]>(loadNavOrder)
   const { logout, isAdmin, user } = useAuth()
   const qc = useQueryClient()
   const location = useLocation()
   const navigate = useNavigate()
   const pageTitle = pageTitles[location.pathname]
     || (location.pathname.startsWith('/board/') ? 'Task Detail' : 'PhoenixTrade')
-  const navItems = isAdmin ? [...baseNavItems, ...adminNavItems] : baseNavItems
+  const currentAdminItems = isAdmin ? adminNavItems : []
   const displayName = getDisplayName(user?.name, user?.email)
   const initials = getInitials(user?.name, user?.email)
+
+  const handleReorder = useCallback((items: NavItemData[]) => {
+    setSortableItems(items)
+    saveNavOrder(items)
+  }, [])
+
+  const handleReset = useCallback(() => {
+    setSortableItems(DEFAULT_NAV_ITEMS)
+    localStorage.removeItem(NAV_ORDER_KEY)
+  }, [])
 
   const { data: unreadData } = useQuery<{ unread_count: number }>({
     queryKey: ['notifications-unread'],
@@ -284,7 +448,10 @@ export default function AppShell() {
           collapsed={collapsed}
           onCollapse={() => setCollapsed((c) => !c)}
           onLogout={logout}
-          navItems={navItems}
+          sortableItems={sortableItems}
+          onReorder={handleReorder}
+          onReset={handleReset}
+          adminItems={currentAdminItems}
           displayName={displayName}
           initials={initials}
           role={isAdmin ? 'Admin' : 'User'}
@@ -303,7 +470,7 @@ export default function AppShell() {
             </SheetTrigger>
             <SheetContent side="left" className="w-64 p-0">
               <SheetTitle className="sr-only">Navigation</SheetTitle>
-              <SidebarContent collapsed={false} onLogout={logout} navItems={navItems} displayName={displayName} initials={initials} role={isAdmin ? 'Admin' : 'User'} />
+              <SidebarContent collapsed={false} onLogout={logout} sortableItems={sortableItems} onReorder={handleReorder} onReset={handleReset} adminItems={currentAdminItems} displayName={displayName} initials={initials} role={isAdmin ? 'Admin' : 'User'} />
             </SheetContent>
           </Sheet>
 

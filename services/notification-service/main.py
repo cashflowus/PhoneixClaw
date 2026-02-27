@@ -43,6 +43,44 @@ async def _persist_notification(event: dict, title: str, body: str, priority: st
         logger.exception("Failed to persist notification")
 
 
+async def _send_whatsapp_if_enabled(event: dict):
+    """Send a WhatsApp alert if the user has it configured and the trade was executed."""
+    status = event.get("status", "")
+    if status not in ("EXECUTED", "FILLED"):
+        return
+    user_id = event.get("user_id")
+    if not user_id:
+        return
+    try:
+        from shared.models.database import AsyncSessionLocal
+        from shared.models.trade import User
+        from shared.whatsapp.sender import send_whatsapp_message, format_trade_alert
+
+        async with AsyncSessionLocal() as session:
+            from sqlalchemy import select
+            result = await session.execute(
+                select(User).where(User.id == uuid.UUID(user_id) if isinstance(user_id, str) else user_id)
+            )
+            user = result.scalar_one_or_none()
+            if not user:
+                return
+
+        prefs = user.notification_prefs or {}
+        if not prefs.get("whatsapp_enabled"):
+            return
+
+        phone_id = prefs.get("whatsapp_phone_number_id", "")
+        token = prefs.get("whatsapp_access_token", "")
+        to_number = prefs.get("whatsapp_to_number", "")
+        if not (phone_id and token and to_number):
+            return
+
+        msg = format_trade_alert(event)
+        await send_whatsapp_message(phone_id, token, to_number, msg)
+    except Exception:
+        logger.exception("WhatsApp notification failed")
+
+
 async def _run_notification_service(service):
     import itertools
     for attempt in itertools.count(1):
@@ -76,6 +114,7 @@ async def lifespan(app: FastAPI):
         title = f"{status}: {action} {ticker}"
         body = message
         await _persist_notification(event, title, body, priority)
+        await _send_whatsapp_if_enabled(event)
         logger.info("Notification: %s", message)
 
     service.register_handler("log", _log_handler)

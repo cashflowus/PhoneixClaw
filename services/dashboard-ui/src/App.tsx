@@ -26,6 +26,8 @@ import AdvancedPipelines from './pages/AdvancedPipelines'
 import PipelineEditorPage from './pages/PipelineEditor'
 import StrategyBuilder from './pages/StrategyBuilder'
 import ModelHub from './pages/ModelHub'
+import VerifyEmail from './pages/VerifyEmail'
+import MFASetup from './pages/MFASetup'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuth()
@@ -38,6 +40,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
       <Route
         path="/"
         element={
@@ -69,6 +72,7 @@ export default function App() {
         <Route path="admin" element={<Admin />} />
         <Route path="access" element={<AccessManagement />} />
         <Route path="notifications" element={<Notifications />} />
+        <Route path="mfa-setup" element={<MFASetup />} />
         <Route path="board" element={<SprintBoard />} />
         <Route path="board/:taskId" element={<TaskDetail />} />
       </Route>
