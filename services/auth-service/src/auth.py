@@ -242,7 +242,10 @@ async def resend_verification(req: ResendVerificationRequest, session: AsyncSess
 
 @router.post("/login")
 async def login(req: LoginRequest, session: AsyncSession = Depends(get_session)):
-    result = await session.execute(select(User).where(User.email == req.email))
+    try:
+        result = await session.execute(select(User).where(User.email == req.email))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"DB query failed: {str(exc)[:300]}")
     user = result.scalar_one_or_none()
     if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
