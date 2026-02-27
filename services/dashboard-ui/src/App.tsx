@@ -26,6 +26,7 @@ import AdvancedPipelines from './pages/AdvancedPipelines'
 import PipelineEditorPage from './pages/PipelineEditor'
 import StrategyBuilder from './pages/StrategyBuilder'
 import ModelHub from './pages/ModelHub'
+import MarketCommandCenter from './pages/MarketCommandCenter'
 import VerifyEmail from './pages/VerifyEmail'
 import MFASetup from './pages/MFASetup'
 
@@ -53,6 +54,7 @@ export default function App() {
         }
       >
         <Route index element={<Dashboard />} />
+        <Route path="market" element={<MarketCommandCenter />} />
         <Route path="sources" element={<DataSources />} />
         <Route path="accounts" element={<TradingAccounts />} />
         <Route path="positions" element={<Positions />} />

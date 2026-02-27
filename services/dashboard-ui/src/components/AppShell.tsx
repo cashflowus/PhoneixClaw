@@ -56,6 +56,7 @@ import {
   Package,
   GripVertical,
   RotateCcw,
+  Globe,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -72,9 +73,10 @@ type NavItemData = { to: string; icon: React.ElementType; label: string }
 
 const DEFAULT_NAV_ITEMS: NavItemData[] = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/market', icon: Globe, label: 'Market Command Center' },
   { to: '/positions', icon: TrendingUp, label: 'Positions' },
   { to: '/pipelines', icon: Workflow, label: 'Trade Pipelines' },
-  { to: '/sentiment', icon: HeartPulse, label: 'Sentiment' },
+  { to: '/sentiment', icon: HeartPulse, label: 'Traders Pulse' },
   { to: '/news', icon: Newspaper, label: 'Trending News' },
   { to: '/ai-decisions', icon: Brain, label: 'AI Decisions' },
   { to: '/advanced-pipelines', icon: Boxes, label: 'Pipeline Builder' },
@@ -350,9 +352,10 @@ function SidebarContent({
 
 const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
+  '/market': 'Market Command Center',
   '/positions': 'Positions',
   '/pipelines': 'Trade Pipelines',
-  '/sentiment': 'Ticker Sentiment',
+  '/sentiment': 'Traders Pulse',
   '/news': 'Trending News',
   '/ai-decisions': 'AI Decisions',
   '/advanced-pipelines': 'Pipeline Builder',

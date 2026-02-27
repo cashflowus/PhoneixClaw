@@ -1,3 +1,4 @@
+import json
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -7,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import StreamingResponse
 
 from shared.models.database import get_session
 from shared.models.trade import StrategyModel
@@ -171,6 +173,36 @@ async def deploy_strategy(
     return _response(s)
 
 
+# ── Approval endpoint for agent deploy gates ─────────────────────────────────
+
+class ApprovalRequest(BaseModel):
+    strategy_id: str
+    approved: bool
+
+
+@router.post("/agent/approve")
+async def agent_approve_action(
+    req: ApprovalRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Handle user approval/rejection for high-risk agent actions like deploy."""
+    if not req.approved:
+        return {"status": "rejected", "message": "Deployment cancelled by user."}
+
+    s = await _get_strategy(req.strategy_id, request, session)
+    if not s.backtest_summary:
+        raise HTTPException(status_code=400, detail="Strategy must be backtested before deployment")
+
+    s.status = "deployed"
+    s.updated_at = datetime.now(timezone.utc)
+    await session.commit()
+    await session.refresh(s)
+    return {"status": "approved", "message": "Strategy deployed successfully.", "strategy": _response(s)}
+
+
+# ── Agent Chat (non-streaming) ───────────────────────────────────────────────
+
 class AgentChatRequest(BaseModel):
     message: str
     conversation_history: list[dict] = []
@@ -183,22 +215,9 @@ async def agent_chat(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    """Proxy to the strategy agent's autonomous chat endpoint."""
+    """Proxy to the strategy agent's ReAct chat endpoint."""
     user_id = request.state.user_id
-
-    strategy_context = req.strategy_context or {}
-    if not strategy_context.get("strategies"):
-        result = await session.execute(
-            select(StrategyModel)
-            .where(StrategyModel.user_id == uuid.UUID(user_id))
-            .order_by(desc(StrategyModel.updated_at))
-            .limit(5)
-        )
-        existing = result.scalars().all()
-        strategy_context["strategies"] = [
-            {"id": str(s.id), "name": s.name, "status": s.status, "text": s.strategy_text[:100]}
-            for s in existing
-        ]
+    strategy_context = await _build_strategy_context(req, user_id, session)
 
     try:
         async with httpx.AsyncClient(timeout=300) as client:
@@ -208,6 +227,7 @@ async def agent_chat(
                     "message": req.message,
                     "conversation_history": req.conversation_history,
                     "strategy_context": strategy_context,
+                    "user_id": user_id,
                 },
             )
             resp.raise_for_status()
@@ -221,6 +241,91 @@ async def agent_chat(
             "steps": [{"type": "response", "content": _fallback_response(req.message)}],
         }
 
+    await _persist_agent_results(agent_response, user_id, strategy_context, request, session)
+    return agent_response
+
+
+# ── Agent Chat (SSE streaming) ───────────────────────────────────────────────
+
+@router.post("/agent/chat/stream")
+async def agent_chat_stream(
+    req: AgentChatRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """SSE streaming proxy — forwards events from the strategy agent to the frontend."""
+    user_id = request.state.user_id
+    strategy_context = await _build_strategy_context(req, user_id, session)
+
+    async def generate():
+        try:
+            async with httpx.AsyncClient(timeout=300) as client:
+                async with client.stream(
+                    "POST",
+                    f"{STRATEGY_AGENT_URL}/agent/chat/stream",
+                    json={
+                        "message": req.message,
+                        "conversation_history": req.conversation_history,
+                        "strategy_context": strategy_context,
+                        "user_id": user_id,
+                    },
+                ) as resp:
+                    collected_steps = []
+                    final_message = ""
+                    async for line in resp.aiter_lines():
+                        if line.startswith("data: "):
+                            yield line + "\n\n"
+                            try:
+                                data = json.loads(line[6:])
+                                if data.get("type") == "done":
+                                    final_message = data.get("message", "")
+                                else:
+                                    collected_steps.append(data)
+                            except Exception:
+                                pass
+
+                    await _persist_agent_results(
+                        {"steps": collected_steps, "message": final_message},
+                        user_id, strategy_context, request, session,
+                    )
+        except Exception as e:
+            logger.warning("SSE stream error: %s", e)
+            fallback = _fallback_response(req.message)
+            yield f"data: {json.dumps({'type': 'response', 'content': fallback})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'message': fallback})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+async def _build_strategy_context(
+    req: AgentChatRequest, user_id: str, session: AsyncSession
+) -> dict:
+    strategy_context = req.strategy_context or {}
+    if not strategy_context.get("strategies"):
+        result = await session.execute(
+            select(StrategyModel)
+            .where(StrategyModel.user_id == uuid.UUID(user_id))
+            .order_by(desc(StrategyModel.updated_at))
+            .limit(5)
+        )
+        existing = result.scalars().all()
+        strategy_context["strategies"] = [
+            {"id": str(s.id), "name": s.name, "status": s.status, "text": s.strategy_text[:100]}
+            for s in existing
+        ]
+    return strategy_context
+
+
+async def _persist_agent_results(
+    agent_response: dict,
+    user_id: str,
+    strategy_context: dict,
+    request: Request,
+    session: AsyncSession,
+):
+    """Persist strategy creation and backtest results from agent steps."""
     for step in agent_response.get("steps", []):
         if step.get("tool") == "create_strategy" and step.get("status") == "success":
             result_data = step.get("result", {})
@@ -247,11 +352,8 @@ async def agent_chat(
                 except Exception:
                     pass
 
-    return agent_response
-
 
 def _fallback_response(message: str) -> str:
-    """Provide a helpful response when the agent service is unavailable."""
     msg_lower = message.lower()
     if any(w in msg_lower for w in ["create", "build", "make", "new"]):
         return ("I'd love to help you create a strategy! The AI agent service is currently "

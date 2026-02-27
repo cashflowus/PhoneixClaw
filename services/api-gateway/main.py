@@ -18,6 +18,7 @@ from services.api_gateway.src.routes.board import router as board_router
 from services.api_gateway.src.routes.chat import router as chat_router
 from services.api_gateway.src.routes.chat import set_kafka_producer
 from services.api_gateway.src.routes.mappings import router as mappings_router
+from services.api_gateway.src.routes.market import router as market_router
 from services.api_gateway.src.routes.messages import router as messages_router
 from services.api_gateway.src.routes.metrics import router as metrics_router
 from services.api_gateway.src.routes.models import router as models_router
@@ -401,6 +402,7 @@ app.include_router(sentiment_router)
 app.include_router(strategies_router)
 app.include_router(models_router)
 app.include_router(watchlist_router)
+app.include_router(market_router)
 app.include_router(ws_router)
 
 
