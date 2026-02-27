@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
-  Save, Play, Undo2, Redo2, Upload, Download, History, Loader2,
+  Save, Play, Undo2, Redo2, Upload, Download, History, Loader2, Rocket, FlaskConical,
 } from 'lucide-react'
 
 interface Props {
@@ -21,6 +21,7 @@ interface Props {
   onVersionHistory: () => void
   canUndo: boolean
   canRedo: boolean
+  isSimulating?: boolean
 }
 
 export function PipelineToolbar({
@@ -40,6 +41,7 @@ export function PipelineToolbar({
   onVersionHistory,
   canUndo,
   canRedo,
+  isSimulating,
 }: Props) {
   const statusColors: Record<string, string> = {
     draft: 'bg-gray-500/15 text-gray-600',
@@ -75,16 +77,21 @@ export function PipelineToolbar({
           <History className="h-4 w-4" />
         </Button>
         <div className="w-px h-5 bg-border mx-1" />
-        <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={onTest} disabled={isTesting}>
-          {isTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-          Test
+        <Button
+          variant={isSimulating ? 'default' : 'outline'}
+          size="sm"
+          className="h-8 gap-1.5"
+          onClick={onTest}
+        >
+          <FlaskConical className="h-3.5 w-3.5" />
+          {isSimulating ? 'Close Simulator' : 'Simulate'}
         </Button>
         <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={onSave} disabled={isSaving || !isDirty}>
           {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
           Save
         </Button>
         <Button size="sm" className="h-8 gap-1.5" onClick={onDeploy} disabled={isDeploying}>
-          {isDeploying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+          {isDeploying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
           Deploy
         </Button>
       </div>

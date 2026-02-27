@@ -127,6 +127,17 @@ export default function Dashboard() {
     queryFn: () => axios.get('/api/v1/trades?limit=50').then((r) => r.data),
     refetchInterval: 5000,
   })
+  const tradesTickers = useMemo(() => {
+    if (!trades) return []
+    return [...new Set(trades.map((t: any) => t.ticker).filter(Boolean))]
+  }, [trades])
+
+  const { data: tickerSentiment } = useQuery<Record<string, { sentiment_label: string; sentiment_score: number }>>({
+    queryKey: ['bulk-sentiment', tradesTickers],
+    queryFn: () => axios.post('/api/v1/sentiment/bulk', { tickers: tradesTickers }).then(r => r.data),
+    enabled: tradesTickers.length > 0,
+    refetchInterval: 60_000,
+  })
   const { data: metrics, isError: metricsError } = useQuery({
     queryKey: ['metrics'],
     queryFn: () => axios.get('/api/v1/metrics/daily?days=7').then((r) => r.data),
@@ -364,6 +375,7 @@ export default function Dashboard() {
             <TableHeader>
               <TableRow>
                 <TableHead>Ticker</TableHead>
+                <TableHead>Sentiment</TableHead>
                 <TableHead>Action</TableHead>
                 <TableHead>Strike</TableHead>
                 <TableHead>Type</TableHead>
@@ -380,6 +392,14 @@ export default function Dashboard() {
               {filteredTrades.map((t) => (
                 <TableRow key={t.trade_id}>
                   <TableCell className="font-medium">{t.ticker}</TableCell>
+                  <TableCell>
+                    {(() => {
+                      const s = tickerSentiment?.[t.ticker]
+                      if (!s) return <span className="text-xs text-muted-foreground">—</span>
+                      const color = s.sentiment_score > 0.2 ? 'text-green-600' : s.sentiment_score < -0.2 ? 'text-red-600' : 'text-yellow-600'
+                      return <span className={`text-xs font-medium ${color}`}>{s.sentiment_label}</span>
+                    })()}
+                  </TableCell>
                   <TableCell>
                     <span className={t.action === 'BUY' ? 'text-emerald-500' : 'text-red-500'}>
                       {t.action}
@@ -420,7 +440,7 @@ export default function Dashboard() {
               ))}
               {filteredTrades.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
                     {searchQuery ? 'No trades match your search.' : 'No trades yet. Connect a data source to get started.'}
                   </TableCell>
                 </TableRow>

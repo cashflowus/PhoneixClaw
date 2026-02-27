@@ -171,6 +171,100 @@ async def deploy_strategy(
     return _response(s)
 
 
+class AgentChatRequest(BaseModel):
+    message: str
+    conversation_history: list[dict] = []
+    strategy_context: dict | None = None
+
+
+@router.post("/agent/chat")
+async def agent_chat(
+    req: AgentChatRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Proxy to the strategy agent's autonomous chat endpoint."""
+    user_id = request.state.user_id
+
+    strategy_context = req.strategy_context or {}
+    if not strategy_context.get("strategies"):
+        result = await session.execute(
+            select(StrategyModel)
+            .where(StrategyModel.user_id == uuid.UUID(user_id))
+            .order_by(desc(StrategyModel.updated_at))
+            .limit(5)
+        )
+        existing = result.scalars().all()
+        strategy_context["strategies"] = [
+            {"id": str(s.id), "name": s.name, "status": s.status, "text": s.strategy_text[:100]}
+            for s in existing
+        ]
+
+    try:
+        async with httpx.AsyncClient(timeout=300) as client:
+            resp = await client.post(
+                f"{STRATEGY_AGENT_URL}/agent/chat",
+                json={
+                    "message": req.message,
+                    "conversation_history": req.conversation_history,
+                    "strategy_context": strategy_context,
+                },
+            )
+            resp.raise_for_status()
+            agent_response = resp.json()
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Agent timed out")
+    except Exception as e:
+        logger.warning("Agent unavailable: %s", e)
+        agent_response = {
+            "message": _fallback_response(req.message),
+            "steps": [{"type": "response", "content": _fallback_response(req.message)}],
+        }
+
+    for step in agent_response.get("steps", []):
+        if step.get("tool") == "create_strategy" and step.get("status") == "success":
+            result_data = step.get("result", {})
+            if result_data.get("name"):
+                strategy = StrategyModel(
+                    user_id=uuid.UUID(user_id),
+                    name=result_data["name"],
+                    strategy_text=result_data.get("strategy_text", ""),
+                )
+                session.add(strategy)
+                await session.commit()
+                await session.refresh(strategy)
+                step["result"]["id"] = str(strategy.id)
+
+        if step.get("tool") == "backtest" and step.get("status") == "success":
+            report = step.get("result", {}).get("report")
+            if report and strategy_context.get("active_strategy_id"):
+                try:
+                    s = await _get_strategy(strategy_context["active_strategy_id"], request, session)
+                    s.backtest_summary = report
+                    s.status = "backtested"
+                    s.updated_at = datetime.now(timezone.utc)
+                    await session.commit()
+                except Exception:
+                    pass
+
+    return agent_response
+
+
+def _fallback_response(message: str) -> str:
+    """Provide a helpful response when the agent service is unavailable."""
+    msg_lower = message.lower()
+    if any(w in msg_lower for w in ["create", "build", "make", "new"]):
+        return ("I'd love to help you create a strategy! The AI agent service is currently "
+                "starting up. Please try again in a moment. In the meantime, you can describe "
+                "your strategy idea in detail — include the asset, entry/exit rules, and any "
+                "time constraints.")
+    if any(w in msg_lower for w in ["backtest", "test", "run"]):
+        return ("I'll run that backtest for you as soon as the agent service is ready. "
+                "Please try again in a few seconds.")
+    return ("I'm your autonomous strategy agent. I can create, backtest, and deploy trading "
+            "strategies from natural language. The AI service is warming up — please try again shortly.")
+
+
 async def _get_strategy(strategy_id: str, request: Request, session: AsyncSession) -> StrategyModel:
     user_id = request.state.user_id
     result = await session.execute(

@@ -45,6 +45,11 @@ export default function PipelineEditorPage() {
     mutationFn: () => axios.post(`/api/v1/advanced-pipelines/${pipelineId}/test`),
   })
 
+  const simulateMutation = useMutation({
+    mutationFn: (input: string) =>
+      axios.post(`/api/v1/advanced-pipelines/${pipelineId}/simulate`, { input }).then(r => r.data),
+  })
+
   if (isLoading) {
     return (
       <div className="p-6 space-y-4">
@@ -90,6 +95,9 @@ export default function PipelineEditorPage() {
             }}
             onTest={async () => {
               await testMutation.mutateAsync()
+            }}
+            onSimulate={async (input) => {
+              return simulateMutation.mutateAsync(input)
             }}
           />
         </ReactFlowProvider>

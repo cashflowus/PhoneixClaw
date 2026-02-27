@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -92,6 +92,18 @@ export default function Positions() {
     queryKey: ['pending-orders', selectedAccount],
     queryFn: () => axios.get(`/api/v1/positions/orders${selectedAccount !== 'all' ? `?account_id=${selectedAccount}` : ''}`).then(r => r.data),
     refetchInterval: 5000,
+  })
+
+  const openTickers = useMemo(() => {
+    if (!openPositions) return []
+    return [...new Set(openPositions.map(p => p.ticker).filter(Boolean))]
+  }, [openPositions])
+
+  const { data: tickerSentiment } = useQuery<Record<string, { sentiment_label: string; sentiment_score: number }>>({
+    queryKey: ['position-sentiment', openTickers],
+    queryFn: () => axios.post('/api/v1/sentiment/bulk', { tickers: openTickers }).then(r => r.data),
+    enabled: openTickers.length > 0,
+    refetchInterval: 60_000,
   })
 
   const closeMut = useMutation({
@@ -322,6 +334,20 @@ export default function Positions() {
                     </TableCell>
                     <TableCell>
                       {p.market_value != null ? `$${p.market_value.toFixed(2)}` : '—'}
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const ticker = p.ticker
+                        const s = tickerSentiment?.[ticker]
+                        if (!s) return <span className="text-xs text-muted-foreground">—</span>
+                        const color = s.sentiment_score > 0.2 ? 'text-green-600' : s.sentiment_score < -0.2 ? 'text-red-600' : 'text-yellow-600'
+                        return (
+                          <div className="flex flex-col">
+                            <span className={`text-xs font-medium ${color}`}>{s.sentiment_label}</span>
+                            <span className="text-[10px] text-muted-foreground">{s.sentiment_score.toFixed(2)}</span>
+                          </div>
+                        )
+                      })()}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{p.account_name || '—'}</TableCell>
                     <TableCell>

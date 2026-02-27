@@ -89,7 +89,7 @@ export function NodeConfigPanel({ node, onUpdate, onClose }: Props) {
   })
 
   return (
-    <div className="w-64 border-l bg-muted/30 flex flex-col">
+    <div className="w-72 border-l bg-muted/30 flex flex-col">
       <div className="flex items-center justify-between p-3 border-b">
         <h3 className="text-sm font-semibold">Configure Node</h3>
         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
@@ -106,7 +106,7 @@ export function NodeConfigPanel({ node, onUpdate, onClose }: Props) {
           />
         </div>
 
-        {/* ── Data Source Nodes ─────────────────────────────── */}
+        {/* Data Source Nodes */}
         {node.type === 'dataSource' && (
           <>
             <div className="space-y-2">
@@ -193,7 +193,7 @@ export function NodeConfigPanel({ node, onUpdate, onClose }: Props) {
           </>
         )}
 
-        {/* ── Processing Nodes ─────────────────────────────── */}
+        {/* Processing Nodes */}
         {node.type === 'processing' && (
           <>
             {subtype === 'sentiment_analyzer' && (
@@ -268,39 +268,142 @@ export function NodeConfigPanel({ node, onUpdate, onClose }: Props) {
           </>
         )}
 
-        {/* ── AI Model Nodes ───────────────────────────────── */}
+        {/* AI Model Nodes — generic, configure after drop */}
         {node.type === 'aiModel' && (
           <>
             <div className="space-y-2">
-              <Label className="text-xs">Model</Label>
-              <Select value={String(data.subtype || 'mistral')} onValueChange={v => update('subtype', v)}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <Label className="text-xs">Model Type</Label>
+              <Select
+                value={String(data.model_type || data.subtype || '')}
+                onValueChange={v => {
+                  onUpdate(node.id, { ...data, model_type: v, subtype: v, label: MODEL_LABELS[v] || 'AI Model' })
+                }}
+              >
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select model..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="mistral">LLM (Mistral)</SelectItem>
                   <SelectItem value="llama">LLM (Llama 3.1)</SelectItem>
                   <SelectItem value="option_analyzer">Option Chain Analyzer</SelectItem>
                   <SelectItem value="trade_recommender">AI Trade Recommender</SelectItem>
+                  <SelectItem value="sentiment_llm">Sentiment LLM</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {(subtype === 'mistral' || subtype === 'llama') && (
-              <div className="space-y-2">
-                <Label className="text-xs">Temperature</Label>
-                <Input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="2"
-                  value={String(data.temperature ?? '0.7')}
-                  onChange={e => update('temperature', parseFloat(e.target.value) || 0.7)}
-                  className="h-8 text-xs"
-                />
-              </div>
+            {data.model_type && (
+              <>
+                {(data.model_type === 'mistral' || data.model_type === 'llama') && (
+                  <>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Temperature</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="2"
+                        value={String(data.temperature ?? '0.7')}
+                        onChange={e => update('temperature', parseFloat(e.target.value) || 0.7)}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Max Tokens</Label>
+                      <Input
+                        type="number"
+                        step="100"
+                        min="100"
+                        max="4096"
+                        value={String(data.max_tokens ?? '1024')}
+                        onChange={e => update('max_tokens', parseInt(e.target.value) || 1024)}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">System Prompt</Label>
+                      <Input
+                        value={String(data.system_prompt || '')}
+                        onChange={e => update('system_prompt', e.target.value)}
+                        className="h-8 text-xs"
+                        placeholder="Optional system prompt..."
+                      />
+                    </div>
+                  </>
+                )}
+                {data.model_type === 'trade_recommender' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Risk Level</Label>
+                      <Select value={String(data.risk_level || 'medium')} onValueChange={v => update('risk_level', v)}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="conservative">Conservative</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="aggressive">Aggressive</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Use Sentiment</Label>
+                      <Select value={String(data.use_sentiment ?? 'true')} onValueChange={v => update('use_sentiment', v)}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="true">Yes — factor in sentiment signals</SelectItem>
+                          <SelectItem value="false">No — ignore sentiment data</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+                {data.model_type === 'option_analyzer' && (
+                  <div className="space-y-2">
+                    <Label className="text-xs">Analysis Depth</Label>
+                    <Select value={String(data.analysis_depth || 'standard')} onValueChange={v => update('analysis_depth', v)}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="quick">Quick — basic Greeks</SelectItem>
+                        <SelectItem value="standard">Standard — full chain analysis</SelectItem>
+                        <SelectItem value="deep">Deep — including implied volatility surface</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {data.model_type === 'sentiment_llm' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Sentiment Source</Label>
+                      <Select value={String(data.sentiment_source || 'all')} onValueChange={v => update('sentiment_source', v)}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Sources</SelectItem>
+                          <SelectItem value="discord">Discord Only</SelectItem>
+                          <SelectItem value="news">News Only</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Lookback Period</Label>
+                      <Select value={String(data.lookback || '1h')} onValueChange={v => update('lookback', v)}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="30m">30 minutes</SelectItem>
+                          <SelectItem value="1h">1 hour</SelectItem>
+                          <SelectItem value="4h">4 hours</SelectItem>
+                          <SelectItem value="24h">24 hours</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+            {!data.model_type && !data.subtype && (
+              <p className="text-[11px] text-amber-600 bg-amber-500/10 rounded p-2">
+                Select a model type above to configure this AI component.
+              </p>
             )}
           </>
         )}
 
-        {/* ── Broker Nodes ─────────────────────────────────── */}
+        {/* Broker Nodes */}
         {node.type === 'broker' && (
           <>
             <div className="space-y-2">
@@ -319,45 +422,76 @@ export function NodeConfigPanel({ node, onUpdate, onClose }: Props) {
               </Select>
             </div>
             {data.broker_type && (
-              <div className="space-y-2">
-                <Label className="text-xs">Trading Account</Label>
-                {accountsLoading ? (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
-                    <Loader2 className="h-3 w-3 animate-spin" /> Loading accounts...
-                  </div>
-                ) : filteredAccounts.length > 0 ? (
-                  <Select
-                    value={String(data.account_id || '')}
-                    onValueChange={v => {
-                      const acct = filteredAccounts.find(a => a.id === v)
-                      onUpdate(node.id, {
-                        ...data,
-                        account_id: v,
-                        account_name: acct?.display_name || '',
-                        paper_mode: acct?.paper_mode ?? true,
-                      })
-                    }}
-                  >
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select account..." /></SelectTrigger>
+              <>
+                <div className="space-y-2">
+                  <Label className="text-xs">Trading Account</Label>
+                  {accountsLoading ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Loading accounts...
+                    </div>
+                  ) : filteredAccounts.length > 0 ? (
+                    <Select
+                      value={String(data.account_id || '')}
+                      onValueChange={v => {
+                        const acct = filteredAccounts.find(a => a.id === v)
+                        onUpdate(node.id, {
+                          ...data,
+                          account_id: v,
+                          account_name: acct?.display_name || '',
+                          paper_mode: acct?.paper_mode ?? true,
+                        })
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select account..." /></SelectTrigger>
+                      <SelectContent>
+                        {filteredAccounts.map(a => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {a.display_name} {a.paper_mode ? '(Paper)' : '(Live)'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">
+                      No {String(data.broker_type)} accounts configured. Add one in Trading Accounts.
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Order Type</Label>
+                  <Select value={String(data.order_type || 'market')} onValueChange={v => update('order_type', v)}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {filteredAccounts.map(a => (
-                        <SelectItem key={a.id} value={a.id}>
-                          {a.display_name} {a.paper_mode ? '(Paper)' : '(Live)'}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="market">Market Order</SelectItem>
+                      <SelectItem value="limit">Limit Order</SelectItem>
+                      <SelectItem value="stop">Stop Order</SelectItem>
+                      <SelectItem value="stop_limit">Stop Limit</SelectItem>
                     </SelectContent>
                   </Select>
-                ) : (
-                  <p className="text-[11px] text-muted-foreground">
-                    No {String(data.broker_type)} accounts configured. Add one in Trading Accounts.
-                  </p>
-                )}
-              </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Position Size (%)</Label>
+                  <Input
+                    type="number"
+                    step="5"
+                    min="1"
+                    max="100"
+                    value={String(data.position_pct ?? '10')}
+                    onChange={e => update('position_pct', parseInt(e.target.value) || 10)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              </>
+            )}
+            {!data.broker_type && (
+              <p className="text-[11px] text-amber-600 bg-amber-500/10 rounded p-2">
+                Select a broker type above, then choose a trading account.
+              </p>
             )}
           </>
         )}
 
-        {/* ── Control Nodes ────────────────────────────────── */}
+        {/* Control Nodes */}
         {node.type === 'control' && (
           <>
             {subtype === 'condition' && (
@@ -410,4 +544,12 @@ export function NodeConfigPanel({ node, onUpdate, onClose }: Props) {
       </div>
     </div>
   )
+}
+
+const MODEL_LABELS: Record<string, string> = {
+  mistral: 'LLM (Mistral)',
+  llama: 'LLM (Llama 3.1)',
+  option_analyzer: 'Option Chain Analyzer',
+  trade_recommender: 'AI Trade Recommender',
+  sentiment_llm: 'Sentiment LLM',
 }

@@ -355,6 +355,40 @@ async def toggle_alert(
     return _alert_response(alert)
 
 
+@router.post("/bulk")
+async def bulk_sentiment(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Return latest sentiment for a list of tickers."""
+    body = await request.json()
+    tickers = body.get("tickers", [])
+    if not tickers:
+        return {}
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    result = await session.execute(
+        select(TickerSentiment)
+        .where(
+            TickerSentiment.ticker.in_(tickers),
+            TickerSentiment.period_start >= cutoff,
+        )
+        .order_by(TickerSentiment.period_start.desc())
+    )
+    rows = result.scalars().all()
+    
+    seen = {}
+    for r in rows:
+        if r.ticker not in seen:
+            seen[r.ticker] = {
+                "ticker": r.ticker,
+                "sentiment_label": r.sentiment_label,
+                "sentiment_score": float(r.sentiment_score) if r.sentiment_score else 0,
+                "message_count": r.message_count or 0,
+            }
+    return seen
+
+
 def _alert_response(a: SentimentAlert) -> AlertResponse:
     return AlertResponse(
         id=str(a.id),

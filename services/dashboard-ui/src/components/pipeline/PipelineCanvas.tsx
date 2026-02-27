@@ -23,6 +23,7 @@ import ControlNode from './nodes/ControlNode'
 import { NodePalette, type PaletteItem } from './NodePalette'
 import { NodeConfigPanel } from './NodeConfigPanel'
 import { PipelineToolbar } from './PipelineToolbar'
+import { SimulationPanel } from './SimulationPanel'
 
 const nodeTypes = {
   dataSource: DataSourceNode,
@@ -41,6 +42,7 @@ interface Props {
   onSave: (nodes: Node[], edges: Edge[]) => Promise<void>
   onDeploy: (nodes: Node[], edges: Edge[]) => Promise<void>
   onTest: (nodes: Node[], edges: Edge[]) => Promise<void>
+  onSimulate?: (input: string) => Promise<any>
 }
 
 export function PipelineCanvas({
@@ -51,6 +53,7 @@ export function PipelineCanvas({
   onSave,
   onDeploy,
   onTest,
+  onSimulate,
 }: Props) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
@@ -61,6 +64,8 @@ export function PipelineCanvas({
   const [isSaving, setIsSaving] = useState(false)
   const [isDeploying, setIsDeploying] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
+  const [showSimulation, setShowSimulation] = useState(false)
+  const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null)
   const [history, setHistory] = useState<{ nodes: Node[]; edges: Edge[] }[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
   const nodeIdCounter = useRef(initialNodes.length)
@@ -100,6 +105,7 @@ export function PipelineCanvas({
 
       setNodes(nds => nds.concat(newNode))
       setIsDirty(true)
+      setSelectedNode(newNode)
     },
     [reactFlowInstance, setNodes],
   )
@@ -200,6 +206,11 @@ export function PipelineCanvas({
     input.click()
   }
 
+  const styledNodes = nodes.map(n => ({
+    ...n,
+    className: highlightedNodeId === n.id ? 'ring-2 ring-blue-500 ring-offset-2 rounded-lg' : '',
+  }))
+
   return (
     <div className="flex flex-col h-full">
       <PipelineToolbar
@@ -211,7 +222,7 @@ export function PipelineCanvas({
         isTesting={isTesting}
         onSave={handleSave}
         onDeploy={handleDeploy}
-        onTest={handleTest}
+        onTest={() => setShowSimulation(s => !s)}
         onUndo={handleUndo}
         onRedo={handleRedo}
         onImport={handleImport}
@@ -219,12 +230,13 @@ export function PipelineCanvas({
         onVersionHistory={() => {}}
         canUndo={historyIndex >= 0}
         canRedo={historyIndex < history.length - 1}
+        isSimulating={showSimulation}
       />
       <div className="flex flex-1 overflow-hidden">
         <NodePalette onDragStart={() => {}} />
         <div className="flex-1" ref={reactFlowWrapper}>
           <ReactFlow
-            nodes={nodes}
+            nodes={styledNodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
@@ -242,6 +254,7 @@ export function PipelineCanvas({
             <MiniMap
               className="!bg-muted"
               nodeColor={(n) => {
+                if (highlightedNodeId === n.id) return '#3b82f6'
                 if (n.type === 'dataSource') return '#3b82f6'
                 if (n.type === 'processing') return '#22c55e'
                 if (n.type === 'aiModel') return '#a855f7'
@@ -252,11 +265,23 @@ export function PipelineCanvas({
             <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
           </ReactFlow>
         </div>
-        {selectedNode && (
+        {selectedNode && !showSimulation && (
           <NodeConfigPanel
             node={selectedNode}
             onUpdate={handleNodeUpdate}
             onClose={() => setSelectedNode(null)}
+          />
+        )}
+        {showSimulation && (
+          <SimulationPanel
+            nodes={nodes}
+            edges={edges}
+            onClose={() => setShowSimulation(false)}
+            onSimulate={async (input) => {
+              if (onSimulate) return onSimulate(input)
+              return handleTest()
+            }}
+            onHighlightNode={setHighlightedNodeId}
           />
         )}
       </div>
