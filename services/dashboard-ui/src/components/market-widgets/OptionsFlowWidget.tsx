@@ -17,12 +17,12 @@ function formatNum(n: number): string {
   return n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(0)}K` : `${n}`
 }
 
-export default function OptionsFlowWidget() {
+export default function OptionsFlowWidget({ symbol = 'SPY' }: { symbol?: string }) {
   const [selectedSym, setSelectedSym] = useState(0)
 
   const { data, isLoading } = useQuery<FlowEntry[]>({
-    queryKey: ['market', 'options-flow'],
-    queryFn: () => axios.get('/api/v1/market/options-flow').then(r => r.data),
+    queryKey: ['market', 'options-flow', symbol],
+    queryFn: () => axios.get(`/api/v1/market/options-flow?symbols=${symbol}`).then(r => r.data),
     refetchInterval: 300_000,
   })
 

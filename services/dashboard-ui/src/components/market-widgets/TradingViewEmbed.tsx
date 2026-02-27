@@ -4,15 +4,16 @@ interface Props {
   scriptSrc: string
   config: object
   containerId?: string
+  configKey?: string
 }
 
-export default function TradingViewEmbed({ scriptSrc, config, containerId }: Props) {
+export default function TradingViewEmbed({ scriptSrc, config, containerId, configKey }: Props) {
   const ref = useRef<HTMLDivElement>(null)
-  const initializedRef = useRef(false)
 
   useEffect(() => {
-    if (!ref.current || initializedRef.current) return
-    initializedRef.current = true
+    if (!ref.current) return
+
+    ref.current.replaceChildren()
 
     const container = document.createElement('div')
     container.className = 'tradingview-widget-container'
@@ -37,9 +38,8 @@ export default function TradingViewEmbed({ scriptSrc, config, containerId }: Pro
 
     return () => {
       if (ref.current) ref.current.replaceChildren()
-      initializedRef.current = false
     }
-  }, [])
+  }, [configKey || ''])
 
   return <div ref={ref} className="h-full w-full overflow-hidden" />
 }

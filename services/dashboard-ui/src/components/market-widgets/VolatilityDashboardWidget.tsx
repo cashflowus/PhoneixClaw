@@ -24,10 +24,10 @@ function GaugeBar({ value, max, color, label }: { value: number; max: number; co
   )
 }
 
-export default function VolatilityDashboardWidget() {
+export default function VolatilityDashboardWidget({ symbol = 'SPY' }: { symbol?: string }) {
   const { data, isLoading } = useQuery<VolData>({
-    queryKey: ['market', 'volatility'],
-    queryFn: () => axios.get('/api/v1/market/volatility').then(r => r.data),
+    queryKey: ['market', 'volatility', symbol],
+    queryFn: () => axios.get(`/api/v1/market/volatility?symbol=${symbol}`).then(r => r.data),
     refetchInterval: 300_000,
   })
 
@@ -40,7 +40,7 @@ export default function VolatilityDashboardWidget() {
   return (
     <div className="p-3 h-full flex flex-col gap-3 overflow-auto">
       <div className="text-center">
-        <p className="text-[9px] text-muted-foreground uppercase">SPY Implied Volatility</p>
+        <p className="text-[9px] text-muted-foreground uppercase">{symbol} Implied Volatility</p>
         <p className="text-3xl font-bold font-mono">{data.iv_current.toFixed(1)}<span className="text-sm text-muted-foreground">%</span></p>
         <p className={`text-[10px] font-medium ${ivColor}`}>IV Rank: {ivLevel}</p>
       </div>

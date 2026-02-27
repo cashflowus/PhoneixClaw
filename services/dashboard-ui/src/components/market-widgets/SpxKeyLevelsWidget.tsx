@@ -29,10 +29,10 @@ function LevelRow({ label, value, current, color }: { label: string; value?: num
   )
 }
 
-export default function SpxKeyLevelsWidget() {
+export default function SpxKeyLevelsWidget({ symbol = 'SPY' }: { symbol?: string }) {
   const { data, isLoading } = useQuery<Levels>({
-    queryKey: ['market', 'spx-levels'],
-    queryFn: () => axios.get('/api/v1/market/spx-levels').then(r => r.data),
+    queryKey: ['market', 'spx-levels', symbol],
+    queryFn: () => axios.get(`/api/v1/market/spx-levels?symbol=${symbol}`).then(r => r.data),
     refetchInterval: 300_000,
   })
 
@@ -42,7 +42,7 @@ export default function SpxKeyLevelsWidget() {
     <div className="p-2 h-full flex flex-col gap-1 overflow-auto">
       {data?.current && (
         <div className="text-center py-1 border-b mb-1">
-          <p className="text-[9px] text-muted-foreground">SPY Current</p>
+          <p className="text-[9px] text-muted-foreground">{symbol} Current</p>
           <p className="text-lg font-bold font-mono">${data.current.toFixed(2)}</p>
         </div>
       )}

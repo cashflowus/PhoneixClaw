@@ -27,10 +27,10 @@ function GaugeBar({ ratio }: { ratio: number }) {
   )
 }
 
-export default function PutCallRatioWidget() {
+export default function PutCallRatioWidget({ symbol = 'SPY' }: { symbol?: string }) {
   const { data, isLoading } = useQuery<PCData[]>({
-    queryKey: ['market', 'put-call-ratio'],
-    queryFn: () => axios.get('/api/v1/market/put-call-ratio').then(r => r.data),
+    queryKey: ['market', 'put-call-ratio', symbol],
+    queryFn: () => axios.get(`/api/v1/market/put-call-ratio?symbols=${symbol}`).then(r => r.data),
     refetchInterval: 300_000,
   })
 

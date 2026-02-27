@@ -1,9 +1,10 @@
 import TradingViewEmbed from './TradingViewEmbed'
 
-export default function FundamentalDataWidget() {
+export default function FundamentalDataWidget({ symbol = 'AAPL' }: { symbol?: string }) {
   return (
     <TradingViewEmbed
       scriptSrc="https://s3.tradingview.com/external-embedding/embed-widget-financials.js"
+      configKey={symbol}
       config={{
         colorTheme: "dark",
         isTransparent: true,
@@ -11,7 +12,7 @@ export default function FundamentalDataWidget() {
         displayMode: "regular",
         width: "100%",
         height: "100%",
-        symbol: "NASDAQ:AAPL",
+        symbol: `NASDAQ:${symbol}`,
         locale: "en",
       }}
     />

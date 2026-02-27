@@ -1,11 +1,13 @@
 import TradingViewEmbed from './TradingViewEmbed'
 
-export default function VixWidget() {
+export default function VixWidget({ symbol = 'SPY' }: { symbol?: string }) {
+  const tvSymbol = symbol === 'SPY' ? 'CBOE:VIX' : `NASDAQ:${symbol}`
   return (
     <TradingViewEmbed
       scriptSrc="https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js"
+      configKey={tvSymbol}
       config={{
-        symbols: [["CBOE:VIX|1D"]],
+        symbols: [[`${tvSymbol}|1D`]],
         chartOnly: false,
         width: "100%",
         height: "100%",

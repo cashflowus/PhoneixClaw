@@ -673,14 +673,15 @@ async def premarket_gaps():
 # ── SPX Key Levels ───────────────────────────────────────────────────────────
 
 @router.get("/spx-levels")
-async def spx_key_levels():
-    cached = _get_cached("spx-levels")
+async def spx_key_levels(symbol: str = "SPY"):
+    cache_key = f"spx-levels-{symbol}"
+    cached = _get_cached(cache_key)
     if cached:
         return cached
 
     def _fetch():
         import yfinance as yf
-        spy = yf.Ticker("SPY")
+        spy = yf.Ticker(symbol)
         hist_5d = spy.history(period="5d")
         hist_1mo = spy.history(period="1mo")
 
@@ -716,7 +717,7 @@ async def spx_key_levels():
         return levels
 
     result = await asyncio.to_thread(_fetch)
-    _set_cached("spx-levels", result)
+    _set_cached(cache_key, result)
     return result
 
 

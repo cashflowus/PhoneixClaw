@@ -12,15 +12,15 @@ interface GexData {
   strikes: StrikeGex[]
 }
 
-export default function GammaExposureWidget() {
+export default function GammaExposureWidget({ symbol = 'SPY' }: { symbol?: string }) {
   const { data, isLoading } = useQuery<GexData>({
-    queryKey: ['market', 'gex'],
-    queryFn: () => axios.get('/api/v1/market/gex?symbol=SPY').then(r => r.data),
+    queryKey: ['market', 'gex', symbol],
+    queryFn: () => axios.get(`/api/v1/market/gex?symbol=${symbol}`).then(r => r.data),
     refetchInterval: 300_000,
   })
 
   if (isLoading) return <div className="flex items-center justify-center h-full"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-  if (!data || !data.strikes?.length) return <div className="flex items-center justify-center h-full text-[10px] text-muted-foreground">No GEX data available</div>
+  if (!data || !data.strikes?.length) return <div className="flex items-center justify-center h-full text-[10px] text-muted-foreground">No GEX data for {symbol}</div>
 
   const maxAbs = Math.max(...data.strikes.map(s => Math.abs(s.gex)), 1)
   const isLongGamma = data.total_gex > 0
@@ -34,9 +34,7 @@ export default function GammaExposureWidget() {
         </div>
         <span className={`text-[9px] font-medium px-2 py-0.5 rounded-full ${
           isLongGamma ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
-        }`}>
-          {data.regime}
-        </span>
+        }`}>{data.regime}</span>
       </div>
 
       <div className="grid grid-cols-2 gap-2">

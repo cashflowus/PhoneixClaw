@@ -1,12 +1,13 @@
 import TradingViewEmbed from './TradingViewEmbed'
 
-export default function TradingViewChartWidget() {
+export default function TradingViewChartWidget({ symbol = 'AAPL' }: { symbol?: string }) {
   return (
     <TradingViewEmbed
       scriptSrc="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
+      configKey={symbol}
       config={{
         autosize: true,
-        symbol: "NASDAQ:AAPL",
+        symbol: `NASDAQ:${symbol}`,
         interval: "D",
         timezone: "Etc/UTC",
         theme: "dark",
