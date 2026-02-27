@@ -254,8 +254,11 @@ async def login(req: LoginRequest, session: AsyncSession = Depends(get_session))
             headers={"X-Error-Code": "EMAIL_NOT_VERIFIED"},
         )
 
-    user.last_login = datetime.now(timezone.utc)
-    await session.commit()
+    try:
+        user.last_login = datetime.now(timezone.utc)
+        await session.commit()
+    except Exception:
+        await session.rollback()
 
     user_id = str(user.id)
 

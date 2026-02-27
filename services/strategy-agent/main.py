@@ -1,7 +1,6 @@
 import json
 import logging
 import sys
-import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -170,7 +169,7 @@ async def agent_chat(req: AgentChatRequest):
             system=AGENT_SYSTEM_PROMPT,
             temperature=0.4,
         )
-        raw_text = response.text if isinstance(response, str) else response.text
+        raw_text = response if isinstance(response, str) else response.text
 
         if not raw_text or not raw_text.strip():
             raw_text = _generate_fallback_actions(req.message)

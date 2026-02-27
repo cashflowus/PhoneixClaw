@@ -301,6 +301,7 @@ async def _run_migrations():
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMPTZ",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret VARCHAR(255)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ",
         "UPDATE users SET email_verified = TRUE WHERE email_verified = FALSE",
     ]
     async with engine.begin() as conn:

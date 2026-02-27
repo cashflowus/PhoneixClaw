@@ -178,7 +178,10 @@ export default function System() {
               </div>
               <Switch
                 checked={notifForm.whatsapp_enabled}
-                onCheckedChange={v => setNotifForm(f => ({ ...f, whatsapp_enabled: v }))}
+                onCheckedChange={v => {
+                  setNotifForm(f => ({ ...f, whatsapp_enabled: v }))
+                  saveNotifMut.mutate({ whatsapp_enabled: v })
+                }}
               />
             </div>
 
@@ -222,7 +225,7 @@ export default function System() {
                   disabled={saveNotifMut.isPending}
                   onClick={() => {
                     const payload: Partial<NotifPrefs> = {
-                      whatsapp_enabled: true,
+                      whatsapp_enabled: notifForm.whatsapp_enabled,
                       whatsapp_phone_number_id: notifForm.whatsapp_phone_number_id,
                       whatsapp_to_number: notifForm.whatsapp_to_number,
                     }
