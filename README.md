@@ -2,7 +2,7 @@
 
 Enterprise-grade, multi-tenant phoenix trade bot. Parses trading signals from Discord (and other sources), routes them through a Kafka pipeline, and executes trades on broker APIs with configurable buffer pricing, risk management, and real-time position monitoring.
 
-**Source of truth:** PhoenixClaw organization repository. Do not push to the legacy/original repo.
+**Source of truth:** [cashflowus/PhoneixClaw](https://github.com/cashflowus/PhoneixClaw). Do not push to the legacy PhoenixTrades repo.
 
 **Phoenix v2** (in progress): New monorepo layout with `apps/api` (FastAPI), `apps/dashboard` (React + Vite), and OpenClaw-based agents. See [newdocs/ImplementationPlan.md](newdocs/ImplementationPlan.md) and [newdocs/PRD.md](newdocs/PRD.md).
 
