@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { FlexCard } from '@/components/ui/FlexCard'
 import { MetricCard } from '@/components/ui/MetricCard'
 import {
@@ -242,17 +243,11 @@ export default function OnChainFlowPage() {
   const formatPremium = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : `$${(n / 1e3).toFixed(0)}K`)
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold flex items-center gap-2">
-          <BarChart3 className="h-7 w-7" />
-          On-Chain / Flow
-        </h2>
-        <p className="text-muted-foreground">Whale movements, unusual options flow, institutional positioning</p>
-      </div>
+    <div className="space-y-4 sm:space-y-6">
+      <PageHeader icon={BarChart3} title="On-Chain / Flow" description="Whale movements, unusual options flow, institutional positioning" />
 
       {/* Top Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <MetricCard
           title="Total Whale Alerts (24h)"
           value={metrics.whale_alerts_24h}
@@ -268,7 +263,7 @@ export default function OnChainFlowPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="lg:col-span-3">
           <Tabs defaultValue="mag7">
             <TabsList className="flex flex-wrap h-auto gap-1">
@@ -280,7 +275,7 @@ export default function OnChainFlowPage() {
             </TabsList>
 
             <TabsContent value="mag7" className="mt-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 {mag7.map((card) => (
                   <FlexCard key={card.ticker} title={card.ticker}>
                     <div className="space-y-2 text-sm">
@@ -288,7 +283,7 @@ export default function OnChainFlowPage() {
                         <p className="text-muted-foreground text-xs mb-1">Latest whale trades</p>
                         <ul className="space-y-0.5">
                           {card.whale_trades.slice(0, 2).map((t, i) => (
-                            <li key={i} className="font-mono text-xs">{t}</li>
+                            <li key={i} className="font-mono text-xs truncate">{t}</li>
                           ))}
                         </ul>
                       </div>
@@ -308,7 +303,7 @@ export default function OnChainFlowPage() {
             </TabsContent>
 
             <TabsContent value="meme" className="mt-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 {meme.map((card) => (
                   <FlexCard key={card.ticker} title={card.ticker}>
                     <div className="space-y-2 text-sm">
@@ -316,7 +311,7 @@ export default function OnChainFlowPage() {
                         <p className="text-muted-foreground text-xs mb-1">Latest whale trades</p>
                         <ul className="space-y-0.5">
                           {card.whale_trades.slice(0, 2).map((t, i) => (
-                            <li key={i} className="font-mono text-xs">{t}</li>
+                            <li key={i} className="font-mono text-xs truncate">{t}</li>
                           ))}
                         </ul>
                       </div>
@@ -355,7 +350,7 @@ export default function OnChainFlowPage() {
             </TabsContent>
 
             <TabsContent value="indices" className="mt-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 {indices.map((idx) => (
                   <FlexCard key={idx.symbol} title={idx.symbol}>
                     <div className="grid grid-cols-2 gap-2 text-sm">

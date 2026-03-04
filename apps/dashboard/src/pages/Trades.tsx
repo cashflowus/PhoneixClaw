@@ -1,18 +1,21 @@
 /**
- * Trades page — pipeline view of all trade intents.
- * Shows trades flowing through: PENDING -> RISK_CHECK -> APPROVED -> FILLED | REJECTED
- * M1.10.
+ * Trades page — agent leaderboard + trade pipeline.
+ * Left: agent performance leaderboard. Right: trade log with filters.
  */
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { StatusBadge } from '@/components/ui/StatusBadge'
+import { LayoutDashboard } from 'lucide-react'
 import { SidePanel } from '@/components/ui/SidePanel'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { AgentLeaderboardTable, type AgentLeaderData } from '@/components/AgentLeaderCard'
 
 interface Trade {
   id: string
@@ -41,6 +44,14 @@ interface TradeStats {
 
 const STATUS_OPTIONS = ['', 'PENDING', 'RISK_CHECK', 'APPROVED', 'SUBMITTED', 'FILLED', 'REJECTED', 'FAILED']
 
+const MOCK_AGENT_LEADERS: AgentLeaderData[] = [
+  { id: 'ag1', rank: 1, name: 'SPY-Momentum', pnl: 5600, winRate: 0.62, sharpe: 1.68, trades: 45, status: 'running' },
+  { id: 'ag2', rank: 2, name: 'MeanRev-QQQ', pnl: 3850, winRate: 0.55, sharpe: 1.12, trades: 52, status: 'running' },
+  { id: 'ag3', rank: 3, name: 'Breakout-ES', pnl: 3000, winRate: 0.52, sharpe: 0.98, trades: 45, status: 'paper' },
+  { id: 'ag4', rank: 4, name: 'Scalper-NQ', pnl: 1200, winRate: 0.48, sharpe: 0.72, trades: 128, status: 'running' },
+  { id: 'ag5', rank: 5, name: 'Swing-AAPL', pnl: -340, winRate: 0.41, sharpe: -0.15, trades: 17, status: 'paused' },
+]
+
 const columns: Column<Trade>[] = [
   {
     id: 'symbol',
@@ -51,7 +62,7 @@ const columns: Column<Trade>[] = [
     id: 'side',
     header: 'Side',
     cell: (row) => (
-      <Badge variant={row.side === 'buy' ? 'default' : 'destructive'} className="uppercase">
+      <Badge variant={row.side === 'buy' ? 'default' : 'destructive'} className="uppercase text-xs">
         {row.side}
       </Badge>
     ),
@@ -59,24 +70,33 @@ const columns: Column<Trade>[] = [
   { id: 'qty', header: 'Qty', accessor: 'qty' },
   { id: 'order_type', header: 'Type', accessor: 'order_type' },
   {
+    id: 'agent_id',
+    header: 'Agent',
+    cell: (row) => (
+      <span className="text-xs font-mono truncate max-w-[80px] inline-block" title={row.agent_id}>
+        {row.agent_id.slice(0, 8)}
+      </span>
+    ),
+  },
+  {
     id: 'status',
     header: 'Status',
     cell: (row) => <StatusBadge status={row.status} />,
   },
   {
     id: 'fill_price',
-    header: 'Fill Price',
+    header: 'Fill',
     cell: (row) => (row.fill_price ? `$${row.fill_price.toFixed(2)}` : '—'),
   },
-  { id: 'signal_source', header: 'Source', cell: (row) => row.signal_source ?? '—' },
   {
     id: 'created_at',
     header: 'Time',
-    cell: (row) => new Date(row.created_at).toLocaleString(),
+    cell: (row) => new Date(row.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
   },
 ]
 
 export default function TradesPage() {
+  const navigate = useNavigate()
   const [statusFilter, setStatusFilter] = useState('')
   const [symbolFilter, setSymbolFilter] = useState('')
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null)
@@ -99,15 +119,25 @@ export default function TradesPage() {
     refetchInterval: 10000,
   })
 
+  const { data: agentLeaders = MOCK_AGENT_LEADERS } = useQuery<AgentLeaderData[]>({
+    queryKey: ['trade-agent-leaders'],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/api/v2/performance/by-agent')
+        return res.data
+      } catch {
+        return MOCK_AGENT_LEADERS
+      }
+    },
+    refetchInterval: 30000,
+  })
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Trades</h2>
-        <p className="text-muted-foreground">Pipeline view of all trade intents from agents</p>
-      </div>
+    <div className="space-y-4 sm:space-y-6">
+      <PageHeader icon={LayoutDashboard} title="Trades" description="Agent performance leaderboard and trade pipeline" />
 
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
           <MetricCard title="Total Trades" value={stats.total} />
           <MetricCard title="Filled" value={stats.filled} trend="up" />
           <MetricCard title="Rejected" value={stats.rejected} trend="down" />
@@ -115,33 +145,46 @@ export default function TradesPage() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <Input
-          placeholder="Filter by symbol..."
-          value={symbolFilter}
-          onChange={(e) => setSymbolFilter(e.target.value)}
-          className="w-full sm:w-48"
-        />
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-40">
-            <SelectValue placeholder="All statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            {STATUS_OPTIONS.map((s) => (
-              <SelectItem key={s || '__all'} value={s || ' '}>
-                {s || 'All'}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Agent Leaderboard */}
+        <div className="lg:col-span-4 xl:col-span-3">
+          <AgentLeaderboardTable agents={agentLeaders} />
+        </div>
 
-      <DataTable
-        columns={columns}
-        data={trades as (Trade & Record<string, unknown>)[]}
-        isLoading={isLoading}
-        emptyMessage="No trades yet. Agents will generate trade intents here."
-      />
+        {/* Trade Log */}
+        <div className="lg:col-span-8 xl:col-span-9 space-y-3">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input
+              placeholder="Filter by symbol..."
+              value={symbolFilter}
+              onChange={(e) => setSymbolFilter(e.target.value)}
+              className="w-full sm:w-44"
+            />
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full sm:w-36">
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_OPTIONS.map((s) => (
+                  <SelectItem key={s || '__all'} value={s || ' '}>
+                    {s || 'All'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="overflow-x-auto">
+            <DataTable
+              columns={columns}
+              data={trades as (Trade & Record<string, unknown>)[]}
+              isLoading={isLoading}
+              emptyMessage="No trades yet. Agents will generate trade intents here."
+              onRowClick={(row) => setSelectedTrade(row as unknown as Trade)}
+            />
+          </div>
+        </div>
+      </div>
 
       <SidePanel
         open={!!selectedTrade}
@@ -150,7 +193,7 @@ export default function TradesPage() {
       >
         {selectedTrade && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
               <span className="text-muted-foreground">Symbol</span>
               <span className="font-mono">{selectedTrade.symbol}</span>
               <span className="text-muted-foreground">Side</span>
@@ -161,11 +204,18 @@ export default function TradesPage() {
               <StatusBadge status={selectedTrade.status} />
               <span className="text-muted-foreground">Fill Price</span>
               <span>{selectedTrade.fill_price ? `$${selectedTrade.fill_price.toFixed(2)}` : '—'}</span>
+              <span className="text-muted-foreground">Agent</span>
+              <span
+                className="font-mono text-xs cursor-pointer text-primary hover:underline"
+                onClick={() => navigate(`/agents/${selectedTrade.agent_id}`)}
+              >
+                {selectedTrade.agent_id.slice(0, 12)}...
+              </span>
               <span className="text-muted-foreground">Source</span>
               <span>{selectedTrade.signal_source ?? '—'}</span>
             </div>
             {selectedTrade.rejection_reason && (
-              <div className="p-3 bg-destructive/10 rounded text-sm text-destructive">
+              <div className="p-3 bg-destructive/10 rounded text-sm text-destructive break-words">
                 <strong>Rejected:</strong> {selectedTrade.rejection_reason}
               </div>
             )}

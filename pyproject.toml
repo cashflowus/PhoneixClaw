@@ -28,6 +28,7 @@ dependencies = [
     "discord.py-self>=2.1.0",
     "prometheus-client>=0.20.0",
     "pyyaml>=6.0.0",
+    "pyotp>=2.9.0",
 ]
 
 [project.optional-dependencies]

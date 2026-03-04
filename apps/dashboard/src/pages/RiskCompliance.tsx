@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { FlexCard } from '@/components/ui/FlexCard'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { Button } from '@/components/ui/button'
@@ -186,14 +187,11 @@ export default function RiskCompliancePage() {
   const tickerConc = positionLimits.tickerConcentration ?? MOCK_POSITION_LIMITS.tickerConcentration
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold flex items-center gap-2">
-        <Shield className="h-7 w-7" />
-        Risk & Compliance
-      </h1>
+    <div className="space-y-4 sm:space-y-6">
+      <PageHeader icon={Shield} title="Risk & Compliance" description="Real-time risk monitoring and position limits" />
 
       {/* Top Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <MetricCard
           title="Portfolio VaR"
           value={`$${(status.var ?? 12500).toLocaleString()}`}
@@ -324,7 +322,7 @@ export default function RiskCompliancePage() {
                   {(circuit.dailyLossPct ?? -1.2).toFixed(1)}% / {(circuit.thresholdPct ?? -5)}%
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Confidence</p>
                   <p className="font-semibold">{((circuit.confidence ?? 0.92) * 100).toFixed(0)}%</p>
@@ -353,7 +351,7 @@ export default function RiskCompliancePage() {
                 <div className="space-y-2">
                   {sectors.map((s: { name: string; exposure: number; max: number }) => (
                     <div key={s.name} className="flex items-center gap-2">
-                      <span className="w-24 text-sm">{s.name}</span>
+                      <span className="w-20 sm:w-24 text-sm truncate">{s.name}</span>
                       <div className="flex-1 h-3 rounded bg-muted overflow-hidden">
                         <div
                           className={cn(
@@ -400,13 +398,13 @@ export default function RiskCompliancePage() {
           <FlexCard title="Risk Checks" action={<Shield className="h-4 w-4 text-muted-foreground" />}>
             <div className="space-y-2">
               {checkItems.map((c: { ts: string; symbol: string; checkType: string; result: string; reason: string }, i: number) => (
-                <div key={i} className="flex items-center justify-between p-3 rounded-lg border text-sm">
-                  <div className="flex gap-4">
+                <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border text-sm gap-2">
+                  <div className="flex flex-wrap gap-2 sm:gap-4">
                     <span className="text-muted-foreground">{formatTime(c.ts)}</span>
                     <span className="font-mono">{c.symbol}</span>
-                    <span className="text-muted-foreground">{c.checkType}</span>
+                    <span className="text-muted-foreground truncate">{c.checkType}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge
                       variant={
                         c.result === 'PASS' ? 'default' : c.result === 'WARN' ? 'secondary' : 'destructive'
@@ -414,7 +412,7 @@ export default function RiskCompliancePage() {
                     >
                       {c.result}
                     </Badge>
-                    <span className="text-muted-foreground">{c.reason}</span>
+                    <span className="text-muted-foreground truncate">{c.reason}</span>
                   </div>
                 </div>
               ))}
@@ -462,7 +460,7 @@ export default function RiskCompliancePage() {
                   ))}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Hedge cost</p>
                   <p className="font-semibold">{(hedging.hedgeCostPct ?? 0.8).toFixed(1)}%</p>

@@ -19,10 +19,11 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { FlexCard } from '@/components/ui/FlexCard'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { StatusBadge } from '@/components/ui/StatusBadge'
-import { Cpu, Activity, Server, Bot, Wrench } from 'lucide-react'
+import { Cpu, Activity, Network, Server, Bot, Wrench } from 'lucide-react'
 
 interface Instance {
   id: string
@@ -50,7 +51,7 @@ function InstanceNode({ data }: NodeProps) {
   const color = statusColor(String(data?.status ?? 'unknown'))
   return (
     <div
-      className={`px-4 py-3 rounded-lg border-2 shadow-lg min-w-[140px] ${color} text-white`}
+      className={`px-4 py-3 rounded-xl border border-white/20 shadow-lg min-w-[140px] backdrop-blur-sm ${color} text-white`}
     >
       <Handle type="target" position={Position.Top} />
       <div className="flex items-center gap-2">
@@ -66,7 +67,7 @@ function InstanceNode({ data }: NodeProps) {
 function AgentNode({ data }: NodeProps) {
   const color = statusColor(String(data?.status ?? 'unknown'))
   return (
-    <div className={`px-2 py-1.5 rounded border-2 ${color} text-white text-xs`}>
+    <div className={`px-2 py-1.5 rounded-lg border border-white/20 ${color} text-white text-xs`}>
       <Handle type="target" position={Position.Top} />
       <div className="flex items-center gap-1">
         <Bot className="h-3 w-3" />
@@ -132,14 +133,15 @@ export default function NetworkPage() {
     const edges: Edge[] = []
     let y = 0
     instances.forEach((inst, i) => {
+      const agentCount = Number(inst.agents) || 0
       const instId = `inst-${inst.id}`
       nodes.push({
         id: instId,
         type: 'instance',
         position: { x: 100 + i * 220, y },
-        data: { label: inst.name, name: inst.name, status: inst.status, agents: inst.agents },
+        data: { label: inst.name, name: inst.name, status: inst.status, agents: agentCount },
       })
-      for (let a = 0; a < inst.agents; a++) {
+      for (let a = 0; a < agentCount; a++) {
         const agentId = `${instId}-agent-${a}`
         nodes.push({
           id: agentId,
@@ -183,18 +185,15 @@ export default function NetworkPage() {
 
   if (isMobile) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold">Agent Network</h2>
-          <p className="text-muted-foreground">Instance status and agent connections</p>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="space-y-4 sm:space-y-6">
+        <PageHeader icon={Network} title="Agent Network" description="Instance status and agent connections" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <MetricCard title="Instances" value={instances.length} />
           <MetricCard title="Running" value={running} trend="up" />
-          <MetricCard title="Total Agents" value={instances.reduce((a, i) => a + i.agents, 0)} />
+          <MetricCard title="Total Agents" value={instances.reduce((a, i) => a + (Number(i.agents) || 0), 0)} />
           <MetricCard title="Healthy" value={instances.filter((i) => (Date.now() - new Date(i.last_heartbeat).getTime()) < 60000).length} />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           {instances.map((inst) => (
             <FlexCard key={inst.id} title={inst.name}>
               <div className="space-y-3">
@@ -219,21 +218,25 @@ export default function NetworkPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Agent Network</h2>
-        <p className="text-muted-foreground">Instance status and agent connections</p>
-      </div>
+    <div className="space-y-4 sm:space-y-6">
+      <PageHeader icon={Network} title="Agent Network" description="Instance status and agent connections" />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <MetricCard title="Instances" value={instances.length} />
         <MetricCard title="Running" value={running} trend="up" />
-        <MetricCard title="Total Agents" value={instances.reduce((a, i) => a + i.agents, 0)} />
+        <MetricCard title="Total Agents" value={instances.reduce((a, i) => a + (Number(i.agents) || 0), 0)} />
         <MetricCard title="Healthy" value={instances.filter((i) => (Date.now() - new Date(i.last_heartbeat).getTime()) < 60000).length} />
       </div>
 
-      <div className="flex gap-6" style={{ height: 420 }}>
-        <div className="flex-1 rounded-lg border bg-muted/20 overflow-hidden">
+      <div className="rounded-xl border border-white/10 bg-card p-2 sm:p-3 dark:bg-white/[0.02]">
+        <p className="text-xs text-muted-foreground mb-2 flex items-center gap-4 overflow-x-auto">
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Running</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500" /> Idle</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" /> Error</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-zinc-400" /> Unknown</span>
+        </p>
+        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 h-[300px] sm:h-[400px] lg:h-[500px]">
+        <div className="flex-1 rounded-lg overflow-hidden min-h-0">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -249,10 +252,10 @@ export default function NetworkPage() {
         </div>
 
         {selectedNode && (
-          <FlexCard title="Node Details" className="w-72 shrink-0 self-start">
+          <FlexCard title="Node Details" className="w-full lg:w-72 shrink-0 self-start">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="font-medium">{(selectedNode.data?.label ?? selectedNode.id) as string}</span>
+                <span className="font-medium truncate">{(selectedNode.data?.label ?? selectedNode.id) as string}</span>
                 <StatusBadge status={String(selectedNode.data?.status ?? 'unknown')} />
               </div>
               <p className="text-xs text-muted-foreground">Type: {selectedNode.type ?? 'unknown'}</p>
@@ -268,6 +271,7 @@ export default function NetworkPage() {
             </div>
           </FlexCard>
         )}
+        </div>
       </div>
     </div>
   )

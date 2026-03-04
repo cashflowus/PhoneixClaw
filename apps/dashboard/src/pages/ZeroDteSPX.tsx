@@ -5,12 +5,14 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { FlexCard } from '@/components/ui/FlexCard'
 import { MetricCard } from '@/components/ui/MetricCard'
 import {
   Timer,
   Target,
   Zap,
+  Activity,
 } from 'lucide-react'
 import {
   Select,
@@ -32,6 +34,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { getMetricTooltip } from '@/lib/metricTooltips'
 
 // Mock data
 const MOCK_SPX = { price: 5987.42, change: 12.35, changePct: 0.21 }
@@ -217,63 +220,77 @@ export default function ZeroDteSPXPage() {
   const formatMoc = (v: number) => `${(v / 1e6).toFixed(0)}M`
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold">0DTE SPX Command Center</h2>
-          <div className="flex items-center gap-4 mt-2 text-muted-foreground">
-            <span className="font-mono text-lg font-semibold text-foreground">
-              SPX {MOCK_SPX.price.toLocaleString()}
-            </span>
-            <span className={MOCK_SPX.change >= 0 ? 'text-emerald-600' : 'text-red-600'}>
-              {MOCK_SPX.change >= 0 ? '+' : ''}{MOCK_SPX.change} ({MOCK_SPX.changePct}%)
-            </span>
-            <span className="flex items-center gap-1">
-              <Timer className="h-4 w-4" />
-              Close in {countdownToClose}
-            </span>
-          </div>
+    <div className="space-y-4 sm:space-y-6">
+      <PageHeader icon={Activity} title="0DTE SPX Command Center" description="Zero days to expiration SPX options flow and signals">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-muted-foreground">
+          <span className="font-mono text-base sm:text-lg font-semibold text-foreground">
+            SPX {MOCK_SPX.price.toLocaleString()}
+          </span>
+          <span className={MOCK_SPX.change >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+            {MOCK_SPX.change >= 0 ? '+' : ''}{MOCK_SPX.change} ({MOCK_SPX.changePct}%)
+          </span>
+          <span className="flex items-center gap-1">
+            <Timer className="h-4 w-4" />
+            Close in {countdownToClose}
+          </span>
         </div>
-      </div>
+      </PageHeader>
 
       {/* Top Metrics Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-        <MetricCard title="SPX Price" value={MOCK_SPX.price.toLocaleString()} />
-        <MetricCard title="VIX" value={MOCK_METRICS.vix} />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 sm:gap-3">
+        <MetricCard title="SPX Price" value={MOCK_SPX.price.toLocaleString()} tooltip={getMetricTooltip('SPX Price')} />
+        <MetricCard title="VIX" value={MOCK_METRICS.vix} tooltip={getMetricTooltip('VIX')} />
         <MetricCard
           title="GEX Net"
           value={formatGex(MOCK_METRICS.gexNet)}
           trend={MOCK_METRICS.gexNet >= 0 ? 'up' : 'down'}
+          tooltip={getMetricTooltip('GEX Net')}
         />
         <MetricCard
           title="Dealer Gamma Zone"
           value={MOCK_METRICS.dealerGammaZone}
           trend={MOCK_METRICS.dealerGammaZone === 'Positive' ? 'up' : 'down'}
+          tooltip={getMetricTooltip('Dealer Gamma Zone')}
         />
-        <MetricCard title="0DTE Volume" value={formatGex(MOCK_METRICS.zeroDteVolume)} />
-        <MetricCard title="Put/Call Ratio" value={MOCK_METRICS.putCallRatio.toFixed(2)} />
+        <MetricCard title="0DTE Volume" value={formatGex(MOCK_METRICS.zeroDteVolume)} tooltip={getMetricTooltip('ODTE Volume')} />
+        <MetricCard title="Put/Call Ratio" value={MOCK_METRICS.putCallRatio.toFixed(2)} tooltip={getMetricTooltip('Put/Call Ratio')} />
         <MetricCard
           title="MOC Imbalance"
           value={`$${formatMoc(Math.abs(MOCK_METRICS.mocImbalance))}`}
           trend={MOCK_METRICS.mocImbalance >= 0 ? 'up' : 'down'}
+          tooltip={getMetricTooltip('MOC Imbalance')}
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {/* Main Tabs */}
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-3 overflow-visible">
           <FlexCard>
             <Tabs defaultValue="gamma">
-              <TabsList className="grid w-full grid-cols-5">
-                <TabsTrigger value="gamma">Gamma Levels</TabsTrigger>
-                <TabsTrigger value="moc">MOC Imbalance</TabsTrigger>
-                <TabsTrigger value="vanna">Vanna & Charm</TabsTrigger>
-                <TabsTrigger value="volume">0DTE Volume</TabsTrigger>
-                <TabsTrigger value="plan">EOD Trade Plan</TabsTrigger>
+              <TabsList className="flex w-full overflow-x-auto sm:grid sm:grid-cols-5">
+                <TabsTrigger value="gamma" className="min-w-max sm:min-w-0">Gamma Levels</TabsTrigger>
+                <TabsTrigger value="moc" className="min-w-max sm:min-w-0">MOC Imbalance</TabsTrigger>
+                <TabsTrigger value="vanna" className="min-w-max sm:min-w-0">Vanna & Charm</TabsTrigger>
+                <TabsTrigger value="volume" className="min-w-max sm:min-w-0">0DTE Volume</TabsTrigger>
+                <TabsTrigger value="plan" className="min-w-max sm:min-w-0">EOD Trade Plan</TabsTrigger>
               </TabsList>
 
               <TabsContent value="gamma" className="space-y-4">
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground space-y-1.5">
+                  <p className="font-medium text-foreground">What are Gamma Levels?</p>
+                  <p>Gamma Exposure (GEX) shows where market makers have concentrated hedging positions at specific strike prices. These levels act as magnets or walls for price action.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                    <div className="flex gap-2 items-start">
+                      <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                      <span><strong className="text-emerald-600 dark:text-emerald-400">Bullish:</strong> Price above the Gamma Flip level, positive GEX = dealers suppress volatility, expect mean-reversion toward high-GEX strikes (support holds).</span>
+                    </div>
+                    <div className="flex gap-2 items-start">
+                      <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                      <span><strong className="text-red-600 dark:text-red-400">Bearish:</strong> Price below Gamma Flip, negative GEX = dealers amplify moves, expect trend-following & volatility expansion toward resistance walls.</span>
+                    </div>
+                  </div>
+                  <p className="text-xs">Look for: <strong>Gamma Flip</strong> (yellow) = key pivot, <strong>Support</strong> = price floor, <strong>Wall/Resistance</strong> = price ceiling.</p>
+                </div>
                 <div className="flex gap-2 text-sm">
                   <span className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
                     Positive Gamma
@@ -322,12 +339,27 @@ export default function ZeroDteSPXPage() {
               </TabsContent>
 
               <TabsContent value="moc" className="space-y-4">
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground space-y-1.5">
+                  <p className="font-medium text-foreground">What is MOC Imbalance?</p>
+                  <p>Market-On-Close (MOC) orders are large institutional orders executed at the closing price. The NYSE publishes the net imbalance at 3:50 PM ET. This is one of the strongest directional signals for the final 10 minutes of trading.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                    <div className="flex gap-2 items-start">
+                      <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                      <span><strong className="text-emerald-600 dark:text-emerald-400">Bullish:</strong> Buy imbalance (positive) means more buy orders at close. Expect a last-minute push higher. Larger imbalances (&gt;$500M) create stronger moves.</span>
+                    </div>
+                    <div className="flex gap-2 items-start">
+                      <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                      <span><strong className="text-red-600 dark:text-red-400">Bearish:</strong> Sell imbalance (negative) means more sell orders at close. Expect a late-day selloff. Compare to Historical Avg — if current amount is 2x+ the average, the signal is stronger.</span>
+                    </div>
+                  </div>
+                  <p className="text-xs"><strong>Key:</strong> Watch &quot;Predicted Impact&quot; — this estimates the % move SPX may make in the final minutes based on the imbalance size relative to historical patterns.</p>
+                </div>
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">
                     MOC released at 3:50 PM ET — Countdown: <strong>{countdownToMoc}</strong>
                   </p>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                   <MetricCard title="Direction" value={mocData.direction} trend={mocData.direction === 'Buy' ? 'up' : 'down'} />
                   <MetricCard title="Amount" value={`$${formatMoc(Math.abs(mocData.amount))}`} />
                   <MetricCard title="Historical Avg" value={`$${formatMoc(Math.abs(mocData.historicalAvg))}`} />
@@ -342,7 +374,22 @@ export default function ZeroDteSPXPage() {
               </TabsContent>
 
               <TabsContent value="vanna" className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground space-y-1.5">
+                  <p className="font-medium text-foreground">What are Vanna & Charm?</p>
+                  <p><strong>Vanna</strong> measures how delta changes with implied volatility. <strong>Charm</strong> measures how delta decays over time. Together they reveal the invisible force of market-maker hedging as options expire.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                    <div className="flex gap-2 items-start">
+                      <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                      <span><strong className="text-emerald-600 dark:text-emerald-400">Bullish:</strong> High positive Vanna + Active Charm Bid = dealers are forced to buy futures to stay hedged as IV drops and time decays. This creates a &quot;gravity pull&quot; upward, especially into the close.</span>
+                    </div>
+                    <div className="flex gap-2 items-start">
+                      <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                      <span><strong className="text-red-600 dark:text-red-400">Bearish:</strong> Negative or low Vanna + Inactive Charm Bid = dealers selling into the close. Rising IV amplifies the selling. Watch for acceleration below key strikes.</span>
+                    </div>
+                  </div>
+                  <p className="text-xs"><strong>Pro tip:</strong> Vanna is strongest when VIX is declining. Charm is strongest in the final 2 hours of 0DTE expiration. The combination creates the well-known &quot;afternoon drift.&quot;</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <MetricCard
                     title="Vanna Level"
                     value={vannaCharm.vannaLevel.toFixed(2)}
@@ -380,7 +427,22 @@ export default function ZeroDteSPXPage() {
               </TabsContent>
 
               <TabsContent value="volume" className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground space-y-1.5">
+                  <p className="font-medium text-foreground">What is 0DTE Volume?</p>
+                  <p>Zero-days-to-expiration option volume shows real-time call and put activity on contracts expiring today. These short-dated options have massive gamma, making volume patterns powerful directional signals.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                    <div className="flex gap-2 items-start">
+                      <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                      <span><strong className="text-emerald-600 dark:text-emerald-400">Bullish:</strong> Call/Put ratio &gt; 1.2, heavy call volume above current price, and no gamma squeeze signal = institutions positioning for upside. Watch for large block trades on OTM calls.</span>
+                    </div>
+                    <div className="flex gap-2 items-start">
+                      <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                      <span><strong className="text-red-600 dark:text-red-400">Bearish:</strong> Put volume surging, C/P ratio &lt; 0.8, put-heavy strikes below current price = hedging/downside bets. A Gamma Squeeze signal (Yes) means dealers may chase price lower fast.</span>
+                    </div>
+                  </div>
+                  <p className="text-xs"><strong>Heatmap:</strong> Brighter green = more activity at that strike. Look for clusters — they reveal where the &quot;battle&quot; is happening. <strong>Largest Trades</strong> show institutional-sized bets.</p>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                   <MetricCard title="Call Volume" value={volume.callVolume?.toLocaleString() ?? '-'} />
                   <MetricCard title="Put Volume" value={volume.putVolume?.toLocaleString() ?? '-'} />
                   <MetricCard title="C/P Ratio" value={volume.ratio?.toFixed(2) ?? '-'} />
@@ -392,7 +454,7 @@ export default function ZeroDteSPXPage() {
                 </div>
                 <div>
                   <h4 className="font-medium mb-2">Volume by Strike (heatmap)</h4>
-                  <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
                     {volume.volumeByStrike?.map((v: { strike: number; calls: number; puts: number }) => {
                       const total = v.calls + v.puts
                       const intensity = Math.min(100, (total / 150) * 100)
@@ -423,9 +485,24 @@ export default function ZeroDteSPXPage() {
               </TabsContent>
 
               <TabsContent value="plan" className="space-y-4">
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground space-y-1.5">
+                  <p className="font-medium text-foreground">What is the EOD Trade Plan?</p>
+                  <p>This is an AI-generated composite trade plan that synthesizes all signals — gamma levels, MOC imbalance, vanna/charm flows, and 0DTE volume — into a single actionable recommendation for the last hour of trading.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                    <div className="flex gap-2 items-start">
+                      <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                      <span><strong className="text-emerald-600 dark:text-emerald-400">LONG signal:</strong> Multiple bullish confirmations — positive GEX, MOC buy imbalance, active charm bid, heavy call volume. The plan will suggest call spreads or outright calls with defined risk.</span>
+                    </div>
+                    <div className="flex gap-2 items-start">
+                      <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                      <span><strong className="text-red-600 dark:text-red-400">SHORT signal:</strong> Multiple bearish confirmations — negative GEX, MOC sell imbalance, inactive charm, put-heavy flow. The plan will suggest put spreads with a tight stop above the gamma flip.</span>
+                    </div>
+                  </div>
+                  <p className="text-xs"><strong>Important:</strong> Always check the &quot;Signals&quot; list to see which factors are driving the recommendation. More signals aligned = higher confidence. Use &quot;Observe Only&quot; mode until you trust the system.</p>
+                </div>
                 <div className="rounded-lg border p-4 space-y-3">
                   <h4 className="font-semibold">AI Composite Trade Plan</h4>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
                     <span className="text-muted-foreground">Direction</span>
                     <Badge variant={tradePlan.direction === 'LONG' ? 'default' : 'destructive'}>{tradePlan.direction}</Badge>
                     <span className="text-muted-foreground">Instrument</span>
@@ -464,7 +541,7 @@ export default function ZeroDteSPXPage() {
         </div>
 
         {/* Agent Config Sidebar */}
-        <FlexCard title="Agent Config">
+        <FlexCard title="Agent Config" className="overflow-visible">
           <div className="space-y-4">
             <div>
               <Label className="text-sm">Instance</Label>

@@ -5,6 +5,7 @@
  */
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -81,16 +82,10 @@ export default function DevDashboard() {
   })
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Shield className="h-6 w-6 text-primary" />
-        <div>
-          <h2 className="text-2xl font-bold">Dev Dashboard</h2>
-          <p className="text-muted-foreground">Admin-only — Dev Agent monitoring and RL metrics</p>
-        </div>
-      </div>
+    <div className="space-y-4 sm:space-y-6">
+      <PageHeader icon={Shield} title="Dev Dashboard" description="Admin-only — Dev Agent monitoring and RL metrics" />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <MetricCard
           title="Dev Agent"
           value={devStatus?.status ?? 'Loading...'}
@@ -106,7 +101,7 @@ export default function DevDashboard() {
       </div>
 
       <Tabs defaultValue="incidents">
-        <TabsList>
+        <TabsList className="flex flex-wrap">
           <TabsTrigger value="incidents" className="gap-2">
             <AlertTriangle className="h-4 w-4" /> Incidents
           </TabsTrigger>
@@ -119,25 +114,29 @@ export default function DevDashboard() {
         </TabsList>
 
         <TabsContent value="incidents" className="mt-4">
-          <DataTable
-            columns={incidentColumns}
-            data={incidents as (Incident & Record<string, unknown>)[]}
-            isLoading={incidentsLoading}
-            emptyMessage="No incidents detected"
-          />
+          <div className="overflow-x-auto">
+            <DataTable
+              columns={incidentColumns}
+              data={incidents as (Incident & Record<string, unknown>)[]}
+              isLoading={incidentsLoading}
+              emptyMessage="No incidents detected"
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="repairs" className="mt-4">
-          <DataTable
-            columns={repairColumns}
-            data={repairs as (Repair & Record<string, unknown>)[]}
-            isLoading={repairsLoading}
-            emptyMessage="No auto-repairs applied"
-          />
+          <div className="overflow-x-auto">
+            <DataTable
+              columns={repairColumns}
+              data={repairs as (Repair & Record<string, unknown>)[]}
+              isLoading={repairsLoading}
+              emptyMessage="No auto-repairs applied"
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="rl" className="mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <FlexCard title="Q-Learning Stats">
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">

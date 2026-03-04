@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { FlexCard } from '@/components/ui/FlexCard'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { Button } from '@/components/ui/button'
@@ -160,14 +161,11 @@ export default function NarrativeSentimentPage() {
   const analystItems = Array.isArray(analystMoves) ? analystMoves : MOCK_ANALYST
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold flex items-center gap-2">
-        <Brain className="h-7 w-7" />
-        Narrative & Sentiment
-      </h1>
+    <div className="space-y-4 sm:space-y-6">
+      <PageHeader icon={Brain} title="Narrative & Sentiment" description="Fed watch, earnings, and analyst sentiment" />
 
       {/* Top Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <MetricCard
           title="Market Sentiment"
           value={`${((metrics.marketSentiment ?? 0.35) * 100).toFixed(0)}%`}
@@ -331,9 +329,9 @@ export default function NarrativeSentimentPage() {
             <div className="space-y-4">
               {fedItems.map((s: { id: string; name: string; date: string; summary: string; hawkish: number; dovish: number }) => (
                 <div key={s.id} className="p-4 rounded-lg border">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-semibold">{s.name}</p>
+                  <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold truncate">{s.name}</p>
                       <p className="text-sm text-muted-foreground">{s.date}</p>
                       <p className="text-sm mt-2">{s.summary}</p>
                     </div>
@@ -393,7 +391,7 @@ export default function NarrativeSentimentPage() {
             <div className="space-y-4">
               {earningsItems.map((e: { ticker: string; date: string; expectation: number; postRisk: string | null }) => (
                 <div key={e.ticker} className="p-4 rounded-lg border">
-                  <div className="flex justify-between items-center">
+                  <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
                     <div>
                       <p className="font-semibold">{e.ticker}</p>
                       <p className="text-sm text-muted-foreground">{e.date}</p>
@@ -413,7 +411,7 @@ export default function NarrativeSentimentPage() {
           <FlexCard title="Analyst Moves" action={<TrendingUp className="h-4 w-4 text-muted-foreground" />}>
             <div className="space-y-4">
               {analystItems.map((a: { ticker: string; action: string; firm: string; target: number; impact: string }) => (
-                <div key={a.ticker} className="p-4 rounded-lg border flex justify-between items-center">
+                <div key={a.ticker} className="p-4 rounded-lg border flex flex-col sm:flex-row justify-between sm:items-center gap-2">
                   <div>
                     <p className="font-semibold">{a.ticker}</p>
                     <p className="text-sm text-muted-foreground">{a.firm} — {a.action}</p>

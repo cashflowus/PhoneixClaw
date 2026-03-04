@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { FlexCard } from '@/components/ui/FlexCard'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -65,17 +66,13 @@ export default function SkillsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Skills</h2>
-          <p className="text-muted-foreground">Skill catalog and agent configuration</p>
-        </div>
+    <div className="space-y-4 sm:space-y-6">
+      <PageHeader icon={BookOpen} title="Skills" description="Skill catalog and agent configuration">
         <Button variant="outline" onClick={syncSkills} disabled={syncing}>
           <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
           Sync Skills
         </Button>
-      </div>
+      </PageHeader>
 
       <Tabs defaultValue="catalog">
         <TabsList>
@@ -84,7 +81,7 @@ export default function SkillsPage() {
         </TabsList>
 
         <TabsContent value="catalog" className="mt-4 space-y-4">
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger className="w-40">
                 <SelectValue placeholder="Category" />
@@ -96,14 +93,14 @@ export default function SkillsPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {skills.map((s: { id: string; name: string; category: string; description: string }) => (
               <FlexCard key={s.id} className="cursor-pointer hover:border-primary/50">
                 <div onClick={() => setSelectedSkill(s)}>
                 <div className="flex items-start gap-2">
                   <BookOpen className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-semibold">{s.name}</span>
+                    <span className="font-semibold truncate">{s.name}</span>
                     <Badge variant="outline" className="ml-2">{s.category}</Badge>
                     <p className="text-sm text-muted-foreground mt-1">{s.description}</p>
                   </div>
@@ -115,7 +112,7 @@ export default function SkillsPage() {
         </TabsContent>
 
         <TabsContent value="config" className="mt-4 space-y-4">
-          <div className="grid gap-4">
+          <div className="grid gap-3 sm:gap-4">
             <FlexCard title="AGENTS.md">
               <pre className="text-xs bg-muted p-3 rounded overflow-auto max-h-32 font-mono">{agentConfig.agents_md}</pre>
             </FlexCard>

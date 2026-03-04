@@ -1,180 +1,570 @@
 /**
- * Market Command Center — TradingView chart, indices, movers, options flow, news, watchlist, quick trade.
+ * Market Command Center — draggable/resizable widget grid with tabs.
+ * Ported from archive MarketCommandCenter; uses PageHeader and theme primary.
  */
-import { useQuery } from '@tanstack/react-query'
-import api from '@/lib/api'
-import { FlexCard } from '@/components/ui/FlexCard'
-import { MetricCard } from '@/components/ui/MetricCard'
-import { Newspaper } from 'lucide-react'
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { ResponsiveGridLayout, useContainerWidth, type LayoutItem } from 'react-grid-layout'
+import 'react-grid-layout/css/styles.css'
+import 'react-resizable/css/styles.css'
+import { Plus, X, Pencil, Check, Copy, LineChart } from 'lucide-react'
 
-const MOCK_INDICES = [
-  { symbol: 'SPX', name: 'S&P 500', value: 5123.45, change: 0.82 },
-  { symbol: 'NDX', name: 'Nasdaq 100', value: 18123.22, change: 1.12 },
-  { symbol: 'DJI', name: 'Dow Jones', value: 38912.34, change: 0.45 },
-]
+import { PageHeader } from '@/components/ui/PageHeader'
+import WidgetCatalog, { WIDGET_DEFINITIONS, type WidgetDef } from '@/components/market-widgets/WidgetCatalog'
+import WidgetWrapper from '@/components/market-widgets/WidgetWrapper'
+import WidgetSettingsDialog from '@/components/market-widgets/WidgetSettingsDialog'
+import FearGreedWidget from '@/components/market-widgets/FearGreedWidget'
+import VixWidget from '@/components/market-widgets/VixWidget'
+import Mag7Widget from '@/components/market-widgets/Mag7Widget'
+import MarketHeatmapWidget from '@/components/market-widgets/MarketHeatmapWidget'
+import TrendingVideosWidget from '@/components/market-widgets/TrendingVideosWidget'
+import BreakingNewsWidget from '@/components/market-widgets/BreakingNewsWidget'
+import SocialFeedWidget from '@/components/market-widgets/SocialFeedWidget'
+import GlobalIndicesWidget from '@/components/market-widgets/GlobalIndicesWidget'
+import CryptoWidget from '@/components/market-widgets/CryptoWidget'
+import SectorPerformanceWidget from '@/components/market-widgets/SectorPerformanceWidget'
+import EconomicCalendarWidget from '@/components/market-widgets/EconomicCalendarWidget'
+import EarningsCalendarWidget from '@/components/market-widgets/EarningsCalendarWidget'
+import MarketBreadthWidget from '@/components/market-widgets/MarketBreadthWidget'
+import FuturesWidget from '@/components/market-widgets/FuturesWidget'
+import CommoditiesWidget from '@/components/market-widgets/CommoditiesWidget'
+import ForexWidget from '@/components/market-widgets/ForexWidget'
+import BondYieldsWidget from '@/components/market-widgets/BondYieldsWidget'
+import TopMoversWidget from '@/components/market-widgets/TopMoversWidget'
+import PlatformSentimentWidget from '@/components/market-widgets/PlatformSentimentWidget'
+import TradingViewChartWidget from '@/components/market-widgets/TradingViewChartWidget'
+import RSSFeedWidget from '@/components/market-widgets/RSSFeedWidget'
+import MarketClockWidget from '@/components/market-widgets/MarketClockWidget'
+import StockScreenerWidget from '@/components/market-widgets/StockScreenerWidget'
+import ForexCrossRatesWidget from '@/components/market-widgets/ForexCrossRatesWidget'
+import CryptoScreenerWidget from '@/components/market-widgets/CryptoScreenerWidget'
+import TechnicalAnalysisWidget from '@/components/market-widgets/TechnicalAnalysisWidget'
+import SymbolInfoWidget from '@/components/market-widgets/SymbolInfoWidget'
+import MiniChartWidget from '@/components/market-widgets/MiniChartWidget'
+import HotlistsWidget from '@/components/market-widgets/HotlistsWidget'
+import PutCallRatioWidget from '@/components/market-widgets/PutCallRatioWidget'
+import IPOCalendarWidget from '@/components/market-widgets/IPOCalendarWidget'
+import RelativeVolumeWidget from '@/components/market-widgets/RelativeVolumeWidget'
+import FiftyTwoWeekWidget from '@/components/market-widgets/FiftyTwoWeekWidget'
+import SectorRotationWidget from '@/components/market-widgets/SectorRotationWidget'
+import OptionsExpiryWidget from '@/components/market-widgets/OptionsExpiryWidget'
+import TradingChecklistWidget from '@/components/market-widgets/TradingChecklistWidget'
+import QuickNotesWidget from '@/components/market-widgets/QuickNotesWidget'
+import TickerTapeWidget from '@/components/market-widgets/TickerTapeWidget'
+import TopStoriesWidget from '@/components/market-widgets/TopStoriesWidget'
+import FundamentalDataWidget from '@/components/market-widgets/FundamentalDataWidget'
+import CompanyProfileWidget from '@/components/market-widgets/CompanyProfileWidget'
+import CryptoHeatmapWidget from '@/components/market-widgets/CryptoHeatmapWidget'
+import ETFHeatmapWidget from '@/components/market-widgets/ETFHeatmapWidget'
+import GammaExposureWidget from '@/components/market-widgets/GammaExposureWidget'
+import MarketInternalsWidget from '@/components/market-widgets/MarketInternalsWidget'
+import VixTermStructureWidget from '@/components/market-widgets/VixTermStructureWidget'
+import PremarketGapWidget from '@/components/market-widgets/PremarketGapWidget'
+import SpxKeyLevelsWidget from '@/components/market-widgets/SpxKeyLevelsWidget'
+import OptionsFlowWidget from '@/components/market-widgets/OptionsFlowWidget'
+import CorrelationMatrixWidget from '@/components/market-widgets/CorrelationMatrixWidget'
+import VolatilityDashboardWidget from '@/components/market-widgets/VolatilityDashboardWidget'
+import PremarketMoversWidget from '@/components/market-widgets/PremarketMoversWidget'
+import DayTradePnlWidget from '@/components/market-widgets/DayTradePnlWidget'
+import PositionSizeCalcWidget from '@/components/market-widgets/PositionSizeCalcWidget'
+import RiskRewardWidget from '@/components/market-widgets/RiskRewardWidget'
+import TradingSessionWidget from '@/components/market-widgets/TradingSessionWidget'
+import KeyboardShortcutsWidget from '@/components/market-widgets/KeyboardShortcutsWidget'
 
-const MOCK_MOVERS = [
-  { symbol: 'NVDA', change: 4.2, direction: 'up' as const },
-  { symbol: 'TSLA', change: -2.8, direction: 'down' as const },
-  { symbol: 'AAPL', change: 1.1, direction: 'up' as const },
-  { symbol: 'META', change: -1.5, direction: 'down' as const },
-]
+const STATIC_WIDGETS: Record<string, React.ComponentType> = {
+  'fear-greed': FearGreedWidget,
+  'mag7': Mag7Widget,
+  'trending-videos': TrendingVideosWidget,
+  'breaking-news': BreakingNewsWidget,
+  'social-feed': SocialFeedWidget,
+  'global-indices': GlobalIndicesWidget,
+  'crypto': CryptoWidget,
+  'sector-perf': SectorPerformanceWidget,
+  'econ-cal': EconomicCalendarWidget,
+  'earnings-cal': EarningsCalendarWidget,
+  'market-breadth': MarketBreadthWidget,
+  'futures': FuturesWidget,
+  'commodities': CommoditiesWidget,
+  'forex': ForexWidget,
+  'bond-yields': BondYieldsWidget,
+  'top-movers': TopMoversWidget,
+  'platform-sentiment': PlatformSentimentWidget,
+  'rss-feed': RSSFeedWidget,
+  'market-clock': MarketClockWidget,
+  'stock-screener': StockScreenerWidget,
+  'forex-cross-rates': ForexCrossRatesWidget,
+  'crypto-screener': CryptoScreenerWidget,
+  'hotlists': HotlistsWidget,
+  'ipo-calendar': IPOCalendarWidget,
+  'rvol': RelativeVolumeWidget,
+  '52week': FiftyTwoWeekWidget,
+  'sector-rotation': SectorRotationWidget,
+  'options-expiry': OptionsExpiryWidget,
+  'trading-checklist': TradingChecklistWidget,
+  'quick-notes': QuickNotesWidget,
+  'ticker-tape': TickerTapeWidget,
+  'top-stories': TopStoriesWidget,
+  'crypto-heatmap': CryptoHeatmapWidget,
+  'etf-heatmap': ETFHeatmapWidget,
+  'market-internals': MarketInternalsWidget,
+  'vix-term': VixTermStructureWidget,
+  'premarket-gaps': PremarketGapWidget,
+  'premarket-movers': PremarketMoversWidget,
+  'day-pnl': DayTradePnlWidget,
+  'position-calc': PositionSizeCalcWidget,
+  'risk-reward': RiskRewardWidget,
+  'session-timer': TradingSessionWidget,
+  'keyboard-shortcuts': KeyboardShortcutsWidget,
+  'correlations': CorrelationMatrixWidget,
+  'heatmap': MarketHeatmapWidget,
+}
 
-const MOCK_OPTIONS_FLOW = [
-  { symbol: 'SPY', type: 'CALL', strike: 520, premium: 125000 },
-  { symbol: 'QQQ', type: 'PUT', strike: 480, premium: 89000 },
-  { symbol: 'AAPL', type: 'CALL', strike: 195, premium: 67000 },
-]
+const CONFIGURABLE_WIDGETS: Record<string, React.ComponentType<{ symbol: string }>> = {
+  'tv-chart': TradingViewChartWidget,
+  'vix': VixWidget,
+  'technical-analysis': TechnicalAnalysisWidget,
+  'symbol-info': SymbolInfoWidget,
+  'mini-chart': MiniChartWidget,
+  'fundamental-data': FundamentalDataWidget,
+  'company-profile': CompanyProfileWidget,
+  'gex': GammaExposureWidget,
+  'spx-levels': SpxKeyLevelsWidget,
+  'options-flow': OptionsFlowWidget,
+  'put-call-ratio': PutCallRatioWidget,
+  'volatility': VolatilityDashboardWidget,
+}
 
-const MOCK_NEWS = [
-  { title: 'Fed signals potential rate cut in Q2', time: '2m ago' },
-  { title: 'Tech earnings beat expectations', time: '15m ago' },
-  { title: 'Oil prices rise on supply concerns', time: '32m ago' },
-]
+const CONFIGURABLE_DEFAULTS: Record<string, string> = {
+  'tv-chart': 'AAPL',
+  'vix': 'SPY',
+  'technical-analysis': 'AAPL',
+  'symbol-info': 'AAPL',
+  'mini-chart': 'SPY',
+  'fundamental-data': 'AAPL',
+  'company-profile': 'AAPL',
+  'gex': 'SPY',
+  'spx-levels': 'SPY',
+  'options-flow': 'SPY',
+  'put-call-ratio': 'SPY',
+  'volatility': 'SPY',
+}
 
-const MOCK_WATCHLIST = [
-  { symbol: 'AAPL', price: 178.45, change: 0.3 },
-  { symbol: 'MSFT', price: 415.22, change: -0.1 },
-  { symbol: 'GOOGL', price: 142.80, change: 0.8 },
-]
+function isConfigurable(widgetId: string): boolean {
+  return widgetId in CONFIGURABLE_WIDGETS
+}
 
-export default function MarketPage() {
-  const { data: indices = MOCK_INDICES } = useQuery({
-    queryKey: ['market-indices'],
-    queryFn: async () => {
-      try {
-        const res = await api.get('/api/v2/market/indices')
-        return res.data
-      } catch {
-        return MOCK_INDICES
-      }
-    },
-  })
+interface TabData {
+  id: string
+  name: string
+  widgets: string[]
+  layouts: LayoutItem[]
+  widgetConfigs: Record<string, Record<string, string>>
+}
+
+const STORAGE_KEY = 'mcc-tabs-v2'
+
+const DEFAULT_TAB: TabData = {
+  id: 'default',
+  name: 'Overview',
+  widgets: ['fear-greed', 'global-indices', 'top-movers', 'breaking-news', 'mag7', 'sector-perf'],
+  layouts: [
+    { i: 'fear-greed', x: 0, y: 0, w: 3, h: 4, minW: 2, minH: 3 },
+    { i: 'global-indices', x: 3, y: 0, w: 5, h: 4, minW: 4, minH: 3 },
+    { i: 'top-movers', x: 8, y: 0, w: 4, h: 4, minW: 3, minH: 3 },
+    { i: 'breaking-news', x: 0, y: 4, w: 4, h: 5, minW: 3, minH: 4 },
+    { i: 'mag7', x: 4, y: 4, w: 4, h: 5, minW: 3, minH: 4 },
+    { i: 'sector-perf', x: 8, y: 4, w: 4, h: 5, minW: 3, minH: 4 },
+  ],
+  widgetConfigs: {},
+}
+
+function loadTabs(): TabData[] {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) {
+      const tabs = JSON.parse(saved) as TabData[]
+      if (Array.isArray(tabs) && tabs.length > 0) return tabs
+    }
+  } catch {}
+  return [DEFAULT_TAB]
+}
+
+function saveTabs(tabs: TabData[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(tabs))
+}
+
+function getWidgetDef(id: string): WidgetDef | undefined {
+  return WIDGET_DEFINITIONS.find((w) => w.id === id)
+}
+
+function generateId(): string {
+  return Math.random().toString(36).substring(2, 9)
+}
+
+function TabBar({
+  tabs,
+  activeTabId,
+  onSelectTab,
+  onAddTab,
+  onRenameTab,
+  onDeleteTab,
+  onDuplicateTab,
+}: {
+  tabs: TabData[]
+  activeTabId: string
+  onSelectTab: (id: string) => void
+  onAddTab: () => void
+  onRenameTab: (id: string, name: string) => void
+  onDeleteTab: (id: string) => void
+  onDuplicateTab: (id: string) => void
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editingId && inputRef.current) inputRef.current.focus()
+  }, [editingId])
+
+  const commitRename = () => {
+    if (editingId && editName.trim()) {
+      onRenameTab(editingId, editName.trim())
+    }
+    setEditingId(null)
+  }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Market Command Center</h2>
-        <p className="text-muted-foreground">Live charts, indices, options flow, and news</p>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <MetricCard title="S&P 500" value="5,123" trend="up" />
-        <MetricCard title="VIX" value="14.2" />
-        <MetricCard title="DXY" value="103.8" />
-        <MetricCard title="BTC" value="$67.2k" trend="up" />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* TradingView chart — spans 2 cols on desktop */}
-        <div className="lg:col-span-2">
-          <FlexCard title="Chart" className="overflow-hidden">
-            <div className="aspect-[16/9] min-h-[280px] bg-muted/30 rounded-lg">
-              <iframe
-                title="TradingView Chart"
-                src="https://www.tradingview.com/chart/?symbol=NASDAQ:AAPL"
-                className="w-full h-full border-0"
-              />
-            </div>
-          </FlexCard>
-        </div>
-
-        {/* Right column: indices + quick trade */}
-        <div className="space-y-6">
-          <FlexCard title="Market Indices">
-            <div className="space-y-3">
-              {indices.map((idx: { symbol: string; name: string; value?: number; change?: number }) => (
-                <div key={idx.symbol} className="flex justify-between items-center py-2 border-b last:border-0">
-                  <div>
-                    <p className="font-medium">{idx.symbol}</p>
-                    <p className="text-xs text-muted-foreground">{idx.name}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-mono text-sm">{idx.value?.toLocaleString() ?? idx.value}</p>
-                    <p className={`text-xs ${(idx.change ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                      {(idx.change ?? 0) >= 0 ? '+' : ''}{idx.change}%
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </FlexCard>
-
-          <FlexCard title="Quick Trade">
-            <div className="space-y-3">
+    <div className="flex items-center gap-0.5 overflow-x-auto scrollbar-thin px-1 sm:px-2">
+      {tabs.map((tab) => (
+        <div
+          key={tab.id}
+          className={`group flex items-center gap-1 px-3 py-1.5 rounded-t-lg border-b-2 cursor-pointer transition-colors shrink-0 ${
+            tab.id === activeTabId
+              ? 'bg-card border-primary text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30'
+          }`}
+          onClick={() => tab.id !== activeTabId && onSelectTab(tab.id)}
+        >
+          {editingId === tab.id ? (
+            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
               <input
-                type="text"
-                placeholder="Symbol"
-                className="w-full px-3 py-2 rounded border bg-background text-sm"
+                ref={inputRef}
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitRename()
+                  if (e.key === 'Escape') setEditingId(null)
+                }}
+                onBlur={commitRename}
+                className="text-xs bg-transparent border-b border-primary outline-none w-24 py-0"
               />
-              <div className="flex gap-2">
-                <button className="flex-1 py-2 rounded bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700">
-                  Buy
-                </button>
-                <button className="flex-1 py-2 rounded bg-red-600 text-white text-sm font-medium hover:bg-red-700">
-                  Sell
-                </button>
-              </div>
+              <button type="button" onClick={commitRename} className="text-primary hover:opacity-80">
+                <Check className="h-3 w-3" />
+              </button>
             </div>
-          </FlexCard>
+          ) : (
+            <>
+              <span className="text-xs font-medium max-w-[120px] truncate">{tab.name}</span>
+              <span className="text-[9px] text-muted-foreground">({tab.widgets.length})</span>
+              <div className="hidden group-hover:flex items-center gap-0.5 ml-1">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setEditingId(tab.id)
+                    setEditName(tab.name)
+                  }}
+                  className="text-muted-foreground hover:text-primary"
+                >
+                  <Pencil className="h-2.5 w-2.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDuplicateTab(tab.id)
+                  }}
+                  className="text-muted-foreground hover:text-primary"
+                  title="Duplicate tab"
+                >
+                  <Copy className="h-2.5 w-2.5" />
+                </button>
+                {tabs.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDeleteTab(tab.id)
+                    }}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                )}
+              </div>
+            </>
+          )}
         </div>
+      ))}
+      <button
+        type="button"
+        onClick={onAddTab}
+        className="flex items-center gap-1 px-2 py-1.5 text-muted-foreground hover:text-primary transition-colors shrink-0"
+        title="Add new tab"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        <span className="text-[10px]">New Tab</span>
+      </button>
+    </div>
+  )
+}
+
+export default function MarketPage() {
+  const [tabs, setTabs] = useState<TabData[]>(loadTabs)
+  const [activeTabId, setActiveTabId] = useState(() => tabs[0]?.id ?? 'default')
+  const [settingsWidgetId, setSettingsWidgetId] = useState<string | null>(null)
+  const { width, containerRef, mounted } = useContainerWidth()
+
+  const activeTab = useMemo(() => tabs.find((t) => t.id === activeTabId) ?? tabs[0], [tabs, activeTabId])
+
+  const updateTab = useCallback((tabId: string, updater: (tab: TabData) => TabData) => {
+    setTabs((prev) => {
+      const next = prev.map((t) => (t.id === tabId ? updater(t) : t))
+      saveTabs(next)
+      return next
+    })
+  }, [])
+
+  const handleLayoutChange = useCallback(
+    (newLayout: readonly LayoutItem[]) => {
+      updateTab(activeTabId, (tab) => ({ ...tab, layouts: [...newLayout] }))
+    },
+    [activeTabId, updateTab],
+  )
+
+  const handleAddWidget = useCallback(
+    (widgetId: string) => {
+      updateTab(activeTabId, (tab) => {
+        if (tab.widgets.includes(widgetId)) return tab
+        const def = getWidgetDef(widgetId)
+        if (!def) return tab
+        const maxY = tab.layouts.reduce((max, l) => Math.max(max, l.y + l.h), 0)
+        const newLayout: LayoutItem = {
+          i: widgetId,
+          x: 0,
+          y: maxY,
+          w: def.defaultW,
+          h: def.defaultH,
+          minW: def.minW,
+          minH: def.minH,
+        }
+        const newConfigs = { ...tab.widgetConfigs }
+        if (isConfigurable(widgetId) && !newConfigs[widgetId]) {
+          newConfigs[widgetId] = { symbol: CONFIGURABLE_DEFAULTS[widgetId] ?? 'SPY' }
+        }
+        return {
+          ...tab,
+          widgets: [...tab.widgets, widgetId],
+          layouts: [...tab.layouts, newLayout],
+          widgetConfigs: newConfigs,
+        }
+      })
+    },
+    [activeTabId, updateTab],
+  )
+
+  const handleRemoveWidget = useCallback(
+    (widgetId: string) => {
+      updateTab(activeTabId, (tab) => ({
+        ...tab,
+        widgets: tab.widgets.filter((w) => w !== widgetId),
+        layouts: tab.layouts.filter((l) => l.i !== widgetId),
+      }))
+    },
+    [activeTabId, updateTab],
+  )
+
+  const handleWidgetConfigChange = useCallback(
+    (widgetId: string, key: string, value: string) => {
+      updateTab(activeTabId, (tab) => ({
+        ...tab,
+        widgetConfigs: {
+          ...tab.widgetConfigs,
+          [widgetId]: { ...(tab.widgetConfigs[widgetId] ?? {}), [key]: value },
+        },
+      }))
+      setSettingsWidgetId(null)
+    },
+    [activeTabId, updateTab],
+  )
+
+  const handleAddTab = useCallback(() => {
+    const id = generateId()
+    const newTab: TabData = {
+      id,
+      name: `Tab ${tabs.length + 1}`,
+      widgets: [],
+      layouts: [],
+      widgetConfigs: {},
+    }
+    const next = [...tabs, newTab]
+    setTabs(next)
+    saveTabs(next)
+    setActiveTabId(id)
+  }, [tabs])
+
+  const handleRenameTab = useCallback(
+    (id: string, name: string) => {
+      updateTab(id, (tab) => ({ ...tab, name }))
+    },
+    [updateTab],
+  )
+
+  const handleDeleteTab = useCallback(
+    (id: string) => {
+      setTabs((prev) => {
+        const next = prev.filter((t) => t.id !== id)
+        if (next.length === 0) next.push(DEFAULT_TAB)
+        saveTabs(next)
+        if (activeTabId === id) setActiveTabId(next[0].id)
+        return next
+      })
+    },
+    [activeTabId],
+  )
+
+  const handleDuplicateTab = useCallback((id: string) => {
+    const source = tabs.find((t) => t.id === id)
+    if (!source) return
+    const newId = generateId()
+    const duplicate: TabData = { ...source, id: newId, name: `${source.name} (copy)` }
+    const next = [...tabs, duplicate]
+    setTabs(next)
+    saveTabs(next)
+    setActiveTabId(newId)
+  }, [tabs])
+
+  const filteredLayouts = useMemo(
+    () => activeTab.layouts.filter((l) => activeTab.widgets.includes(l.i)),
+    [activeTab],
+  )
+
+  const getWidgetConfig = useCallback(
+    (widgetId: string): Record<string, string> => activeTab.widgetConfigs[widgetId] ?? {},
+    [activeTab],
+  )
+
+  const renderWidget = useCallback(
+    (widgetId: string) => {
+      const config = getWidgetConfig(widgetId)
+      const symbol = config.symbol ?? CONFIGURABLE_DEFAULTS[widgetId] ?? 'SPY'
+
+      const ConfigurableComponent = CONFIGURABLE_WIDGETS[widgetId]
+      if (ConfigurableComponent) {
+        return <ConfigurableComponent symbol={symbol} />
+      }
+
+      const StaticComponent = STATIC_WIDGETS[widgetId]
+      if (StaticComponent) {
+        return <StaticComponent />
+      }
+
+      return (
+        <div className="flex items-center justify-center h-full text-[10px] text-muted-foreground">
+          Widget not found
+        </div>
+      )
+    },
+    [getWidgetConfig],
+  )
+
+  return (
+    <div className="space-y-4 sm:space-y-6">
+      <PageHeader
+        icon={LineChart}
+        title="Market Command Center"
+        description={`${activeTab.widgets.length} widgets on "${activeTab.name}" — drag to rearrange, add or remove widgets`}
+      >
+        <WidgetCatalog activeWidgetIds={activeTab.widgets} onAddWidget={handleAddWidget} />
+      </PageHeader>
+
+      <div className="border-b bg-card/50 rounded-t-lg sticky top-0 z-10">
+        <TabBar
+          tabs={tabs}
+          activeTabId={activeTabId}
+          onSelectTab={setActiveTabId}
+          onAddTab={handleAddTab}
+          onRenameTab={handleRenameTab}
+          onDeleteTab={handleDeleteTab}
+          onDuplicateTab={handleDuplicateTab}
+        />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <FlexCard title="Top Movers">
-          <div className="space-y-2">
-            {MOCK_MOVERS.map((m) => (
-              <div key={m.symbol} className="flex justify-between items-center">
-                <span className="font-medium">{m.symbol}</span>
-                <span className={m.direction === 'up' ? 'text-emerald-600' : 'text-red-600'}>
-                  {m.direction === 'up' ? '+' : ''}{m.change}%
-                </span>
-              </div>
-            ))}
+      <div
+        className="flex-1 min-h-[480px] overflow-auto p-1 sm:p-2 rounded-b-lg border border-t-0 border-border bg-background"
+        ref={containerRef as React.RefObject<HTMLDivElement>}
+      >
+        {activeTab.widgets.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+            <p className="text-sm mb-2">No widgets on this tab yet</p>
+            <p className="text-xs mb-4">Click &quot;Add Widget&quot; to build your &quot;{activeTab.name}&quot; dashboard</p>
           </div>
-        </FlexCard>
+        ) : mounted ? (
+          (() => {
+            const Grid = ResponsiveGridLayout as React.ComponentType<any>
+            return (
+              <Grid
+                className="layout"
+                width={width}
+                layouts={{ lg: filteredLayouts }}
+                breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+                cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
+                rowHeight={40}
+                dragConfig={{ enabled: true, handle: '.drag-handle' }}
+                resizeConfig={{ enabled: true }}
+                onLayoutChange={handleLayoutChange}
+                margin={[8, 8]}
+              >
+            {activeTab.widgets.map((widgetId) => {
+              const def = getWidgetDef(widgetId)
+              if (!def) return null
+              const configurable = isConfigurable(widgetId)
+              const config = getWidgetConfig(widgetId)
 
-        <FlexCard title="Options Flow">
-          <div className="space-y-2">
-            {MOCK_OPTIONS_FLOW.map((o, i) => (
-              <div key={i} className="flex justify-between items-center text-sm">
-                <span>
-                  {o.symbol} ${o.strike} {o.type}
-                </span>
-                <span className="text-muted-foreground">${(o.premium / 1000).toFixed(0)}k</span>
-              </div>
-            ))}
-          </div>
-        </FlexCard>
-
-        <FlexCard title="News Feed">
-          <div className="space-y-2">
-            {MOCK_NEWS.map((n, i) => (
-              <div key={i} className="flex gap-2">
-                <Newspaper className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm">{n.title}</p>
-                  <p className="text-xs text-muted-foreground">{n.time}</p>
+              return (
+                <div key={widgetId}>
+                  <WidgetWrapper
+                    title={
+                      configurable && config.symbol ? `${def.label} (${config.symbol})` : def.label
+                    }
+                    icon={def.icon}
+                    onRemove={() => handleRemoveWidget(widgetId)}
+                    hasSettings={configurable}
+                    onSettings={() => setSettingsWidgetId(widgetId)}
+                  >
+                    {renderWidget(widgetId)}
+                  </WidgetWrapper>
                 </div>
-              </div>
-            ))}
-          </div>
-        </FlexCard>
+              )
+            })}
+              </Grid>
+            )
+          })()
+        ) : null}
       </div>
 
-      <FlexCard title="Watchlist">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          {MOCK_WATCHLIST.map((w) => (
-            <div key={w.symbol} className="p-3 rounded-lg border bg-muted/20">
-              <p className="font-medium">{w.symbol}</p>
-              <p className="font-mono text-sm">{w.price}</p>
-              <p className={`text-xs ${w.change >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                {w.change >= 0 ? '+' : ''}{w.change}%
-              </p>
-            </div>
-          ))}
-        </div>
-      </FlexCard>
+      {settingsWidgetId && (
+        <WidgetSettingsDialog
+          widgetId={settingsWidgetId}
+          widgetLabel={getWidgetDef(settingsWidgetId)?.label ?? ''}
+          currentSymbol={
+            getWidgetConfig(settingsWidgetId).symbol ??
+            CONFIGURABLE_DEFAULTS[settingsWidgetId] ??
+            'SPY'
+          }
+          onSave={(symbol) => handleWidgetConfigChange(settingsWidgetId, 'symbol', symbol)}
+          onClose={() => setSettingsWidgetId(null)}
+        />
+      )}
     </div>
   )
 }

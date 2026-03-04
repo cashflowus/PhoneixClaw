@@ -43,6 +43,10 @@ from apps.api.src.routes import zero_dte as zero_dte_routes
 from apps.api.src.routes import narrative_sentiment as narrative_sentiment_routes
 from apps.api.src.routes import risk_compliance as risk_compliance_routes
 from apps.api.src.routes import agent_messages as agent_messages_routes
+from apps.api.src.routes import chat as chat_routes
+from apps.api.src.routes import notifications as notifications_routes
+from apps.api.src.routes import error_logs as error_logs_routes
+from apps.api.src.routes import ai_expand as ai_expand_routes
 
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
 
@@ -101,6 +105,10 @@ app.include_router(zero_dte_routes.router)
 app.include_router(narrative_sentiment_routes.router)
 app.include_router(risk_compliance_routes.router)
 app.include_router(agent_messages_routes.router)
+app.include_router(chat_routes.router)
+app.include_router(notifications_routes.router)
+app.include_router(error_logs_routes.router)
+app.include_router(ai_expand_routes.router)
 
 
 @app.get("/health")

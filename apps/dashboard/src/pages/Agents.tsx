@@ -5,7 +5,9 @@
  */
 import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { FlexCard } from '@/components/ui/FlexCard'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -16,6 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { AiAssistPopover } from '@/components/AiAssistPopover'
 import { Bot, Plus, Pause, Play, Trash2, CheckCircle2, Rocket, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface AgentData {
@@ -120,8 +123,8 @@ function AgentCard({ agent, onSelect, onPause, onResume, onDelete, onApprove, on
     >
       <div className="space-y-3" onClick={onSelect}>
         <div className="flex items-center gap-2">
-          <Bot className="h-5 w-5 text-primary" />
-          <span className="font-semibold">{agent.name}</span>
+          <Bot className="h-5 w-5 text-primary shrink-0" />
+          <span className="font-semibold truncate">{agent.name}</span>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Badge variant="outline">{agent.type}</Badge>
@@ -142,12 +145,12 @@ function AgentCard({ agent, onSelect, onPause, onResume, onDelete, onApprove, on
 
 function StepIndicator({ currentStep }: { currentStep: number }) {
   return (
-    <div className="flex items-center justify-between mb-6">
+    <div className="flex items-center justify-between mb-6 overflow-x-auto">
       {WIZARD_STEPS.map((label, idx) => (
         <div key={label} className="flex items-center">
           <div className="flex flex-col items-center">
             <div
-              className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors ${
+              className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors shrink-0 ${
                 idx < currentStep
                   ? 'bg-primary border-primary text-primary-foreground'
                   : idx === currentStep
@@ -157,12 +160,12 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
             >
               {idx < currentStep ? '✓' : idx + 1}
             </div>
-            <span className={`text-xs mt-1 ${idx === currentStep ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
+            <span className={`text-xs mt-1 hidden sm:block whitespace-nowrap ${idx === currentStep ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
               {label}
             </span>
           </div>
           {idx < WIZARD_STEPS.length - 1 && (
-            <div className={`h-0.5 w-8 mx-1 mt-[-14px] ${idx < currentStep ? 'bg-primary' : 'bg-muted-foreground/30'}`} />
+            <div className={`h-0.5 w-4 sm:w-8 mx-1 mt-[-14px] sm:mt-[-14px] ${idx < currentStep ? 'bg-primary' : 'bg-muted-foreground/30'}`} />
           )}
         </div>
       ))}
@@ -192,14 +195,14 @@ function StepBasicInfo({ form, onChange }: { form: WizardFormData; onChange: (f:
           </SelectContent>
         </Select>
       </div>
-      <div>
-        <Label>Description</Label>
-        <Input
-          value={form.description}
-          onChange={(e) => onChange({ description: e.target.value })}
-          placeholder="What does this agent do?"
-        />
-      </div>
+      <AiAssistPopover
+        label="Description"
+        value={form.description}
+        onChange={(v) => onChange({ description: v })}
+        placeholder="What does this agent do?"
+        multiline
+        context={`agent type: ${form.type}`}
+      />
     </div>
   )
 }
@@ -241,7 +244,7 @@ function StepSkills({ form, onChange }: { form: WizardFormData; onChange: (f: Pa
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">Select the capabilities this agent should have.</p>
-      <div className="grid grid-cols-1 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {AGENT_SKILLS.map((skill) => {
           const checked = form.skills.includes(skill.id)
           return (
@@ -391,7 +394,7 @@ function StepReview({ form, instances }: { form: WizardFormData; instances: Arra
         </div>
         <div className="p-3">
           <p className="text-xs text-muted-foreground">Risk Configuration</p>
-          <div className="grid grid-cols-3 gap-4 mt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-1">
             <div>
               <p className="text-xs text-muted-foreground">Max Daily Loss</p>
               <p className="font-mono font-medium">{form.max_daily_loss_pct}%</p>
@@ -413,6 +416,7 @@ function StepReview({ form, instances }: { form: WizardFormData; instances: Arra
 
 export default function AgentsPage() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [selected, setSelected] = useState<AgentData | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [wizardStep, setWizardStep] = useState(0)
@@ -509,11 +513,10 @@ export default function AgentsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Agents</h2>
-          <p className="text-muted-foreground">Manage OpenClaw trading and monitoring agents</p>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <PageHeader icon={Bot} title="Agents" description="Manage OpenClaw trading and monitoring agents" />
         </div>
         <Dialog
           open={createOpen}
@@ -525,7 +528,7 @@ export default function AgentsPage() {
           <DialogTrigger asChild>
             <Button><Plus className="h-4 w-4 mr-2" /> New Agent</Button>
           </DialogTrigger>
-          <DialogContent className="max-w-xl">
+          <DialogContent className="max-w-xl w-[calc(100vw-2rem)] sm:w-full">
             <DialogHeader>
               <DialogTitle>Create Agent</DialogTitle>
             </DialogHeader>
@@ -570,7 +573,7 @@ export default function AgentsPage() {
       </div>
 
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <MetricCard title="Total Agents" value={stats.total} />
           <MetricCard title="Running" value={stats.running} trend="up" />
           <MetricCard title="Paused" value={stats.paused} trend="neutral" />
@@ -579,7 +582,7 @@ export default function AgentsPage() {
       )}
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-40 rounded-lg border animate-pulse bg-muted" />
           ))}
@@ -591,12 +594,12 @@ export default function AgentsPage() {
           <p className="text-sm">Create your first agent to get started</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
           {agents.map((agent) => (
             <AgentCard
               key={agent.id}
               agent={agent}
-              onSelect={() => setSelected(agent)}
+              onSelect={() => navigate(`/agents/${agent.id}`)}
               onPause={() => pauseMutation.mutate(agent.id)}
               onResume={() => resumeMutation.mutate(agent.id)}
               onApprove={() => approveMutation.mutate(agent.id)}

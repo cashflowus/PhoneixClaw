@@ -1,0 +1,313 @@
+###############################################################################
+# Phoenix Claw v2 — Coolify Production Compose
+#
+# Deploy via Coolify's Docker Compose build pack.
+# All ${VAR} references are auto-detected and exposed in Coolify's UI.
+# Set them in Coolify's Environment Variables panel before deploying.
+#
+# Coolify will assign a domain to the nginx service (port 80).
+###############################################################################
+
+services:
+  # ─── Infrastructure ─────────────────────────────────────────────────────
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-phoenixtrader}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-localdev}
+      POSTGRES_DB: ${POSTGRES_DB:-phoenixtrader}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-phoenixtrader}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
+    volumes:
+      - miniodata:/data
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    restart: unless-stopped
+
+  # ─── Ollama (AI/LLM) ───────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  phoenix-ollama-init:
+    image: curlimages/curl:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "curl -sf http://ollama:11434/api/pull -d '{\"name\":\"llama3.2:1b\",\"stream\":false}' || true"
+    restart: "no"
+
+  # ─── Core Application ──────────────────────────────────────────────────
+  phoenix-api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_EXPAND_MODEL=${OLLAMA_EXPAND_MODEL:-llama3.2:1b}
+      - LLM_GATEWAY_URL=http://phoenix-llm-gateway:8050
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8011/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  phoenix-dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    depends_on:
+      - phoenix-api
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    restart: unless-stopped
+
+  # ─── Nginx (Public Entrypoint — Coolify assigns domain here) ───────────
+  nginx:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - phoenix-api
+      - phoenix-dashboard
+      - phoenix-ws-gateway
+    restart: unless-stopped
+
+  # ─── Bridge & Gateway ──────────────────────────────────────────────────
+  phoenix-bridge:
+    build:
+      context: .
+      dockerfile: openclaw/bridge/Dockerfile
+    environment:
+      - BRIDGE_TOKEN=${BRIDGE_TOKEN}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-http://minio:9000}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    restart: unless-stopped
+
+  phoenix-ws-gateway:
+    build:
+      context: .
+      dockerfile: services/ws-gateway/Dockerfile
+    environment:
+      - REDIS_URL=${REDIS_URL}
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    restart: unless-stopped
+
+  phoenix-llm-gateway:
+    build:
+      context: .
+      dockerfile: services/llm-gateway/Dockerfile
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_DEFAULT_MODEL=${OLLAMA_EXPAND_MODEL:-llama3.2:1b}
+    depends_on:
+      ollama:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    restart: unless-stopped
+
+  # ─── Background Services ───────────────────────────────────────────────
+  phoenix-execution:
+    build:
+      context: .
+      dockerfile: services/execution/Dockerfile
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - DATABASE_URL=${DATABASE_URL}
+      - ALPACA_API_KEY=${ALPACA_API_KEY:-}
+      - ALPACA_SECRET_KEY=${ALPACA_SECRET_KEY:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    restart: unless-stopped
+
+  phoenix-automation:
+    build:
+      context: .
+      dockerfile: services/automation/Dockerfile
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - DATABASE_URL=${DATABASE_URL}
+      - API_URL=http://phoenix-api:8011
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    restart: unless-stopped
+
+  phoenix-connector-manager:
+    build:
+      context: .
+      dockerfile: services/connector-manager/Dockerfile
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - DATABASE_URL=${DATABASE_URL}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    restart: unless-stopped
+
+  phoenix-backtest-runner:
+    build:
+      context: .
+      dockerfile: services/backtest-runner/Dockerfile
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-http://minio:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    restart: unless-stopped
+
+  phoenix-skill-sync:
+    build:
+      context: .
+      dockerfile: services/skill-sync/Dockerfile
+    environment:
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-http://minio:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - BRIDGE_URL=http://phoenix-bridge:18800
+      - BRIDGE_TOKEN=${BRIDGE_TOKEN}
+    depends_on:
+      minio:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    restart: unless-stopped
+
+  phoenix-agent-comm:
+    build:
+      context: .
+      dockerfile: services/agent-comm/Dockerfile
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - DATABASE_URL=${DATABASE_URL}
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    restart: unless-stopped
+
+  phoenix-global-monitor:
+    build:
+      context: .
+      dockerfile: services/global-monitor/Dockerfile
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - DATABASE_URL=${DATABASE_URL}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  miniodata:
+  ollama_data:

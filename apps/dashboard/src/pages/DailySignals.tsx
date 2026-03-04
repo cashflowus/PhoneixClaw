@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { FlexCard } from '@/components/ui/FlexCard'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -36,6 +37,7 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { getMetricTooltip } from '@/lib/metricTooltips'
 
 interface Signal {
   id: string
@@ -263,38 +265,36 @@ export default function DailySignalsPage() {
   const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Daily Signals</h2>
-        <p className="text-muted-foreground">3-agent pipeline: Research → Technical → Risk</p>
-      </div>
+    <div className="space-y-4 sm:space-y-6">
+      <PageHeader icon={Zap} title="Daily Signals" description="3-agent pipeline: Research → Technical → Risk" />
 
       {/* Daily Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <MetricCard title="Total Signals Today" value={summary.total_signals_today} />
-        <MetricCard title="Win Rate (7d)" value={`${summary.win_rate_7d}%`} trend="up" />
-        <MetricCard title="Avg R:R" value={summary.avg_rr.toFixed(1)} />
-        <MetricCard title="Active Signals" value={summary.active_signals} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+        <MetricCard title="Total Signals Today" value={summary.total_signals_today} tooltip={getMetricTooltip('Total Signals Today')} />
+        <MetricCard title="Win Rate (7d)" value={`${summary.win_rate_7d}%`} trend="up" tooltip={getMetricTooltip('Win Rate')} />
+        <MetricCard title="Avg R:R" value={summary.avg_rr.toFixed(1)} tooltip={getMetricTooltip('Avg R:R')} />
+        <MetricCard title="Active Signals" value={summary.active_signals} tooltip={getMetricTooltip('Active Signals')} />
         <MetricCard
           title="Pipeline Health"
           value={summary.pipeline_health}
           trend={summary.pipeline_health === 'healthy' ? 'up' : 'down'}
+          tooltip={getMetricTooltip('Pipeline Health')}
         />
       </div>
 
       {/* Pipeline Visualization + Instance Connection */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
         <div className="lg:col-span-2">
           <FlexCard title="Pipeline">
             <div className="flex flex-wrap items-center gap-4">
               {pipeline.agents.map((agent, i) => (
                 <div key={agent.id} className="flex items-center gap-2">
-                  <div className="flex flex-col items-center p-3 rounded-lg border bg-card min-w-[140px]">
+                    <div className="flex flex-col items-center p-3 rounded-lg border bg-card min-w-[120px] sm:min-w-[140px]">
                     <div className="flex items-center gap-2 mb-1">
                       {agent.name === 'Research Analyst' && <Search className="h-4 w-4 text-muted-foreground" />}
                       {agent.name === 'Technical Analyst' && <BarChart3 className="h-4 w-4 text-muted-foreground" />}
                       {agent.name === 'Risk Analyzer' && <Shield className="h-4 w-4 text-muted-foreground" />}
-                      <span className="text-sm font-medium">{agent.name}</span>
+                      <span className="text-xs sm:text-sm font-medium truncate">{agent.name}</span>
                     </div>
                     <StatusBadge status={agent.status} className="text-xs" />
                     <p className="text-xs text-muted-foreground mt-1">
@@ -310,10 +310,10 @@ export default function DailySignalsPage() {
             </div>
           </FlexCard>
         </div>
-        <FlexCard title="Instance Connection">
-          <div className="space-y-3">
+        <FlexCard title="Instance Connection" className="overflow-visible">
+          <div className="space-y-4">
             <Select value={selectedInstance} onValueChange={setSelectedInstance}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full [&>span]:min-w-0 [&>span]:truncate">
                 <SelectValue placeholder="Connect Instance" />
               </SelectTrigger>
               <SelectContent>
@@ -348,7 +348,7 @@ export default function DailySignalsPage() {
 
       {/* Signals Feed */}
       <FlexCard title="Signals Feed" action={<span className="text-xs text-muted-foreground">{signals.length} signals</span>}>
-        <div className="rounded-md border">
+        <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -398,7 +398,7 @@ export default function DailySignalsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>{(sig.confidence * 100).toFixed(0)}%</TableCell>
-                    <TableCell className="text-muted-foreground">{sig.source_agent}</TableCell>
+                    <TableCell className="text-muted-foreground truncate">{sig.source_agent}</TableCell>
                     <TableCell>${sig.entry_price.toFixed(2)}</TableCell>
                     <TableCell>${sig.stop_loss.toFixed(2)}</TableCell>
                     <TableCell>${sig.take_profit.toFixed(2)}</TableCell>

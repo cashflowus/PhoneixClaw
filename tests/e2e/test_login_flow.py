@@ -9,7 +9,7 @@ from playwright.sync_api import Page, expect
 def test_login_page_renders(page: Page, base_url: str):
     """Login page shows email/password form."""
     page.goto(f"{base_url}/login")
-    expect(page.get_by_role("heading", name="Phoenix v2")).to_be_visible()
+    expect(page.get_by_role("heading", name="Phoenix Claw")).to_be_visible()
     expect(page.get_by_label("Email")).to_be_visible()
     expect(page.get_by_label("Password")).to_be_visible()
     expect(page.get_by_role("button", name="Sign in")).to_be_visible()

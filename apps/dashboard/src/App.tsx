@@ -1,13 +1,18 @@
 /**
  * Phoenix v2 Dashboard — root. M1.4+: shell, routes, auth, real pages.
+ * Error boundary and global error reporting wired for error logging framework.
  */
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from '@/context/AuthContext'
 import { ThemeProvider } from '@/context/ThemeContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import AppShell from '@/components/layout/AppShell'
+import { reportError } from '@/lib/errorLogger'
 import Login from '@/pages/Login'
+import Register from '@/pages/Register'
 import TradesPage from '@/pages/Trades'
 import PositionsPage from '@/pages/Positions'
 import AgentsPage from '@/pages/Agents'
@@ -28,7 +33,10 @@ import MacroPulsePage from '@/pages/MacroPulse'
 import ZeroDteSPXPage from '@/pages/ZeroDteSPX'
 import NarrativeSentimentPage from '@/pages/NarrativeSentiment'
 import RiskCompliancePage from '@/pages/RiskCompliance'
+import DevSprintBoardPage from '@/pages/DevSprintBoard'
+import AgentDashboardPage from '@/pages/AgentDashboard'
 import { Toaster } from 'sonner'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -37,13 +45,43 @@ const queryClient = new QueryClient({
       staleTime: 5000,
       retry: 1,
     },
+    mutations: {
+      onError: (err) => {
+        reportError(err instanceof Error ? err : new Error(String(err)), { source: 'query_error' })
+      },
+    },
   },
 })
+
+function GlobalErrorHandlers() {
+  useEffect(() => {
+    const onError = (event: ErrorEvent) => {
+      reportError(event.error ?? new Error(event.message), {
+        source: 'global_handler',
+        url: event.filename,
+      })
+    }
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      reportError(
+        event.reason instanceof Error ? event.reason : new Error(String(event.reason)),
+        { source: 'unhandled_rejection' },
+      )
+    }
+    window.addEventListener('error', onError)
+    window.addEventListener('unhandledrejection', onUnhandledRejection)
+    return () => {
+      window.removeEventListener('error', onError)
+      window.removeEventListener('unhandledrejection', onUnhandledRejection)
+    }
+  }, [])
+  return null
+}
 
 function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
       <Route
         path="/"
         element={
@@ -57,6 +95,7 @@ function AppRoutes() {
         <Route path="positions" element={<PositionsPage />} />
         <Route path="performance" element={<PerformancePage />} />
         <Route path="agents" element={<AgentsPage />} />
+        <Route path="agents/:id" element={<AgentDashboardPage />} />
         <Route path="strategies" element={<StrategiesPage />} />
         <Route path="connectors" element={<ConnectorsPage />} />
         <Route path="skills" element={<SkillsPage />} />
@@ -73,6 +112,7 @@ function AppRoutes() {
         <Route path="settings" element={<SettingsPage />} />
         <Route path="agent-learning" element={<AgentLearningPage />} />
         <Route path="dev" element={<DevDashboard />} />
+        <Route path="dev-sprint" element={<DevSprintBoardPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -84,10 +124,15 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <QueryClientProvider client={queryClient}>
-          <BrowserRouter>
-            <AppRoutes />
-            <Toaster position="top-right" richColors />
-          </BrowserRouter>
+          <TooltipProvider delayDuration={300}>
+            <ErrorBoundary>
+              <GlobalErrorHandlers />
+              <BrowserRouter>
+                <AppRoutes />
+              </BrowserRouter>
+              <Toaster position="top-right" richColors />
+            </ErrorBoundary>
+          </TooltipProvider>
         </QueryClientProvider>
       </AuthProvider>
     </ThemeProvider>

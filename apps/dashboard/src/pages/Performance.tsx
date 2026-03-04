@@ -4,11 +4,15 @@
  */
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { BarChart3 } from 'lucide-react'
+import { getMetricTooltip } from '@/lib/metricTooltips'
 
 const TIME_RANGES = ['1D', '1W', '1M', '3M', 'YTD', 'ALL'] as const
 
@@ -67,6 +71,7 @@ const MOCK_RISK: PerfRow[] = [
 
 export default function PerformancePage() {
   const [timeRange, setTimeRange] = useState<string>('1M')
+  const navigate = useNavigate()
 
   const { data: summary } = useQuery({
     queryKey: ['performance-summary', timeRange],
@@ -93,11 +98,10 @@ export default function PerformancePage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Performance</h2>
-          <p className="text-muted-foreground">Portfolio and agent performance metrics</p>
+          <PageHeader icon={BarChart3} title="Performance" description="Portfolio and agent performance metrics" />
         </div>
         <Select value={timeRange} onValueChange={setTimeRange}>
           <SelectTrigger className="w-28">
@@ -111,23 +115,33 @@ export default function PerformancePage() {
         </Select>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <MetricCard
           title="Total P&L"
           value={`$${metrics.total_pnl?.toFixed(2) ?? '0.00'}`}
           trend={metrics.total_pnl >= 0 ? 'up' : 'down'}
+          tooltip={getMetricTooltip('Total P&L')}
         />
-        <MetricCard title="Win Rate" value={`${((metrics.win_rate ?? 0) * 100).toFixed(1)}%`} />
-        <MetricCard title="Sharpe Ratio" value={(metrics.sharpe_ratio ?? 0).toFixed(2)} />
+        <MetricCard
+          title="Win Rate"
+          value={`${((metrics.win_rate ?? 0) * 100).toFixed(1)}%`}
+          tooltip={getMetricTooltip('Win Rate')}
+        />
+        <MetricCard
+          title="Sharpe Ratio"
+          value={(metrics.sharpe_ratio ?? 0).toFixed(2)}
+          tooltip={getMetricTooltip('Sharpe Ratio')}
+        />
         <MetricCard
           title="Max Drawdown"
           value={`${((metrics.max_drawdown ?? 0) * 100).toFixed(1)}%`}
           trend="down"
+          tooltip={getMetricTooltip('Max Drawdown')}
         />
       </div>
 
       <Tabs defaultValue="portfolio">
-        <TabsList className="flex-wrap">
+        <TabsList className="flex overflow-x-auto sm:grid sm:grid-cols-6">
           <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
           <TabsTrigger value="account">By Account</TabsTrigger>
           <TabsTrigger value="agent">By Agent</TabsTrigger>
@@ -136,22 +150,39 @@ export default function PerformancePage() {
           <TabsTrigger value="risk">Risk</TabsTrigger>
         </TabsList>
         <TabsContent value="portfolio" className="mt-4">
+          <div className="overflow-x-auto">
           <DataTable columns={perfColumns} data={MOCK_PORTFOLIO as (PerfRow & Record<string, unknown>)[]} emptyMessage="No data" />
+          </div>
         </TabsContent>
         <TabsContent value="account" className="mt-4">
+          <div className="overflow-x-auto">
           <DataTable columns={perfColumns} data={MOCK_BY_ACCOUNT as (PerfRow & Record<string, unknown>)[]} emptyMessage="No data" />
+          </div>
         </TabsContent>
         <TabsContent value="agent" className="mt-4">
-          <DataTable columns={perfColumns} data={MOCK_BY_AGENT as (PerfRow & Record<string, unknown>)[]} emptyMessage="No data" />
+          <div className="overflow-x-auto">
+          <DataTable
+            columns={perfColumns}
+            data={MOCK_BY_AGENT as (PerfRow & Record<string, unknown>)[]}
+            emptyMessage="No data"
+            onRowClick={(row) => navigate(`/agents/${(row as PerfRow).id}`)}
+          />
+          </div>
         </TabsContent>
         <TabsContent value="source" className="mt-4">
+          <div className="overflow-x-auto">
           <DataTable columns={perfColumns} data={MOCK_BY_SOURCE as (PerfRow & Record<string, unknown>)[]} emptyMessage="No data" />
+          </div>
         </TabsContent>
         <TabsContent value="instrument" className="mt-4">
+          <div className="overflow-x-auto">
           <DataTable columns={perfColumns} data={MOCK_BY_INSTRUMENT as (PerfRow & Record<string, unknown>)[]} emptyMessage="No data" />
+          </div>
         </TabsContent>
         <TabsContent value="risk" className="mt-4">
+          <div className="overflow-x-auto">
           <DataTable columns={perfColumns} data={MOCK_RISK as (PerfRow & Record<string, unknown>)[]} emptyMessage="No data" />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

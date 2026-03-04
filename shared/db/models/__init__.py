@@ -11,6 +11,7 @@ from shared.db.models.connector import Connector, ConnectorAgent
 from shared.db.models.dev_incident import DevIncident
 from shared.db.models.openclaw_instance import OpenClawInstance
 from shared.db.models.skill import AgentSkill, Skill
+from shared.db.models.strategy import Strategy
 from shared.db.models.task import Automation, Task
 from shared.db.models.trade import Position, TradeIntent
 from shared.db.models.trading_account import TradingAccount
@@ -30,6 +31,7 @@ __all__ = [
     "TradingAccount",
     "Skill",
     "AgentSkill",
+    "Strategy",
     "Task",
     "Automation",
     "DevIncident",

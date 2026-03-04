@@ -208,19 +208,55 @@ async def resume_agent(agent_id: str, session: DbSession):
     return {"id": agent_id, "status": "RUNNING"}
 
 
+class AgentApprovePayload(BaseModel):
+    trading_mode: str = "paper"  # "paper" or "live"
+    account_id: str | None = None
+    stop_loss_pct: float = 2.0
+    target_profit_pct: float = 5.0
+    max_daily_loss_pct: float = 5.0
+    max_position_pct: float = 10.0
+
+
 @router.post("/{agent_id}/approve")
-async def approve_agent(agent_id: str, session: DbSession):
-    """Approve an agent after backtest review. Transitions CREATED -> APPROVED."""
+async def approve_agent(agent_id: str, session: DbSession, payload: AgentApprovePayload | None = None):
+    """
+    Approve an agent after backtest review. Transitions CREATED/BACKTESTING -> APPROVED.
+
+    Accepts optional body:
+      - trading_mode: "paper" | "live"
+      - account_id: broker account UUID (required if live)
+      - stop_loss_pct: per-trade stop loss %
+      - target_profit_pct: per-trade target profit %
+      - max_daily_loss_pct: daily loss limit %
+      - max_position_pct: max position as % of account
+    """
     result = await session.execute(select(Agent).where(Agent.id == uuid.UUID(agent_id)))
     agent = result.scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
-    if agent.status not in ("CREATED", "BACKTESTING"):
+    if agent.status not in ("CREATED", "BACKTESTING", "BACKTEST_COMPLETE"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Cannot approve agent in {agent.status} state")
+
+    if payload:
+        approval_config = {
+            "trading_mode": payload.trading_mode,
+            "stop_loss_pct": payload.stop_loss_pct,
+            "target_profit_pct": payload.target_profit_pct,
+            "max_daily_loss_pct": payload.max_daily_loss_pct,
+            "max_position_pct": payload.max_position_pct,
+        }
+        if payload.account_id:
+            approval_config["account_id"] = payload.account_id
+        agent.config = {**(agent.config or {}), "approval": approval_config}
+
     agent.status = "APPROVED"
     agent.updated_at = datetime.now(timezone.utc)
     await session.commit()
-    return {"id": agent_id, "status": "APPROVED"}
+
+    # TODO: Forward approval config to Bridge Service to update agent workspace
+    # with trading parameters (paper/live mode, risk limits)
+
+    return {"id": agent_id, "status": "APPROVED", "config": agent.config}
 
 
 @router.post("/{agent_id}/promote")

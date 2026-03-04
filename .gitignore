@@ -63,12 +63,14 @@ htmlcov/
 .ruff_cache/
 
 # Node / Dashboard
-services/dashboard-ui/node_modules/
-services/dashboard-ui/dist/
-services/dashboard-ui/.vite/
-apps/dashboard/node_modules/
+node_modules/
 apps/dashboard/dist/
 apps/dashboard/.vite/
+archive/**/node_modules/
+
+# Playwright
+playwright-report/
+test-results/
 
 # Docker
 *.tar
@@ -77,3 +79,4 @@ docker-compose.override.yml
 # Data
 data/*
 !data/parser_test_cases.json
+*.tsbuildinfo

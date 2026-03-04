@@ -5,9 +5,9 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { FlexCard } from '@/components/ui/FlexCard'
 import { MetricCard } from '@/components/ui/MetricCard'
-import { StatusBadge } from '@/components/ui/StatusBadge'
 import { SidePanel } from '@/components/ui/SidePanel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -210,12 +210,8 @@ export default function AgentLearningPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Agent Learning</h2>
-          <p className="text-muted-foreground">Train agents from YouTube, Discord, or trade logs</p>
-        </div>
+    <div className="space-y-4 sm:space-y-6">
+      <PageHeader icon={Brain} title="Agent Learning" description="Train agents from YouTube, Discord, or trade logs">
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <Button><Brain className="h-4 w-4 mr-2" /> Create Learning Session</Button>
@@ -270,9 +266,9 @@ export default function AgentLearningPage() {
             </div>
           </DialogContent>
         </Dialog>
-      </div>
+      </PageHeader>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <MetricCard title="Total Sessions" value={stats.total} />
         <MetricCard title="Ready" value={stats.ready} trend="up" />
         <MetricCard title="Training" value={stats.training} trend="neutral" />
@@ -280,17 +276,17 @@ export default function AgentLearningPage() {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {[1, 2, 3].map((i) => <div key={i} className="h-48 rounded-lg border animate-pulse bg-muted" />)}
         </div>
       ) : sessions.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
+        <div className="text-center py-12 sm:py-16 text-muted-foreground">
           <Brain className="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p className="text-lg">No learning sessions yet</p>
           <p className="text-sm">Create your first session to start training an agent</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {sessions.map((s) => <SessionCard key={s.id} session={s} onSelect={() => setSelected(s)} />)}
         </div>
       )}

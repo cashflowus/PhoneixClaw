@@ -77,7 +77,7 @@ export const adminApi = {
     api.get<AdminUser>(`/api/v2/admin/users/${id}`).then((r) => r.data),
 
   updateUser: (id: string, data: UpdateUserData) =>
-    api.patch<AdminUser>(`/api/v2/admin/users/${id}`, data).then((r) => r.data),
+    api.put<AdminUser>(`/api/v2/admin/users/${id}`, data).then((r) => r.data),
 
   getApiKeys: () =>
     api.get<ApiKey[]>('/api/v2/admin/api-keys').then((r) => r.data),
@@ -89,5 +89,5 @@ export const adminApi = {
     api.delete(`/api/v2/admin/api-keys/${id}`).then((r) => r.data),
 
   getAuditLogs: (params?: AuditLogParams) =>
-    api.get<PaginatedResponse<AuditLog>>('/api/v2/admin/audit-logs', { params }).then((r) => r.data),
+    api.get<PaginatedResponse<AuditLog>>('/api/v2/admin/audit-log', { params }).then((r) => r.data),
 }

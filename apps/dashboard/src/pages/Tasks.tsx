@@ -4,6 +4,7 @@ import { DndContext, DragEndEvent, DragOverlay, closestCenter, PointerSensor, us
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { FlexCard } from '@/components/ui/FlexCard'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/button'
@@ -12,7 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
-import { Plus, User, GripVertical } from 'lucide-react'
+import { Plus, User, GripVertical, ListTodo, Bot } from 'lucide-react'
 
 const COLUMNS = ['BACKLOG', 'IN_PROGRESS', 'UNDER_REVIEW', 'COMPLETED'] as const
 type ColumnStatus = (typeof COLUMNS)[number]
@@ -110,7 +111,7 @@ function SortableTaskCard({ task, onDelete }: { task: Task; onDelete: (id: strin
         </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <span className="font-medium text-sm leading-snug">{task.title}</span>
+            <span className="font-medium text-sm leading-snug truncate">{task.title}</span>
             <PriorityBadge priority={task.priority} />
           </div>
           {task.description && (
@@ -305,105 +306,113 @@ export default function TasksPage() {
     })
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Tasks</h2>
-          <p className="text-muted-foreground text-sm">Kanban board with agent role assignment</p>
-        </div>
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" /> Create Task
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Create Task</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label>Title</Label>
-                <Input
-                  value={newTask.title}
-                  onChange={(e) => setNewTask((prev) => ({ ...prev, title: e.target.value }))}
-                  placeholder="Task title"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Description</Label>
-                <Input
-                  value={newTask.description}
-                  onChange={(e) => setNewTask((prev) => ({ ...prev, description: e.target.value }))}
-                  placeholder="Optional description"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Assign Agent Role</Label>
-                <Select
-                  value={newTask.agent_role}
-                  onValueChange={(v) => setNewTask((prev) => ({ ...prev, agent_role: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AGENT_ROLES.map((r) => (
-                      <SelectItem key={r.value} value={r.value}>
-                        {r.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Priority</Label>
-                <Select
-                  value={newTask.priority}
-                  onValueChange={(v) => setNewTask((prev) => ({ ...prev, priority: v as Priority }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(PRIORITY_CONFIG) as Priority[]).map((p) => (
-                      <SelectItem key={p} value={p}>
-                        <span className="flex items-center gap-2">
-                          <span
-                            className={`inline-block h-2 w-2 rounded-full ${
-                              p === 'low' ? 'bg-slate-400' :
-                              p === 'medium' ? 'bg-blue-500' :
-                              p === 'high' ? 'bg-orange-500' :
-                              'bg-red-500'
-                            }`}
-                          />
-                          {PRIORITY_CONFIG[p].label}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                className="w-full"
-                onClick={handleCreate}
-                disabled={!newTask.title.trim() || createMutation.isPending}
-              >
-                {createMutation.isPending ? 'Creating…' : 'Create'}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+  const agentRoleCounts = AGENT_ROLES.map((r) => ({
+    ...r,
+    count: tasks.filter((t) => t.agent_role === r.value).length,
+  }))
 
+  return (
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col lg:flex-row items-start gap-4 sm:gap-6">
+        <div className="flex-1 min-w-0 space-y-4 sm:space-y-6">
+          <PageHeader
+            icon={ListTodo}
+            title="Tasks"
+            description="Kanban board with agent role assignment"
+          >
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" /> Create Task
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md w-[calc(100vw-2rem)] sm:w-full">
+                <DialogHeader>
+                  <DialogTitle>Create Task</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label>Title</Label>
+                    <Input
+                      value={newTask.title}
+                      onChange={(e) => setNewTask((prev) => ({ ...prev, title: e.target.value }))}
+                      placeholder="Task title"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Description</Label>
+                    <Input
+                      value={newTask.description}
+                      onChange={(e) => setNewTask((prev) => ({ ...prev, description: e.target.value }))}
+                      placeholder="Optional description"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Assign Agent Role</Label>
+                    <Select
+                      value={newTask.agent_role}
+                      onValueChange={(v) => setNewTask((prev) => ({ ...prev, agent_role: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {AGENT_ROLES.map((r) => (
+                          <SelectItem key={r.value} value={r.value}>
+                            {r.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Priority</Label>
+                    <Select
+                      value={newTask.priority}
+                      onValueChange={(v) => setNewTask((prev) => ({ ...prev, priority: v as Priority }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select priority" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(Object.keys(PRIORITY_CONFIG) as Priority[]).map((p) => (
+                          <SelectItem key={p} value={p}>
+                            <span className="flex items-center gap-2">
+                              <span
+                                className={`inline-block h-2 w-2 rounded-full ${
+                                  p === 'low' ? 'bg-slate-400' :
+                                  p === 'medium' ? 'bg-blue-500' :
+                                  p === 'high' ? 'bg-orange-500' :
+                                  'bg-red-500'
+                                }`}
+                              />
+                              {PRIORITY_CONFIG[p].label}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    className="w-full"
+                    onClick={handleCreate}
+                    disabled={!newTask.title.trim() || createMutation.isPending}
+                  >
+                    {createMutation.isPending ? 'Creating…' : 'Create'}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </PageHeader>
+
+      {/* @ts-expect-error dnd-kit types */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
           {COLUMNS.map((col) => (
             <KanbanColumn
               key={col}
@@ -413,10 +422,34 @@ export default function TasksPage() {
             />
           ))}
         </div>
+        {/* @ts-expect-error dnd-kit types */}
         <DragOverlay dropAnimation={{ duration: 200, easing: 'ease' }}>
           {activeTask ? <TaskOverlayCard task={activeTask} /> : null}
         </DragOverlay>
       </DndContext>
+        </div>
+
+        {/* Agent sidebar */}
+        <aside className="w-full lg:w-56 shrink-0 rounded-xl border border-white/10 bg-card dark:bg-white/[0.02] p-3 h-fit">
+          <div className="flex items-center gap-2 mb-3">
+            <Bot className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">Agents by role</span>
+          </div>
+          <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-1.5">
+            {agentRoleCounts.map((r) => (
+              <li
+                key={r.value}
+                className="flex items-center justify-between rounded-lg px-2.5 py-2 text-sm text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              >
+                <span className="truncate">{r.label}</span>
+                <Badge variant="secondary" className="text-[10px] shrink-0">
+                  {r.count}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      </div>
     </div>
   )
 }

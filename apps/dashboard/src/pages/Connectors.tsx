@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { FlexCard } from '@/components/ui/FlexCard'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/button'
@@ -59,12 +60,8 @@ export default function ConnectorsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Connectors</h2>
-          <p className="text-muted-foreground">Data source and broker connectors</p>
-        </div>
+    <div className="space-y-4 sm:space-y-6">
+      <PageHeader icon={Plug} title="Connectors" description="Data source and broker connectors">
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger asChild>
             <Button><Plus className="h-4 w-4 mr-2" /> Add Connector</Button>
@@ -97,9 +94,9 @@ export default function ConnectorsPage() {
             </div>
           </DialogContent>
         </Dialog>
-      </div>
+      </PageHeader>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         {connectors.map((c) => (
           <FlexCard
             key={c.id}
@@ -113,7 +110,7 @@ export default function ConnectorsPage() {
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Plug className="h-5 w-5 text-primary" />
-                <span className="font-semibold">{c.name}</span>
+                <span className="font-semibold truncate">{c.name}</span>
               </div>
               <div className="flex gap-2 flex-wrap">
                 <Badge variant="outline">{c.type}</Badge>

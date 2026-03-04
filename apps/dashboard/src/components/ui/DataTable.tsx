@@ -27,6 +27,7 @@ export interface DataTableProps<T> {
   isLoading?: boolean
   emptyMessage?: string
   className?: string
+  onRowClick?: (row: T) => void
 }
 
 export function DataTable<T extends Record<string, unknown>>({
@@ -36,10 +37,12 @@ export function DataTable<T extends Record<string, unknown>>({
   isLoading,
   emptyMessage = 'No data',
   className,
+  onRowClick = undefined,
 }: DataTableProps<T>) {
   const key = typeof keyField === 'string' ? keyField : 'id'
+  const handleRowClick = typeof onRowClick === 'function' ? onRowClick : undefined
   return (
-    <div className={cn('rounded-md border', className)}>
+    <div className={cn('rounded-xl border border-border', className)}>
       <Table>
         <TableHeader>
           <TableRow>
@@ -68,7 +71,11 @@ export function DataTable<T extends Record<string, unknown>>({
                 </TableRow>
                 )
               : data.map((row) => (
-                <TableRow key={String(row[key])}>
+                <TableRow
+                  key={String(row[key])}
+                  className={handleRowClick ? 'cursor-pointer hover:bg-muted/50' : undefined}
+                  onClick={handleRowClick ? () => handleRowClick(row) : undefined}
+                >
                   {columns.map((col) => (
                     <TableCell key={col.id}>
                       {col.cell

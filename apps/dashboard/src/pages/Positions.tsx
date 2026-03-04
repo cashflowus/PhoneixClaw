@@ -4,10 +4,12 @@
  */
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
+import { TrendingUp } from 'lucide-react'
 
 interface PositionData {
   id: string
@@ -135,14 +137,13 @@ export default function PositionsPage() {
   })
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h2 className="text-2xl font-bold">Positions</h2>
-        <p className="text-muted-foreground">Account-level position management</p>
+        <PageHeader icon={TrendingUp} title="Positions" description="Account-level position management" />
       </div>
 
       {summary && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           <MetricCard title="Open Positions" value={summary.open_positions} />
           <MetricCard
             title="Unrealized P&L"
@@ -168,21 +169,25 @@ export default function PositionsPage() {
         </TabsList>
 
         <TabsContent value="open" className="mt-4">
-          <DataTable
-            columns={openColumns}
-            data={openPositions as (PositionData & Record<string, unknown>)[]}
-            isLoading={openLoading}
-            emptyMessage="No open positions"
-          />
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <DataTable
+              columns={openColumns}
+              data={openPositions as (PositionData & Record<string, unknown>)[]}
+              isLoading={openLoading}
+              emptyMessage="No open positions"
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="closed" className="mt-4">
-          <DataTable
-            columns={closedColumns}
-            data={closedPositions as (PositionData & Record<string, unknown>)[]}
-            isLoading={closedLoading}
-            emptyMessage="No closed positions yet"
-          />
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <DataTable
+              columns={closedColumns}
+              data={closedPositions as (PositionData & Record<string, unknown>)[]}
+              isLoading={closedLoading}
+              emptyMessage="No closed positions yet"
+            />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

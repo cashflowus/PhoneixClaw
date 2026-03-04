@@ -4,6 +4,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTheme } from '@/context/ThemeContext'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { FlexCard } from '@/components/ui/FlexCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,14 +34,11 @@ export default function SettingsPage() {
   const p = profile ?? { name: 'User', email: 'user@phoenix.io', timezone: 'America/New_York' }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Settings</h2>
-        <p className="text-muted-foreground">Profile, theme, and preferences</p>
-      </div>
+    <div className="space-y-4 sm:space-y-6">
+      <PageHeader icon={Palette} title="Settings" description="Profile, theme, and preferences" />
 
       <Tabs defaultValue="profile">
-        <TabsList>
+        <TabsList className="flex flex-wrap">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="theme">Theme</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>

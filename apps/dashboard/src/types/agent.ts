@@ -6,6 +6,8 @@ export type AgentType = 'trading' | 'strategy' | 'monitoring' | 'task'
 
 export type AgentStatus =
   | 'CREATED'
+  | 'APPROVED'
+  | 'RUNNING'
   | 'BACKTESTING'
   | 'BACKTEST_COMPLETE'
   | 'REVIEW_PENDING'

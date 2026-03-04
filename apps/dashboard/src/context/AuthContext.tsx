@@ -18,6 +18,7 @@ interface AuthContextValue {
   token: string | null
   user: UserProfile | null
   login: (email: string, password: string) => Promise<void>
+  register: (email: string, password: string, name: string) => Promise<void>
   logout: () => void
   isAuthenticated: boolean
   error: string | null
@@ -82,6 +83,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(profile)
   }, [])
 
+  const register = useCallback(async (email: string, password: string, name: string) => {
+    setError(null)
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, name }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setError(data.detail ?? 'Registration failed')
+      throw new Error(data.detail ?? 'Registration failed')
+    }
+    if (res.status === 201) {
+      await login(email, password)
+    }
+  }, [login])
+
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY)
     setToken(null)
@@ -93,6 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     token,
     user,
     login,
+    register,
     logout,
     isAuthenticated: !!token,
     error,

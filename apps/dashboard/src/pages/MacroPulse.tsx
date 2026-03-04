@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { FlexCard } from '@/components/ui/FlexCard'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { Button } from '@/components/ui/button'
@@ -18,15 +19,23 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
+  LineChart as RechartsLineChart,
+  Line as RechartsLine,
+  XAxis as RechartsXAxis,
+  YAxis as RechartsYAxis,
   CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer as RechartsResponsiveContainer,
 } from 'recharts'
+import type { ComponentType } from 'react'
 import { Bot, Calendar, AlertTriangle, Lightbulb } from 'lucide-react'
+
+const ResponsiveContainer = RechartsResponsiveContainer as unknown as ComponentType<any>
+const LineChart = RechartsLineChart as unknown as ComponentType<any>
+const XAxis = RechartsXAxis as unknown as ComponentType<any>
+const YAxis = RechartsYAxis as unknown as ComponentType<any>
+const Tooltip = RechartsTooltip as unknown as ComponentType<any>
+const Line = RechartsLine as unknown as ComponentType<any>
 
 type Regime = 'RISK-ON' | 'RISK-OFF' | 'NEUTRAL' | 'HAWKISH' | 'DOVISH'
 type Severity = 'Critical' | 'High' | 'Medium' | 'Low'
@@ -175,9 +184,10 @@ export default function MacroPulsePage() {
       ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      <PageHeader icon={Calendar} title="Macro-Pulse" description="Macro economic intelligence and regime view" />
       {/* Top Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Badge
             variant="outline"
@@ -254,7 +264,7 @@ export default function MacroPulsePage() {
 
       {/* Sub-tabs */}
       <Tabs defaultValue="regime" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
+        <TabsList className="flex flex-wrap h-auto gap-1 w-full lg:w-auto">
           <TabsTrigger value="regime">Regime Overview</TabsTrigger>
           <TabsTrigger value="calendar">Fed Calendar</TabsTrigger>
           <TabsTrigger value="indicators">Economic Indicators</TabsTrigger>
@@ -263,7 +273,7 @@ export default function MacroPulsePage() {
         </TabsList>
 
         <TabsContent value="regime" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             <FlexCard title="Current Regime" className="border-emerald-500/30 bg-emerald-500/5">
               <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">Risk-On</p>
               <p className="text-sm text-muted-foreground">Equities favored, credit spreads tightening</p>
@@ -296,7 +306,7 @@ export default function MacroPulsePage() {
 
         <TabsContent value="calendar" className="space-y-4">
           <FlexCard title="Fed Calendar" action={<Calendar className="h-4 w-4 text-muted-foreground" />}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               {mockCalendar.map((ev: { id: string; date: string; event: string; impact: string }) => (
                 <div
                   key={ev.id}
@@ -317,7 +327,7 @@ export default function MacroPulsePage() {
         </TabsContent>
 
         <TabsContent value="indicators" className="space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
             {mockIndicators.map((ind: { name: string; value: string; trend?: 'up' | 'down' | 'neutral' }) => (
               <MetricCard
                 key={ind.name}
@@ -354,7 +364,7 @@ export default function MacroPulsePage() {
                   impact: string
                 }) => (
                   <div key={r.id} className="p-4 rounded-lg border">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <p className="font-semibold">{r.title}</p>
                       <Badge
                         variant={
