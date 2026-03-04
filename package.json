@@ -1,0 +1,11 @@
+{
+  "name": "phoenix-v2",
+  "private": true,
+  "workspaces": ["apps/dashboard"],
+  "scripts": {
+    "dev": "npm -w apps/dashboard run dev",
+    "build": "npm -w apps/dashboard run build",
+    "test": "npm -w apps/dashboard run test",
+    "lint": "npm -w apps/dashboard run lint"
+  }
+}

@@ -136,10 +136,10 @@ Four logical OpenClaw instances, deployable across 1-N physical machines:
 
 | Instance | Role | Agents | Tool Allowlist |
 |---|---|---|---|
-| **A: Strategy Lab** | Build, test, and validate strategies | Strategy Builder, Code Generator, Unit Test Fixer, Backtest Analyst | `write_file`, `run_tests`, `run_backtest`, `read_file` |
-| **B: Data & Research** | Fetch and cache market data, interpret news/sentiment | Data Planner, Data Fetcher, News/Sentiment Analyst | `get_data`, `cache_data`, `get_news`, `browse_web` |
-| **C: Promotion & Risk** | Rank strategies, enforce risk limits, manage deployments | Strategy Selector, Risk Supervisor, Deployment Manager | `score`, `gate`, `deploy`, `kill_switch` |
-| **D: Live Trading Ops** | Execute trades and monitor positions | Live Trader (Stocks), Live Trader (Options), Trade Monitor, Incident/Recovery | `place_order`, `cancel`, `get_positions`, `get_quotes` |
+| **A: Strategy Lab** | Build, test, and validate strategies | Strategy Builder, Code Generator, Unit Test Fixer, Backtest Analyst | `write-file`, `run-tests`, `run-backtest`, `read-file` |
+| **B: Data & Research** | Fetch and cache market data, interpret news/sentiment | Data Planner, Data Fetcher, News/Sentiment Analyst | `get-data`, `cache-data`, `get-news`, `browse-web` |
+| **C: Promotion & Risk** | Rank strategies, enforce risk limits, manage deployments | Strategy Selector, Risk Supervisor, Deployment Manager | `score`, `gate`, `deploy`, `kill-switch` |
+| **D: Live Trading Ops** | Execute trades and monitor positions | Live Trader (Stocks), Live Trader (Options), Trade Monitor, Incident/Recovery | `place-order`, `cancel`, `get-positions`, `get-quotes` |
 
 ### 2.3 Communication Flow
 
@@ -1646,161 +1646,161 @@ Skills are the building blocks of agent intelligence. Each skill is a `SKILL.md`
 
 | # | Skill Name | Description |
 |---|---|---|
-| 1 | `fetch_stock_quotes` | Get real-time stock quotes from broker/market data API |
-| 2 | `fetch_options_chain` | Retrieve full options chain for a ticker (strikes, expirations, Greeks) |
-| 3 | `fetch_historical_bars` | Get OHLCV bars for any timeframe (1m to monthly) |
-| 4 | `fetch_unusual_whales_flow` | Pull options flow data from Unusual Whales API |
-| 5 | `fetch_dark_pool_data` | Get dark pool print data from Unusual Whales |
-| 6 | `fetch_news_headlines` | Aggregate news from Finnhub, NewsAPI, Benzinga |
-| 7 | `fetch_earnings_calendar` | Get upcoming earnings dates and estimates |
-| 8 | `fetch_economic_calendar` | Get economic events (FOMC, CPI, NFP, etc.) |
-| 9 | `fetch_insider_trades` | Congressional and corporate insider transaction data |
-| 10 | `fetch_social_sentiment` | Aggregate sentiment from Reddit, Twitter, StockTwits |
-| 11 | `fetch_sector_performance` | Sector ETF performance and rotation data |
-| 12 | `fetch_market_breadth` | Advance/decline, new highs/lows, McClellan oscillator |
-| 13 | `fetch_vix_data` | VIX spot, futures, term structure |
-| 14 | `fetch_gex_data` | Gamma exposure levels by strike (Unusual Whales / custom) |
-| 15 | `fetch_premarket_data` | Pre-market movers, gap analysis, futures |
-| 16 | `fetch_order_book` | Level II order book data — bids, asks, depth, imbalances |
-| 17 | `fetch_level2_flow` | Time and sales tape data for detecting large block trades |
-| 18 | `fetch_economic_indicators` | Fear & Greed index, yield curve, Fed funds rate, CPI |
+| 1 | `fetch-stock-quotes` | Get real-time stock quotes from broker/market data API |
+| 2 | `fetch-options-chain` | Retrieve full options chain for a ticker (strikes, expirations, Greeks) |
+| 3 | `fetch-historical-bars` | Get OHLCV bars for any timeframe (1m to monthly) |
+| 4 | `fetch-unusual-whales-flow` | Pull options flow data from Unusual Whales API |
+| 5 | `fetch-dark-pool-data` | Get dark pool print data from Unusual Whales |
+| 6 | `fetch-news-headlines` | Aggregate news from Finnhub, NewsAPI, Benzinga |
+| 7 | `fetch-earnings-calendar` | Get upcoming earnings dates and estimates |
+| 8 | `fetch-economic-calendar` | Get economic events (FOMC, CPI, NFP, etc.) |
+| 9 | `fetch-insider-trades` | Congressional and corporate insider transaction data |
+| 10 | `fetch-social-sentiment` | Aggregate sentiment from Reddit, Twitter, StockTwits |
+| 11 | `fetch-sector-performance` | Sector ETF performance and rotation data |
+| 12 | `fetch-market-breadth` | Advance/decline, new highs/lows, McClellan oscillator |
+| 13 | `fetch-vix-data` | VIX spot, futures, term structure |
+| 14 | `fetch-gex-data` | Gamma exposure levels by strike (Unusual Whales / custom) |
+| 15 | `fetch-premarket-data` | Pre-market movers, gap analysis, futures |
+| 16 | `fetch-order-book` | Level II order book data — bids, asks, depth, imbalances |
+| 17 | `fetch-level2-flow` | Time and sales tape data for detecting large block trades |
+| 18 | `fetch-economic-indicators` | Fear & Greed index, yield curve, Fed funds rate, CPI |
 
 ### 12.2 Analysis Skills (25 skills)
 
 | # | Skill Name | Description |
 |---|---|---|
-| 16 | `technical_analysis_basic` | Calculate RSI, MACD, Bollinger Bands, moving averages |
-| 17 | `technical_analysis_advanced` | Ichimoku, Fibonacci, Elliott Wave, harmonic patterns |
-| 18 | `support_resistance_levels` | Identify key support/resistance from price history |
-| 19 | `volume_analysis` | Volume profile, OBV, relative volume, VWAP analysis |
-| 20 | `options_greeks_analyzer` | Analyze delta, gamma, theta, vega for position sizing |
-| 21 | `implied_volatility_analyzer` | IV rank, IV percentile, skew analysis, term structure |
-| 22 | `sentiment_classifier` | Classify text as bullish/bearish/neutral (FinBERT or LLM) |
-| 23 | `trade_signal_parser` | Parse unstructured messages into structured trade signals |
-| 24 | `news_impact_analyzer` | Assess likely price impact of a news headline |
-| 25 | `earnings_analyzer` | Analyze earnings results vs. expectations, estimate reaction |
-| 26 | `correlation_analyzer` | Calculate correlation between instruments, detect divergences |
-| 27 | `momentum_scorer` | Score momentum across multiple timeframes |
-| 28 | `mean_reversion_detector` | Detect overextended conditions ripe for reversion |
-| 29 | `trend_strength_analyzer` | ADX, moving average alignment, trend duration |
-| 30 | `pattern_recognition` | Chart patterns: head & shoulders, double top/bottom, flags, wedges |
-| 31 | `options_flow_interpreter` | Interpret unusual options activity and infer institutional positioning |
-| 32 | `sector_rotation_analyzer` | Identify which sectors are leading/lagging, rotation signals |
-| 33 | `macro_regime_classifier` | Classify current market regime: risk-on, risk-off, ranging, trending |
-| 34 | `put_call_ratio_analyzer` | Analyze put/call ratios for contrarian signals |
-| 35 | `whale_tracker` | Track large institutional trades and dark pool activity |
-| 36 | `chart_pattern_recognition` | Detect chart patterns: flags, double tops, head-and-shoulders, wedges |
-| 37 | `order_book_imbalance` | Analyze Level II order book for supply/demand imbalances |
-| 38 | `volume_flow_scanner` | Scan for unusual volume spikes and block trades across a watchlist |
-| 39 | `options_max_pain_calculator` | Calculate max pain strike and pin risk for options expiration |
-| 40 | `relative_strength_ranker` | Rank stocks by relative strength vs. sector/index for momentum |
+| 16 | `technical-analysis-basic` | Calculate RSI, MACD, Bollinger Bands, moving averages |
+| 17 | `technical-analysis-advanced` | Ichimoku, Fibonacci, Elliott Wave, harmonic patterns |
+| 18 | `support-resistance-levels` | Identify key support/resistance from price history |
+| 19 | `volume-analysis` | Volume profile, OBV, relative volume, VWAP analysis |
+| 20 | `options-greeks-analyzer` | Analyze delta, gamma, theta, vega for position sizing |
+| 21 | `implied-volatility-analyzer` | IV rank, IV percentile, skew analysis, term structure |
+| 22 | `sentiment-classifier` | Classify text as bullish/bearish/neutral (FinBERT or LLM) |
+| 23 | `trade-signal-parser` | Parse unstructured messages into structured trade signals |
+| 24 | `news-impact-analyzer` | Assess likely price impact of a news headline |
+| 25 | `earnings-analyzer` | Analyze earnings results vs. expectations, estimate reaction |
+| 26 | `correlation-analyzer` | Calculate correlation between instruments, detect divergences |
+| 27 | `momentum-scorer` | Score momentum across multiple timeframes |
+| 28 | `mean-reversion-detector` | Detect overextended conditions ripe for reversion |
+| 29 | `trend-strength-analyzer` | ADX, moving average alignment, trend duration |
+| 30 | `pattern-recognition` | Chart patterns: head & shoulders, double top/bottom, flags, wedges |
+| 31 | `options-flow-interpreter` | Interpret unusual options activity and infer institutional positioning |
+| 32 | `sector-rotation-analyzer` | Identify which sectors are leading/lagging, rotation signals |
+| 33 | `macro-regime-classifier` | Classify current market regime: risk-on, risk-off, ranging, trending |
+| 34 | `put-call-ratio-analyzer` | Analyze put/call ratios for contrarian signals |
+| 35 | `whale-tracker` | Track large institutional trades and dark pool activity |
+| 36 | `chart-pattern-recognition` | Detect chart patterns: flags, double tops, head-and-shoulders, wedges |
+| 37 | `order-book-imbalance` | Analyze Level II order book for supply/demand imbalances |
+| 38 | `volume-flow-scanner` | Scan for unusual volume spikes and block trades across a watchlist |
+| 39 | `options-max-pain-calculator` | Calculate max pain strike and pin risk for options expiration |
+| 40 | `relative-strength-ranker` | Rank stocks by relative strength vs. sector/index for momentum |
 
 ### 12.3 Strategy Skills (15 skills)
 
 | # | Skill Name | Description |
 |---|---|---|
-| 36 | `strategy_rsi_reversal` | RSI oversold/overbought reversal strategy logic |
-| 37 | `strategy_macd_crossover` | MACD signal line crossover strategy |
-| 38 | `strategy_breakout` | Price breakout above resistance with volume confirmation |
-| 39 | `strategy_opening_range` | Opening range breakout (ORB) strategy for intraday |
-| 40 | `strategy_vwap_reversion` | Mean reversion to VWAP strategy |
-| 41 | `strategy_iron_condor` | Weekly iron condor on indices with IV rank filter |
-| 42 | `strategy_wheel` | Wheel strategy (sell puts, get assigned, sell calls) |
-| 43 | `strategy_covered_call` | Covered call writing on held positions |
-| 44 | `strategy_momentum` | Multi-factor momentum (price + volume + relative strength) |
-| 45 | `strategy_pairs_trading` | Statistical arbitrage between correlated instruments |
-| 46 | `strategy_gap_fill` | Trade gap fills on stocks gapping up/down at open |
-| 47 | `strategy_earnings_drift` | Post-earnings announcement drift strategy |
-| 48 | `strategy_0dte_scalp` | 0DTE options scalping based on SPX levels and GEX |
-| 49 | `strategy_dividend_capture` | Buy before ex-date, sell after with covered calls |
-| 50 | `strategy_sector_rotation` | Rotate into strongest sectors monthly |
+| 36 | `strategy-rsi-reversal` | RSI oversold/overbought reversal strategy logic |
+| 37 | `strategy-macd-crossover` | MACD signal line crossover strategy |
+| 38 | `strategy-breakout` | Price breakout above resistance with volume confirmation |
+| 39 | `strategy-opening-range` | Opening range breakout (ORB) strategy for intraday |
+| 40 | `strategy-vwap-reversion` | Mean reversion to VWAP strategy |
+| 41 | `strategy-iron-condor` | Weekly iron condor on indices with IV rank filter |
+| 42 | `strategy-wheel` | Wheel strategy (sell puts, get assigned, sell calls) |
+| 43 | `strategy-covered-call` | Covered call writing on held positions |
+| 44 | `strategy-momentum` | Multi-factor momentum (price + volume + relative strength) |
+| 45 | `strategy-pairs-trading` | Statistical arbitrage between correlated instruments |
+| 46 | `strategy-gap-fill` | Trade gap fills on stocks gapping up/down at open |
+| 47 | `strategy-earnings-drift` | Post-earnings announcement drift strategy |
+| 48 | `strategy-0dte-scalp` | 0DTE options scalping based on SPX levels and GEX |
+| 49 | `strategy-dividend-capture` | Buy before ex-date, sell after with covered calls |
+| 50 | `strategy-sector-rotation` | Rotate into strongest sectors monthly |
 
 ### 12.4 Execution Skills (12 skills)
 
 | # | Skill Name | Description |
 |---|---|---|
-| 51 | `place_stock_order` | Place market/limit stock orders via broker API |
-| 52 | `place_option_order` | Place single-leg option orders |
-| 53 | `place_spread_order` | Place multi-leg option spreads (verticals, iron condors) |
-| 54 | `calculate_position_size` | Risk-based position sizing (% of account, Kelly criterion) |
-| 55 | `format_trade_intent` | Convert agent decision into standardized trade intent JSON |
-| 56 | `cancel_order` | Cancel open/pending orders |
-| 57 | `modify_order` | Modify existing order (price, quantity) |
-| 58 | `close_position` | Close an entire position (market or limit) |
-| 59 | `close_partial_position` | Close a percentage of a position |
-| 60 | `close_all_positions` | Emergency: close everything on an account |
-| 61 | `smart_order_router` | Route orders optimally across brokers for best execution |
-| 62 | `multi_asset_hedger` | Calculate and execute hedges (e.g., buy QQQ puts against long tech) |
+| 51 | `place-stock-order` | Place market/limit stock orders via broker API |
+| 52 | `place-option-order` | Place single-leg option orders |
+| 53 | `place-spread-order` | Place multi-leg option spreads (verticals, iron condors) |
+| 54 | `calculate-position-size` | Risk-based position sizing (% of account, Kelly criterion) |
+| 55 | `format-trade-intent` | Convert agent decision into standardized trade intent JSON |
+| 56 | `cancel-order` | Cancel open/pending orders |
+| 57 | `modify-order` | Modify existing order (price, quantity) |
+| 58 | `close-position` | Close an entire position (market or limit) |
+| 59 | `close-partial-position` | Close a percentage of a position |
+| 60 | `close-all-positions` | Emergency: close everything on an account |
+| 61 | `smart-order-router` | Route orders optimally across brokers for best execution |
+| 62 | `multi-asset-hedger` | Calculate and execute hedges (e.g., buy QQQ puts against long tech) |
 
 ### 12.5 Risk & Monitoring Skills (10 skills)
 
 | # | Skill Name | Description |
 |---|---|---|
-| 61 | `risk_calculator` | Calculate VaR, max loss, portfolio heat |
-| 62 | `position_monitor` | Track unrealized PnL, check stop-loss levels |
-| 63 | `trailing_stop_manager` | Implement and manage trailing stop logic |
-| 64 | `daily_pnl_tracker` | Track daily PnL across all positions |
-| 65 | `drawdown_monitor` | Monitor and alert on drawdown thresholds |
-| 66 | `exposure_calculator` | Calculate portfolio exposure by sector, ticker, strategy |
-| 67 | `circuit_breaker` | Trigger kill switch when loss limits are breached |
-| 68 | `correlation_risk_checker` | Check if new trade adds correlated risk to portfolio |
-| 69 | `eod_position_closer` | End-of-day position closing for intraday strategies |
-| 70 | `overnight_risk_assessor` | Evaluate overnight holding risk based on events calendar |
+| 61 | `risk-calculator` | Calculate VaR, max loss, portfolio heat |
+| 62 | `position-monitor` | Track unrealized PnL, check stop-loss levels |
+| 63 | `trailing-stop-manager` | Implement and manage trailing stop logic |
+| 64 | `daily-pnl-tracker` | Track daily PnL across all positions |
+| 65 | `drawdown-monitor` | Monitor and alert on drawdown thresholds |
+| 66 | `exposure-calculator` | Calculate portfolio exposure by sector, ticker, strategy |
+| 67 | `circuit-breaker` | Trigger kill switch when loss limits are breached |
+| 68 | `correlation-risk-checker` | Check if new trade adds correlated risk to portfolio |
+| 69 | `eod-position-closer` | End-of-day position closing for intraday strategies |
+| 70 | `overnight-risk-assessor` | Evaluate overnight holding risk based on events calendar |
 
 ### 12.6 Utility Skills (15 skills)
 
 | # | Skill Name | Description |
 |---|---|---|
-| 71 | `backtest_runner` | Execute a strategy backtest against historical data |
-| 72 | `backtest_reporter` | Generate performance report from backtest results |
-| 73 | `strategy_optimizer` | Run parameter optimization (grid search or genetic) |
-| 74 | `log_trade_decision` | Write structured decision log for audit trail |
-| 75 | `notify_dashboard` | Push status/event to dashboard API |
-| 76 | `notify_discord` | Send notification to Discord channel |
-| 77 | `notify_email` | Send email notification (alerts, daily summary) |
-| 78 | `data_cache_manager` | Cache and retrieve market data (Parquet/TimescaleDB) |
-| 79 | `performance_calculator` | Calculate Sharpe, Sortino, max drawdown, profit factor |
-| 80 | `equity_curve_generator` | Generate equity curve data from trade history |
-| 81 | `trade_journal_writer` | Write detailed trade journal entry with reasoning |
-| 82 | `market_hours_checker` | Check if market is open, pre-market, after-hours, or closed |
-| 83 | `options_expiration_tracker` | Track upcoming expirations for held options |
-| 84 | `dividend_date_checker` | Check ex-dividend dates for held positions |
-| 85 | `broker_account_status` | Get account balance, buying power, margin status |
+| 71 | `backtest-runner` | Execute a strategy backtest against historical data |
+| 72 | `backtest-reporter` | Generate performance report from backtest results |
+| 73 | `strategy-optimizer` | Run parameter optimization (grid search or genetic) |
+| 74 | `log-trade-decision` | Write structured decision log for audit trail |
+| 75 | `notify-dashboard` | Push status/event to dashboard API |
+| 76 | `notify-discord` | Send notification to Discord channel |
+| 77 | `notify-email` | Send email notification (alerts, daily summary) |
+| 78 | `data-cache-manager` | Cache and retrieve market data (Parquet/TimescaleDB) |
+| 79 | `performance-calculator` | Calculate Sharpe, Sortino, max drawdown, profit factor |
+| 80 | `equity-curve-generator` | Generate equity curve data from trade history |
+| 81 | `trade-journal-writer` | Write detailed trade journal entry with reasoning |
+| 82 | `market-hours-checker` | Check if market is open, pre-market, after-hours, or closed |
+| 83 | `options-expiration-tracker` | Track upcoming expirations for held options |
+| 84 | `dividend-date-checker` | Check ex-dividend dates for held positions |
+| 85 | `broker-account-status` | Get account balance, buying power, margin status |
 
 ### 12.7 Advanced/AI Skills (20 skills)
 
 | # | Skill Name | Description |
 |---|---|---|
-| 86 | `llm_trade_evaluator` | Use LLM to synthesize all data and evaluate a trade idea |
-| 87 | `llm_thesis_validator` | Re-evaluate an existing trade thesis with current data |
-| 88 | `llm_strategy_generator` | Generate new strategy ideas from market conditions |
-| 89 | `llm_risk_narrator` | Generate human-readable risk assessment |
-| 90 | `llm_market_summary` | Generate morning market briefing |
-| 91 | `llm_trade_debrief` | Post-trade analysis: what went right/wrong |
-| 92 | `agent_debate_bull_bear` | Bull vs. bear debate between two agent contexts |
-| 93 | `agent_consensus_builder` | Aggregate signals from multiple agents into consensus |
-| 94 | `anomaly_detector` | Detect unusual patterns in price, volume, or flow data |
-| 95 | `regime_change_detector` | Detect shifts in market regime (volatile, trending, ranging) |
-| 96 | `news_event_classifier` | Classify news events by expected market impact (high/med/low) |
-| 97 | `discord_message_quality_scorer` | Score Discord trade alerts by historical accuracy |
-| 98 | `strategy_drift_detector` | Detect when live performance diverges from backtest |
-| 99 | `adaptive_stop_loss` | ML-based dynamic stop-loss that adapts to volatility |
-| 100 | `multi_timeframe_confluence` | Identify setups where multiple timeframes align |
-| 101 | `python_code_executor` | Write and execute arbitrary Python code in sandbox for custom analysis |
-| 102 | `ml_model_trainer` | Train ML models (sklearn, XGBoost, PyTorch) on market data |
-| 103 | `ml_model_loader` | Load a pre-trained model from artifact store and run inference |
-| 104 | `self_debugger` | Analyze error tracebacks and generate code fixes |
-| 105 | `parameter_optimizer` | Grid search or genetic optimization of strategy parameters |
-| 106 | `memory_compactor` | Summarize and compress agent session history to free context |
-| 107 | `knowledge_base_query` | Query a vector database of historical trading events and outcomes |
-| 108 | `skill_loader` | Dynamically load a new skill from ClawHub or central repo at runtime |
-| 109 | `portfolio_rebalancer` | Calculate and execute portfolio rebalancing across agents |
-| 110 | `agent_to_agent_messenger` | Send structured messages to other agents and handle responses |
-| 111 | `telegram_notifier` | Send messages and receive commands via Telegram bot |
-| 112 | `discord_notifier` | Send messages and receive commands via Discord bot |
-| 113 | `whatsapp_notifier` | Send alerts via WhatsApp using Meta Cloud API |
-| 114 | `task_board_updater` | Create, update, and complete tasks on the dashboard Task Board |
-| 115 | `cron_scheduler` | Create and manage scheduled automation jobs |
+| 86 | `llm-trade-evaluator` | Use LLM to synthesize all data and evaluate a trade idea |
+| 87 | `llm-thesis-validator` | Re-evaluate an existing trade thesis with current data |
+| 88 | `llm-strategy-generator` | Generate new strategy ideas from market conditions |
+| 89 | `llm-risk-narrator` | Generate human-readable risk assessment |
+| 90 | `llm-market-summary` | Generate morning market briefing |
+| 91 | `llm-trade-debrief` | Post-trade analysis: what went right/wrong |
+| 92 | `agent-debate-bull-bear` | Bull vs. bear debate between two agent contexts |
+| 93 | `agent-consensus-builder` | Aggregate signals from multiple agents into consensus |
+| 94 | `anomaly-detector` | Detect unusual patterns in price, volume, or flow data |
+| 95 | `regime-change-detector` | Detect shifts in market regime (volatile, trending, ranging) |
+| 96 | `news-event-classifier` | Classify news events by expected market impact (high/med/low) |
+| 97 | `discord-message-quality-scorer` | Score Discord trade alerts by historical accuracy |
+| 98 | `strategy-drift-detector` | Detect when live performance diverges from backtest |
+| 99 | `adaptive-stop-loss` | ML-based dynamic stop-loss that adapts to volatility |
+| 100 | `multi-timeframe-confluence` | Identify setups where multiple timeframes align |
+| 101 | `python-code-executor` | Write and execute arbitrary Python code in sandbox for custom analysis |
+| 102 | `ml-model-trainer` | Train ML models (sklearn, XGBoost, PyTorch) on market data |
+| 103 | `ml-model-loader` | Load a pre-trained model from artifact store and run inference |
+| 104 | `self-debugger` | Analyze error tracebacks and generate code fixes |
+| 105 | `parameter-optimizer` | Grid search or genetic optimization of strategy parameters |
+| 106 | `memory-compactor` | Summarize and compress agent session history to free context |
+| 107 | `knowledge-base-query` | Query a vector database of historical trading events and outcomes |
+| 108 | `skill-loader` | Dynamically load a new skill from ClawHub or central repo at runtime |
+| 109 | `portfolio-rebalancer` | Calculate and execute portfolio rebalancing across agents |
+| 110 | `agent-to-agent-messenger` | Send structured messages to other agents and handle responses |
+| 111 | `telegram-notifier` | Send messages and receive commands via Telegram bot |
+| 112 | `discord-notifier` | Send messages and receive commands via Discord bot |
+| 113 | `whatsapp-notifier` | Send alerts via WhatsApp using Meta Cloud API |
+| 114 | `task-board-updater` | Create, update, and complete tasks on the dashboard Task Board |
+| 115 | `cron-scheduler` | Create and manage scheduled automation jobs |
 
 ### 12.8 Skill Development Framework
 
@@ -1810,7 +1810,7 @@ A standardized framework for creating, testing, and deploying new skills.
 
 ```markdown
 ---
-name: my_custom_skill
+name: my-custom-skill
 version: 1.0.0
 description: Short description of what this skill does
 category: analysis | data | execution | risk | utility | advanced
@@ -1818,8 +1818,8 @@ tools_required:
   - python
   - shell
 dependencies:
-  - fetch_stock_quotes
-  - technical_analysis_basic
+  - fetch-stock-quotes
+  - technical-analysis-basic
 ---
 
 # My Custom Skill
@@ -2710,12 +2710,12 @@ When creating the new repository, the following services and code from the exist
 
 | Service | Replacement |
 |---|---|
-| `services/nlp-parser/` | OpenClaw skill: `sentiment_classifier`, `trade_signal_parser` |
-| `services/sentiment-analyzer/` | OpenClaw skill: `sentiment_classifier`, `social_sentiment_analysis` |
-| `services/news-aggregator/` | OpenClaw skill: `fetch_news_headlines`, `news_impact_analyzer` |
+| `services/nlp-parser/` | OpenClaw skill: `sentiment-classifier`, `trade-signal-parser` |
+| `services/sentiment-analyzer/` | OpenClaw skill: `sentiment-classifier`, `social-sentiment-analysis` |
+| `services/news-aggregator/` | OpenClaw skill: `fetch-news-headlines`, `news-impact-analyzer` |
 | `services/ai-trade-recommender/` | OpenClaw trading agents with evaluation skills |
-| `services/signal-scorer/` | OpenClaw skill: `llm_trade_evaluator` |
-| `services/option-chain-analyzer/` | OpenClaw skill: `options_chain_analyzer`, `options_greeks_analyzer` |
+| `services/signal-scorer/` | OpenClaw skill: `llm-trade-evaluator` |
+| `services/option-chain-analyzer/` | OpenClaw skill: `options-chain-analyzer`, `options-greeks-analyzer` |
 | `services/twitter-ingestor/` | Connector Framework: Twitter/X connector |
 
 **Services to Keep and Refactor**:
@@ -2729,7 +2729,7 @@ When creating the new repository, the following services and code from the exist
 | `services/reddit-ingestor/` | Refactor into Connector Framework interface |
 | `services/trade-executor/` | Refactor into Execution Service |
 | `services/position-monitor/` | Replace with Monitoring Agent (OpenClaw) + Global Monitor (backend service) |
-| `services/trade-parser/` | Convert to OpenClaw skill: `trade_signal_parser` |
+| `services/trade-parser/` | Convert to OpenClaw skill: `trade-signal-parser` |
 | `services/notification-service/` | Expand — add Telegram, keep Discord, keep WhatsApp |
 | `services/strategy-agent/` | Replace with OpenClaw Strategy Agents |
 

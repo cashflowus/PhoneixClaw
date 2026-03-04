@@ -151,6 +151,23 @@ async def skills_sync(_: str = Depends(require_token)) -> dict:
     return sync_skills()
 
 
+@app.get("/agents/{agent_id}/logs")
+async def agent_logs(
+    agent_id: str,
+    limit: int = 100,
+    level: str | None = None,
+    _: str = Depends(require_token),
+) -> dict:
+    """Retrieve logs for a specific agent from the local OpenClaw instance."""
+    from src.agent_manager import get_agent_logs
+    a = get_agent(agent_id)
+    if not a:
+        METRIC_ERRORS.labels(path="agent_logs").inc()
+        raise HTTPException(status_code=404, detail="Agent not found")
+    logs = get_agent_logs(agent_id, limit=limit, level=level)
+    return {"agent_id": agent_id, "logs": logs, "total": len(logs)}
+
+
 @app.get("/metrics")
 async def metrics() -> Response:
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)

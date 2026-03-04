@@ -1,0 +1,61 @@
+{
+  "uid": "phoenix-system-overview",
+  "title": "Phoenix System Overview",
+  "tags": ["phoenix", "infrastructure", "system"],
+  "schemaVersion": 38,
+  "version": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      { "name": "instance", "type": "query", "query": "label_values(up, instance)", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "CPU Usage %",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "100 - (avg by(instance)(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)", "legendFormat": "{{instance}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Memory Usage (MB)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / 1024 / 1024", "legendFormat": "{{instance}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Disk Usage %",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "100 - ((node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}) * 100)", "legendFormat": "{{instance}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Network RX (bytes/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(node_network_receive_bytes_total{device!~\"lo\"}[5m])", "legendFormat": "{{instance}}-{{device}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Network TX (bytes/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(node_network_transmit_bytes_total{device!~\"lo\"}[5m])", "legendFormat": "{{instance}}-{{device}}", "refId": "A" }
+      ]
+    }
+  ]
+}

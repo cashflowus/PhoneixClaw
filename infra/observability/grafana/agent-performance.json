@@ -1,0 +1,61 @@
+{
+  "uid": "phoenix-agent-performance",
+  "title": "Phoenix Agent Performance",
+  "tags": ["phoenix", "agents", "performance"],
+  "schemaVersion": 38,
+  "version": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      { "name": "agent", "type": "query", "query": "label_values(phoenix_trades_total, agent)", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Active Agents",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        { "expr": "count(phoenix_agent_heartbeat_age_seconds < 60)", "legendFormat": "active", "refId": "A" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Trades per Agent",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by(agent)(rate(phoenix_trades_total{status=\"EXECUTED\"}[5m]))", "legendFormat": "{{agent}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Agent Win Rate %",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "100 * rate(phoenix_trades_total{status=\"EXECUTED\"}[1h]) / (rate(phoenix_trades_total[1h]) + 1e-9)", "legendFormat": "win rate", "refId": "A" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "P&L by Agent",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "phoenix_agent_pnl_total", "legendFormat": "{{agent}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Bridge Heartbeats/min",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(phoenix_bridge_heartbeat_total[5m]) * 60", "legendFormat": "heartbeats", "refId": "A" }
+      ]
+    }
+  ]
+}

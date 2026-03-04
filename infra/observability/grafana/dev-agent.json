@@ -1,0 +1,61 @@
+{
+  "uid": "phoenix-dev-agent",
+  "title": "Phoenix Dev Agent",
+  "tags": ["phoenix", "dev-agent", "incidents"],
+  "schemaVersion": 38,
+  "version": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      { "name": "agent", "type": "query", "query": "label_values(phoenix_dev_agent_incidents_total, agent)", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Incidents Detected",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(phoenix_dev_agent_incidents_total[5m]) * 60", "legendFormat": "incidents/min", "refId": "A" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Auto-Repairs Executed",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(phoenix_dev_agent_repairs_total[5m])", "legendFormat": "repairs/s", "refId": "A" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "RL Reward Trend",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "phoenix_dev_agent_rl_reward", "legendFormat": "reward", "refId": "A" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Fix Success Rate %",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "100 * rate(phoenix_dev_agent_repairs_success_total[1h]) / (rate(phoenix_dev_agent_repairs_total[1h]) + 1e-9)", "legendFormat": "success %", "refId": "A" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Incidents by Type",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum by(type)(rate(phoenix_dev_agent_incidents_total[5m]))", "legendFormat": "{{type}}", "refId": "A" }
+      ]
+    }
+  ]
+}

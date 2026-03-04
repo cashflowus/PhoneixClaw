@@ -22,10 +22,21 @@ import {
   Moon,
   Sun,
   LogOut,
+  Zap,
+  Activity,
+  Fish,
+  MessageCircle,
+  ShieldCheck,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
   { to: '/trades', icon: LayoutDashboard, label: 'Trades' },
+  { to: '/daily-signals', icon: Zap, label: 'Daily Signals' },
+  { to: '/zero-dte', icon: Activity, label: '0DTE SPX' },
+  { to: '/onchain-flow', icon: Fish, label: 'On-Chain Flow' },
+  { to: '/macro-pulse', icon: Activity, label: 'Macro-Pulse' },
+  { to: '/narrative', icon: MessageCircle, label: 'Narrative' },
+  { to: '/risk', icon: ShieldCheck, label: 'Risk' },
   { to: '/positions', icon: TrendingUp, label: 'Positions' },
   { to: '/performance', icon: BarChart3, label: 'Performance' },
   { to: '/agents', icon: Bot, label: 'Agents' },

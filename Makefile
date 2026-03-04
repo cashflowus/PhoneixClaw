@@ -1,5 +1,5 @@
 .PHONY: help install dev-install lint test test-cov infra-up infra-down infra-logs \
-       db-init db-migrate run-gateway run-auth run-dashboard \
+       db-init db-migrate dev \
        docker-build docker-up docker-down docker-logs clean benchmark \
        up down status logs setup local-up local-down \
        prod-build prod-up prod-down prod-logs prod-status
@@ -45,7 +45,7 @@ env-file: ## Create .env from .env.example
 	fi
 
 dashboard-install: ## Install dashboard (npm) dependencies
-	cd services/dashboard-ui && npm install
+	cd apps/dashboard && npm install
 
 # ─────────────────────────────────────────────
 # Code Quality
@@ -99,7 +99,7 @@ infra-logs: ## Tail infrastructure logs
 # Database
 # ─────────────────────────────────────────────
 db-init: ## Create all database tables
-	$(PYTHON) -c "import asyncio; from shared.models.database import init_db; asyncio.run(init_db())"
+	$(PYTHON) -c "import asyncio; from shared.db.database import init_db; asyncio.run(init_db())"
 
 db-migrate: ## Generate a new Alembic migration (usage: make db-migrate msg="add xyz")
 	alembic revision --autogenerate -m "$(msg)"
@@ -111,25 +111,15 @@ db-upgrade-v2: ## Apply Phoenix v2 shared/db migrations
 	PYTHONPATH=. alembic -c shared/db/migrations/alembic.ini upgrade head
 
 # ─────────────────────────────────────────────
-# Run Individual Services (local, no Docker)
+# Run v2 Services (local, no Docker)
 # ─────────────────────────────────────────────
-run-gateway: ## Run API Gateway on :8011
-	$(PYTHON) services/api-gateway/main.py
-
-run-auth: ## Run Auth Service on :8001
-	$(PYTHON) services/auth-service/main.py
-
-run-parser: ## Run Trade Parser on :8006
-	$(PYTHON) services/trade-parser/main.py
-
-run-executor: ## Run Trade Executor on :8008
-	$(PYTHON) services/trade-executor/main.py
-
-run-monitor: ## Run Position Monitor on :8009
-	$(PYTHON) services/position-monitor/main.py
-
-run-dashboard: ## Run React dashboard dev server on :3000 (v1)
-	cd services/dashboard-ui && npm run dev
+dev: ## Start the v2 stack via Docker Compose
+	docker compose -f infra/docker-compose.production.yml up -d
+	@echo ""
+	@echo "  v2 stack starting..."
+	@echo "      Dashboard:   http://localhost:3000"
+	@echo "      API:         http://localhost:8011"
+	@echo ""
 
 run-api-v2: ## Run Phoenix v2 API on :8011
 	PYTHONPATH=. $(PYTHON) -m uvicorn apps.api.src.main:app --host 0.0.0.0 --port 8011 --reload
@@ -152,10 +142,9 @@ setup: dev-install env-file dashboard-install ## First-time: install everything 
 up: ## Build & run ENTIRE platform in Docker
 	docker compose up -d --build
 	@echo ""
-	@echo "  ✅  Platform starting..."
+	@echo "  Platform starting..."
 	@echo "      Dashboard:   http://localhost:3000"
-	@echo "      API Gateway: http://localhost:8011"
-	@echo "      Auth API:    http://localhost:8001"
+	@echo "      API:         http://localhost:8011"
 	@echo ""
 	@echo "  Run 'make logs' to watch output"
 	@echo "  Run 'make status' to check health"
@@ -173,13 +162,11 @@ status: ## Show running containers & health
 
 local-up: infra-up db-init ## Start infra (Kafka/PG/Redis) + init DB for local dev
 	@echo ""
-	@echo "  ✅  Infra running & DB initialized. Now start services in separate terminals:"
-	@echo "      make run-auth       (port 8001)"
-	@echo "      make run-gateway    (port 8011)"
-	@echo "      make run-parser"
-	@echo "      make run-executor"
-	@echo "      make run-monitor"
-	@echo "      make run-dashboard  (port 3000)"
+	@echo "  Infra running & DB initialized. Now start services in separate terminals:"
+	@echo "      make run-api-v2        (port 8011)"
+	@echo "      make run-dashboard-v2  (port 3000)"
+	@echo "      make run-bridge        (port 18800)"
+	@echo "  Or run: make dev  (Docker-based v2 stack)"
 
 local-down: infra-down ## Stop local infra (Kafka/PG/Redis)
 
@@ -199,25 +186,25 @@ docker-logs: ## Tail all service logs
 	docker compose logs -f
 
 # ─────────────────────────────────────────────
-# Production / Coolify (docker-compose.coolify.yml)
+# Production (infra/docker-compose.production.yml)
 # ─────────────────────────────────────────────
-prod-build: ## Build production images (Coolify compose)
-	docker compose -f docker-compose.coolify.yml build
+prod-build: ## Build production images
+	docker compose -f infra/docker-compose.production.yml build
 
 prod-up: ## Start production stack locally (test before deploying)
-	docker compose -f docker-compose.coolify.yml up -d --build
+	docker compose -f infra/docker-compose.production.yml up -d --build
 	@echo ""
 	@echo "  Production stack starting on http://localhost"
 	@echo "  Run 'make prod-logs' to watch output"
 
 prod-down: ## Stop production stack
-	docker compose -f docker-compose.coolify.yml down
+	docker compose -f infra/docker-compose.production.yml down
 
 prod-logs: ## Tail production logs
-	docker compose -f docker-compose.coolify.yml logs -f
+	docker compose -f infra/docker-compose.production.yml logs -f
 
 prod-status: ## Show production container health
-	docker compose -f docker-compose.coolify.yml ps
+	docker compose -f infra/docker-compose.production.yml ps
 
 # ─────────────────────────────────────────────
 # Housekeeping

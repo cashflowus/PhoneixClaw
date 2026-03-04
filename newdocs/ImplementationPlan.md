@@ -1201,8 +1201,48 @@ on:
 
 jobs:
   full-regression:
-    # Runs unit + integration + regression + e2e + load tests
-    # Uses docker-compose to spin up full stack
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg16
+        env:
+          POSTGRES_USER: phoenixtrader
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: phoenixtrader_test
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - name: Run full regression suite
+        env:
+          DATABASE_URL: postgresql://phoenixtrader:testpass@localhost:5432/phoenixtrader_test
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          PYTHONPATH=. python -m pytest tests/unit/ tests/integration/ tests/regression/ -v --tb=short --junitxml=results.xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: results.xml
+
+  load-test:
+    runs-on: ubuntu-latest
+    needs: full-regression
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install locust websockets
+      - name: Run WebSocket load test
+        run: python tests/load/ws_load.py || true
 ```
 
 ### 4.5 Regression Growth by Phase
@@ -1353,7 +1393,7 @@ jobs:
 ### M1.4: Dashboard Shell & Navigation
 
 **Research Items:**
-- Review existing `services/dashboard-ui/src/` for AppShell, ThemeProvider, routing
+- Review existing `apps/dashboard/src/` for AppShell, ThemeProvider, routing
 - Evaluate React Router v6 patterns for protected routes
 - Tailwind CSS v4 configuration for dark mode and custom palette
 - Bottom navigation patterns for mobile (Material Design 3 specs)
@@ -1398,7 +1438,7 @@ jobs:
 ### M1.5: UI Component Library
 
 **Research Items:**
-- Inventory existing 19 Radix wrappers from `services/dashboard-ui/src/components/ui/`
+- Inventory existing 19 Radix wrappers from `apps/dashboard/src/components/ui/`
 - Evaluate TanStack Table v8 for DataTable component
 - Evaluate Sonner for toast notifications
 - Review `@xyflow/react` API for future Agent Network page
@@ -2023,6 +2063,52 @@ Each follows the same TDD pattern:
 - Implement to make tests pass
 - Add to regression suite
 - Update README with new capabilities
+
+**M2.11 — Multi-Broker Integration (IBKR, Tradier, Crypto)**
+
+| Item | Implementation |
+|---|---|
+| IBKR Connector | `services/connector-manager/src/brokers/ibkr.py` — uses `ib_insync`, TWS/IB Gateway paper + live |
+| Tradier Connector | `services/connector-manager/src/brokers/tradier.py` — REST API, sandbox + production tokens |
+| Crypto Connector | `services/connector-manager/src/brokers/coinbase.py` — Coinbase Advanced Trade API |
+| Unified Interface | `services/connector-manager/src/brokers/base.py` — abstract `BrokerAdapter` class (submit_order, cancel_order, get_positions, get_account) |
+| Regression Tests | `tests/regression/test_connector_regression.py` — per-broker connectivity, order lifecycle, credential vault |
+
+**M2.12 — Market Command Center Migration**
+
+| Item | Implementation |
+|---|---|
+| Market Page | `apps/dashboard/src/pages/Market.tsx` — real-time indices, TradingView embed, watchlists, quick trade |
+| Sector Heatmap | `apps/dashboard/src/components/market-widgets/SectorHeatmap.tsx` — CSS grid heat-colored by performance |
+| Options Flow | `apps/dashboard/src/components/market-widgets/OptionsFlow.tsx` — unusual options activity feed |
+| Widget Layout | CSS Grid (responsive), user can add/remove widgets via widget picker |
+
+**M2.13 — Enhanced Monitoring & Alerting**
+
+| Item | Implementation |
+|---|---|
+| Grafana Dashboards | `infra/observability/grafana/` — 7 dashboards (system, trading, agents, infra, circuit, openclaw, dev) |
+| Alert Rules | `infra/observability/alerting-rules.yml` — Prometheus alert rules for heartbeat miss, high latency, error rate |
+| Loki Integration | `infra/docker-compose.production.yml` — Loki + Promtail services |
+| Regression Tests | `tests/regression/test_infra_health.py` — Prometheus target scraping, alert rule syntax |
+
+**M2.14 — Performance Optimization**
+
+| Item | Implementation |
+|---|---|
+| DB Indices | Alembic migration adding composite indices on (agent_id, status), (symbol, created_at) |
+| Redis Caching | `apps/api/src/middleware/cache.py` — decorator for GET endpoints with 5s TTL |
+| Connection Pooling | SQLAlchemy pool_size=20, max_overflow=30 in production config |
+| TimescaleDB | Hypertable on `trade_intents.created_at` with 7-day chunks, 90-day retention policy |
+
+**M2.15 — Complete Skill Catalog (115 Skills)**
+
+| Item | Implementation |
+|---|---|
+| Skill Files | 115 markdown skill files across 7 categories in `openclaw/skills/` |
+| Skill Sync Service | `services/skill-sync/` — watches MinIO bucket, distributes to instances via bridge |
+| Skill Registry DB | `shared/db/models/skill.py` — Skill + AgentSkill models |
+| Regression Tests | `tests/regression/test_skill_sync_regression.py` — catalog scan, version tracking, distribution |
 
 ---
 

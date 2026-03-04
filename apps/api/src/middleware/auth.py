@@ -29,6 +29,8 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         request.state.user_id = None
         request.state.is_admin = False
+        request.state.role = "viewer"
+        request.state.permissions = []
         auth = request.headers.get("Authorization")
         if auth and auth.startswith("Bearer "):
             token = auth[7:]
@@ -36,4 +38,6 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             if payload and payload.get("type") == "access":
                 request.state.user_id = payload.get("sub")
                 request.state.is_admin = payload.get("admin") is True
+                request.state.role = payload.get("role", "trader")
+                request.state.permissions = payload.get("permissions", [])
         return await call_next(request)

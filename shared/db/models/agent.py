@@ -1,11 +1,11 @@
 """
-Agent model — links to OpenClaw instance and user. M1.6.
+Agent, AgentBacktest, and AgentLog models. M1.6, M2.3, M2.4.
 """
 
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,3 +28,42 @@ class Agent(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+
+class AgentBacktest(Base):
+    """Backtest run linked to an agent for lifecycle gating (M2.3/M2.4)."""
+    __tablename__ = "agent_backtests"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="RUNNING", index=True)
+    strategy_template: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    start_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    end_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    parameters: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    metrics: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    equity_curve: Mapped[dict] = mapped_column(JSONB, nullable=False, default=list)
+    total_trades: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    win_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sharpe_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_drawdown: Mapped[float | None] = mapped_column(Float, nullable=True)
+    total_return: Mapped[float | None] = mapped_column(Float, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class AgentLog(Base):
+    """Structured agent log entry (M2.5)."""
+    __tablename__ = "agent_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    level: Mapped[str] = mapped_column(String(10), nullable=False, default="INFO")
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    context: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

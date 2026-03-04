@@ -1,0 +1,66 @@
+groups:
+  - name: phoenix-alerts
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+
+      - alert: HighErrorRate
+        expr: rate(phoenix_api_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on {{ $labels.job }}"
+
+      - alert: CircuitBreakerOpen
+        expr: phoenix_circuit_breaker_state == 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker is OPEN - trading halted"
+
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes / 1024 / 1024 > 512
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.job }}"
+
+      - alert: AgentOffline
+        expr: phoenix_agent_heartbeat_age_seconds > 180
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent {{ $labels.agent_id }} heartbeat stale"
+
+      - alert: HighLatency
+        expr: histogram_quantile(0.99, rate(phoenix_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P99 latency above 2s on {{ $labels.job }}"
+
+      - alert: DiskSpaceLow
+        expr: node_filesystem_avail_bytes / node_filesystem_size_bytes < 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk space below 10%"
+
+      - alert: DailyLossThreshold
+        expr: phoenix_daily_pnl_total < -5000
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Daily loss exceeds $5000"

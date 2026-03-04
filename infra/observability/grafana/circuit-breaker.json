@@ -1,0 +1,62 @@
+{
+  "uid": "phoenix-circuit-breaker",
+  "title": "Phoenix Circuit Breaker",
+  "tags": ["phoenix", "risk", "circuit-breaker"],
+  "schemaVersion": 38,
+  "version": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "10s",
+  "templating": {
+    "list": [
+      { "name": "service", "type": "query", "query": "label_values(phoenix_circuit_breaker_state, service)", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Circuit Breaker State",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 4 },
+      "targets": [
+        { "expr": "phoenix_circuit_breaker_state", "legendFormat": "{{service}} (0=closed 1=open 2=half-open)", "refId": "A" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Daily Loss %",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "phoenix_daily_pnl_total", "legendFormat": "daily PnL", "refId": "A" },
+        { "expr": "phoenix_daily_pnl_percent", "legendFormat": "daily %", "refId": "B" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Kill Switch Status",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 4 },
+      "targets": [
+        { "expr": "phoenix_kill_switch_active", "legendFormat": "active (1=yes)", "refId": "A" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Blocked Trades Count",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "increase(phoenix_trades_total{status=\"REJECTED\"}[1h])", "legendFormat": "rejected/h", "refId": "A" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Circuit Breaker Events",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "changes(phoenix_circuit_breaker_state[1h])", "legendFormat": "state changes", "refId": "A" }
+      ]
+    }
+  ]
+}

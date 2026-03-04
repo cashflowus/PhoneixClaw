@@ -100,3 +100,21 @@ def set_agent_status(agent_id: str, status: str, pnl: float | None = None) -> No
     if pnl is not None:
         data["pnl"] = pnl
     status_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def get_agent_logs(agent_id: str, limit: int = 100, level: str | None = None) -> list[dict]:
+    """Return log entries for an agent. Reads from logs.json in agent dir if present."""
+    d = _agent_dir(agent_id)
+    if not d.exists():
+        return []
+    logs_file = d / "logs.json"
+    if not logs_file.exists():
+        return []
+    try:
+        data = json.loads(logs_file.read_text(encoding="utf-8"))
+        entries = data if isinstance(data, list) else data.get("logs", [])
+        if level:
+            entries = [e for e in entries if e.get("level") == level.upper()]
+        return entries[-limit:] if limit else entries
+    except Exception:
+        return []

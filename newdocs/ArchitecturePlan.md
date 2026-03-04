@@ -158,7 +158,7 @@ Dashboard updates in real-time
 │  │  Dashboard  │ │ Backend  │ │PostgreSQL│ │ Redis  │ │   MinIO   │ │
 │  │  (nginx +  │ │  API     │ │   16 +   │ │  7     │ │  (S3 API) │ │
 │  │  React)    │ │ (FastAPI)│ │TimescaleDB│ │        │ │           │ │
-│  │  :3080     │ │  :8011   │ │  :5432   │ │ :6379  │ │ :9000     │ │
+│  │  :3000     │ │  :8011   │ │  :5432   │ │ :6379  │ │ :9000     │ │
 │  └────────────┘ └──────────┘ └──────────┘ └────────┘ └───────────┘ │
 │                                                                      │
 │  ┌─────────────┐ ┌──────────────┐ ┌──────────────┐ ┌─────────────┐ │
@@ -222,6 +222,7 @@ Dashboard updates in real-time
 | `phoenix.yourdomain.com` | A | Coolify server public IP | Dashboard + API |
 | `api.phoenix.yourdomain.com` | CNAME | `phoenix.yourdomain.com` | API (optional separate subdomain) |
 | `grafana.phoenix.yourdomain.com` | A | Coolify server public IP | Monitoring dashboard |
+| `minio.phoenix.yourdomain.com` | A | Coolify server public IP | Object storage console |
 
 All HTTPS certificates are provisioned automatically by Coolify via Let's Encrypt.
 
@@ -235,9 +236,9 @@ All services on the Coolify server communicate via Docker network. OpenClaw inst
 
 | Service | Technology | Port | Replicas | Memory Limit | Depends On |
 |---|---|---|---|---|---|
-| **Dashboard** | React 18 + Vite 5 + nginx | 3080 (ext) → 80 (int) | 1 | 256 MB | API Gateway |
+| **Dashboard** | React 18 + Vite 5 + nginx | 3000 (ext) → 80 (int) | 1 | 256 MB | API Gateway |
 | **Backend API** | Python 3.12 + FastAPI + Uvicorn (includes `/auth`) | 8011 | 1 | 512 MB | PostgreSQL, Redis |
-| **Orchestrator Worker** | Python 3.12 + BullMQ consumer | internal | 1 | 512 MB | Redis, PostgreSQL |
+| **Orchestrator Worker** | Python 3.12 + FastAPI (Redis Streams consumer) | 8040 | 1 | 512 MB | Redis, PostgreSQL |
 | **Execution Service** | Python 3.12 + FastAPI | 8021 | 1 | 384 MB | Redis, PostgreSQL |
 | **Global Position Monitor** | Python 3.12 | internal | 1 | 256 MB | Redis, PostgreSQL |
 | **Connector Manager** | Python 3.12 | internal | 1 | 384 MB | Redis, PostgreSQL, Kafka (optional) |
@@ -263,7 +264,7 @@ All services on the Coolify server communicate via Docker network. OpenClaw inst
 ### 3.2 Service Interaction Diagram
 
 ```
-                           Dashboard (:3080)
+                           Dashboard (:3000)
                                │
                           nginx reverse proxy
                          /api → :8011, /auth → :8011, /ws → :8031
@@ -590,6 +591,7 @@ The Bridge Service is a lightweight FastAPI sidecar that the Control Plane uses 
 | `/agents/:id/pause` | POST | Pause agent |
 | `/agents/:id/resume` | POST | Resume agent |
 | `/agents/:id/logs` | GET | Stream recent agent logs |
+| `/agents/:id/message` | POST | Send a message to a specific agent |
 | `/skills/sync` | POST | Trigger skill pull from MinIO |
 
 ### 6.4 Skill Sync Mechanism
@@ -679,7 +681,7 @@ All other ports are blocked. Bridge Services (18800) and OpenClaw (18790) are ac
 ### 7.3 Authentication & Authorization
 
 **External (Dashboard users)**:
-- JWT tokens issued by Auth Service (existing `services/auth-service/`)
+- JWT tokens issued by Backend API (`apps/api/` routes under `/auth`)
 - Access token: 60-minute expiry, stored in memory
 - Refresh token: 7-day expiry, stored in localStorage
 - MFA: TOTP (existing implementation)
@@ -760,7 +762,7 @@ Health checks pass → traffic routed to new containers
 
 ### 8.2 Coolify Docker Compose
 
-The Coolify deployment uses a single `docker-compose.coolify.yml` with all services. Key patterns from the existing production compose:
+The Coolify deployment uses `infra/docker-compose.production.yml` with all services. Key patterns from the production compose:
 
 - All application services use `restart: unless-stopped`
 - Resource limits (memory) set per service

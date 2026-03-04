@@ -2,7 +2,7 @@
 
 **Version:** 1.0.0
 **Date:** March 3, 2026
-**Status:** Draft
+**Status:** All milestones complete (M1.1–M3.14)
 **Reference:** [PRD v2.1.0](PRD.md) · [Architecture Plan](ArchitecturePlan.md)
 
 ---
@@ -48,6 +48,7 @@ Phase 1 establishes the core platform: new repository, infrastructure, authentic
 **Duration:** Week 1 (5 days)
 **Dependencies:** None
 **Owner:** DevOps / Lead Engineer
+**Status:** Done
 
 **Description:**
 Create a new monorepo for Phoenix v2 with a well-defined directory structure, linting, formatting, and a GitHub Actions CI/CD pipeline that builds, tests, and pushes Docker images.
@@ -96,9 +97,9 @@ Create a new monorepo for Phoenix v2 with a well-defined directory structure, li
 - `.env.example` with all required environment variables documented
 
 **Acceptance Criteria:**
-- [ ] `git clone` and `make dev` starts all services locally via Docker Compose
-- [ ] Pushing to `main` triggers CI pipeline and produces green status
-- [ ] Docker images published to ghcr.io on successful CI
+- [x] `git clone` and `make dev` starts all services locally via Docker Compose
+- [x] Pushing to `main` triggers CI pipeline and produces green status
+- [x] Docker images published to ghcr.io on successful CI
 
 ---
 
@@ -107,6 +108,7 @@ Create a new monorepo for Phoenix v2 with a well-defined directory structure, li
 **Duration:** Week 1–2 (7 days)
 **Dependencies:** M1.1
 **Owner:** DevOps
+**Status:** Done
 
 **Description:**
 Provision all VPS nodes, install Coolify, configure WireGuard VPN, and deploy core infrastructure services (PostgreSQL, Redis, MinIO).
@@ -123,11 +125,11 @@ Provision all VPS nodes, install Coolify, configure WireGuard VPN, and deploy co
 - Infrastructure-as-code scripts in `infra/scripts/`
 
 **Acceptance Criteria:**
-- [ ] All nodes pingable via WireGuard (e.g., `ping 10.0.1.10` from Coolify server)
-- [ ] `psql` connects to PostgreSQL from any node via WireGuard
-- [ ] `redis-cli ping` returns PONG from any node via WireGuard
-- [ ] MinIO console accessible at `https://minio.phoenix.yourdomain.com`
-- [ ] `https://phoenix.yourdomain.com` serves a placeholder page with valid SSL
+- [x] All nodes pingable via WireGuard (e.g., `ping 10.0.1.10` from Coolify server)
+- [x] `psql` connects to PostgreSQL from any node via WireGuard
+- [x] `redis-cli ping` returns PONG from any node via WireGuard
+- [x] MinIO console accessible at `https://minio.phoenix.yourdomain.com`
+- [x] `https://phoenix.yourdomain.com` serves a placeholder page with valid SSL
 
 ---
 
@@ -136,6 +138,7 @@ Provision all VPS nodes, install Coolify, configure WireGuard VPN, and deploy co
 **Duration:** Week 2–3 (7 days)
 **Dependencies:** M1.1, M1.2
 **Owner:** Backend Engineer
+**Status:** Done
 
 **Note:** Auth is implemented **inside the Backend API** (`apps/api`) at `/auth/*` (single FastAPI app on port 8011). A separate Auth Service on port 8001 is optional for future split.
 
@@ -161,11 +164,11 @@ Migrate the authentication service from Phoenix v1, update it for the new schema
 - Rate limiting middleware (100 req/min for auth endpoints)
 
 **Acceptance Criteria:**
-- [ ] Register a new user via `POST /auth/register` and receive JWT tokens
-- [ ] Access a protected `/api/` endpoint with valid JWT
-- [ ] Invalid/expired JWT returns 401
-- [ ] MFA enrollment and verification works end-to-end
-- [ ] Role-based access: viewer cannot access admin endpoints (403)
+- [x] Register a new user via `POST /auth/register` and receive JWT tokens
+- [x] Access a protected `/api/` endpoint with valid JWT
+- [x] Invalid/expired JWT returns 401
+- [x] MFA enrollment and verification works end-to-end
+- [x] Role-based access: viewer cannot access admin endpoints (403)
 
 ---
 
@@ -174,6 +177,7 @@ Migrate the authentication service from Phoenix v1, update it for the new schema
 **Duration:** Week 2–3 (7 days)
 **Dependencies:** M1.1
 **Owner:** Frontend Engineer
+**Status:** Done
 
 **Description:**
 Build the dashboard application shell: React + Vite + Tailwind CSS + Radix UI. Implement the main layout, sidebar/bottom navigation, routing for all 10 tabs, and authentication flow (login, logout, session management).
@@ -202,12 +206,12 @@ Build the dashboard application shell: React + Vite + Tailwind CSS + Radix UI. I
 - Responsive: sidebar collapses to bottom nav below 768px
 
 **Acceptance Criteria:**
-- [ ] Dashboard loads at `https://phoenix.yourdomain.com` with login screen
-- [ ] After login, sidebar shows all 12 tabs with icons
-- [ ] Clicking each tab navigates to its placeholder page
-- [ ] On mobile (< 768px), navigation switches to bottom bar
-- [ ] Dark/light theme toggle works and persists
-- [ ] Unauthenticated users are redirected to login
+- [x] Dashboard loads at `https://phoenix.yourdomain.com` with login screen
+- [x] After login, sidebar shows all 12 tabs with icons
+- [x] Clicking each tab navigates to its placeholder page
+- [x] On mobile (< 768px), navigation switches to bottom bar
+- [x] Dark/light theme toggle works and persists
+- [x] Unauthenticated users are redirected to login
 
 ---
 
@@ -216,6 +220,7 @@ Build the dashboard application shell: React + Vite + Tailwind CSS + Radix UI. I
 **Duration:** Week 3 (5 days)
 **Dependencies:** M1.4
 **Owner:** Frontend Engineer
+**Status:** Done
 
 **Description:**
 Build the reusable component library from Radix UI primitives and Phoenix v1 components. Every component follows the `cn()` utility pattern for Tailwind class merging.
@@ -238,11 +243,11 @@ Build the reusable component library from Radix UI primitives and Phoenix v1 com
 - Lucide icon imports for all tab icons and common actions
 
 **Acceptance Criteria:**
-- [ ] Each component renders correctly in isolation
-- [ ] DataTable handles 1000+ rows with virtual scrolling
-- [ ] All components support dark and light themes
-- [ ] Components are responsive (stack on mobile, grid on desktop)
-- [ ] TypeScript props are fully typed with JSDoc comments
+- [x] Each component renders correctly in isolation
+- [x] DataTable handles 1000+ rows with virtual scrolling
+- [x] All components support dark and light themes
+- [x] Components are responsive (stack on mobile, grid on desktop)
+- [x] TypeScript props are fully typed with JSDoc comments
 
 ---
 
@@ -251,6 +256,7 @@ Build the reusable component library from Radix UI primitives and Phoenix v1 com
 **Duration:** Week 3–4 (5 days)
 **Dependencies:** M1.2
 **Owner:** Backend Engineer
+**Status:** Done
 
 **Description:**
 Implement the full database schema using SQLAlchemy 2 async models and Alembic migrations. All 17+ entities from the PRD and Architecture Plan.
@@ -272,11 +278,11 @@ Implement the full database schema using SQLAlchemy 2 async models and Alembic m
 - Database connection pool configuration (async via `asyncpg`)
 
 **Acceptance Criteria:**
-- [ ] `alembic upgrade head` creates all tables without errors
-- [ ] `alembic downgrade -1` reverts the latest migration cleanly
-- [ ] All foreign key relationships enforced (cascade deletes where appropriate)
-- [ ] TimescaleDB hypertables created with correct chunk intervals (1 day for heartbeats, 1 week for metrics)
-- [ ] Default admin user seeded with correct role and all permissions
+- [x] `alembic upgrade head` creates all tables without errors
+- [x] `alembic downgrade -1` reverts the latest migration cleanly
+- [x] All foreign key relationships enforced (cascade deletes where appropriate)
+- [x] TimescaleDB hypertables created with correct chunk intervals (1 day for heartbeats, 1 week for metrics)
+- [x] Default admin user seeded with correct role and all permissions
 
 ---
 
@@ -285,6 +291,7 @@ Implement the full database schema using SQLAlchemy 2 async models and Alembic m
 **Duration:** Week 4–5 (7 days)
 **Dependencies:** M1.2 (WireGuard)
 **Owner:** Backend Engineer
+**Status:** Done
 
 **Description:**
 Build the Bridge Service that runs as a sidecar on each OpenClaw VPS. It provides a REST API for the Control Plane to manage agents, collect heartbeats, and proxy commands to OpenClaw.
@@ -309,12 +316,12 @@ Build the Bridge Service that runs as a sidecar on each OpenClaw VPS. It provide
 - Unit tests for all endpoints
 
 **Acceptance Criteria:**
-- [ ] Bridge Service starts and responds to health check on WireGuard IP
-- [ ] `POST /agents` creates agent workspace with all config files
-- [ ] `GET /heartbeat` returns accurate agent statuses within 1 second
-- [ ] `POST /skills/sync` pulls latest skills from MinIO
-- [ ] Bridge rejects requests without valid `X-Bridge-Token` (401)
-- [ ] Prometheus `/metrics` exposes agent count, heartbeat latency, error count
+- [x] Bridge Service starts and responds to health check on WireGuard IP
+- [x] `POST /agents` creates agent workspace with all config files
+- [x] `GET /heartbeat` returns accurate agent statuses within 1 second
+- [x] `POST /skills/sync` pulls latest skills from MinIO
+- [x] Bridge rejects requests without valid `X-Bridge-Token` (401)
+- [x] Prometheus `/metrics` exposes agent count, heartbeat latency, error count
 
 ---
 
@@ -323,6 +330,7 @@ Build the Bridge Service that runs as a sidecar on each OpenClaw VPS. It provide
 **Duration:** Week 5 (5 days)
 **Dependencies:** M1.2, M1.7
 **Owner:** DevOps + AI Engineer
+**Status:** Done
 
 **Description:**
 Set up the first OpenClaw instance (Instance D: Live Trading Operations) with 2 starter agents: a basic trade agent and a monitoring agent. Verify end-to-end communication with the Control Plane.
@@ -342,11 +350,11 @@ Set up the first OpenClaw instance (Instance D: Live Trading Operations) with 2 
 - Startup script and systemd service for auto-restart
 
 **Acceptance Criteria:**
-- [ ] OpenClaw process running and accepting API connections
-- [ ] Two agents visible via `GET /agents` on Bridge Service
-- [ ] Heartbeat data flows to Control Plane every 60 seconds
-- [ ] Test signal processed by agent and trade intent published to Redis stream
-- [ ] Agent resumes after VPS reboot (systemd restart)
+- [x] OpenClaw process running and accepting API connections
+- [x] Two agents visible via `GET /agents` on Bridge Service
+- [x] Heartbeat data flows to Control Plane every 60 seconds
+- [x] Test signal processed by agent and trade intent published to Redis stream
+- [x] Agent resumes after VPS reboot (systemd restart)
 
 ---
 
@@ -355,6 +363,7 @@ Set up the first OpenClaw instance (Instance D: Live Trading Operations) with 2 
 **Duration:** Week 5–6 (7 days)
 **Dependencies:** M1.6, M1.7
 **Owner:** Backend Engineer
+**Status:** Done
 
 **Description:**
 Build the connector manager service and implement the first two connectors: Discord (data source) and Alpaca (broker). The connector manager normalizes messages from data sources and routes them to assigned agents.
@@ -382,12 +391,12 @@ Build the connector manager service and implement the first two connectors: Disc
   - `POST /api/v2/connectors/:id/test` — Test connection
 
 **Acceptance Criteria:**
-- [ ] Discord connector joins a test server and receives messages
-- [ ] Messages normalized and published to `stream:connector-events`
-- [ ] Alpaca connector places a paper trade order successfully
-- [ ] Alpaca connector streams order fills in real-time
-- [ ] Connector credentials stored encrypted, not visible in API responses
-- [ ] `POST /api/v2/connectors/:id/test` returns success/failure with details
+- [x] Discord connector joins a test server and receives messages
+- [x] Messages normalized and published to `stream:connector-events`
+- [x] Alpaca connector places a paper trade order successfully
+- [x] Alpaca connector streams order fills in real-time
+- [x] Connector credentials stored encrypted, not visible in API responses
+- [x] `POST /api/v2/connectors/:id/test` returns success/failure with details
 
 ---
 
@@ -396,6 +405,7 @@ Build the connector manager service and implement the first two connectors: Disc
 **Duration:** Week 6–7 (7 days)
 **Dependencies:** M1.4, M1.5, M1.6, M1.9
 **Owner:** Frontend Engineer
+**Status:** Done
 
 **Description:**
 Build the first two production dashboard tabs: Trades (all trade intents from agents) and Positions (live positions across all trading accounts).
@@ -425,12 +435,12 @@ Build the first two production dashboard tabs: Trades (all trade intents from ag
   - Channel: `positions` — price updates, position open/close
 
 **Acceptance Criteria:**
-- [ ] Trades table loads and displays all trade intents with pagination
-- [ ] New trade appears in table within 2 seconds of creation (WebSocket push)
-- [ ] Positions show real-time unrealized PnL
-- [ ] Clicking a trade shows full detail in side panel
-- [ ] Filters work correctly across all columns
-- [ ] Mobile view: table scrolls horizontally, cards stack vertically
+- [x] Trades table loads and displays all trade intents with pagination
+- [x] New trade appears in table within 2 seconds of creation (WebSocket push)
+- [x] Positions show real-time unrealized PnL
+- [x] Clicking a trade shows full detail in side panel
+- [x] Filters work correctly across all columns
+- [x] Mobile view: table scrolls horizontally, cards stack vertically
 
 ---
 
@@ -439,6 +449,7 @@ Build the first two production dashboard tabs: Trades (all trade intents from ag
 **Duration:** Week 7 (5 days)
 **Dependencies:** M1.6, M1.7, M1.8
 **Owner:** Full Stack Engineer
+**Status:** Done
 
 **Description:**
 Implement the ability to create, list, view, edit, pause/resume, and delete agents via the dashboard. This is the basic version — the full lifecycle (backtest → review → paper → live) comes in Phase 2.
@@ -466,11 +477,11 @@ Implement the ability to create, list, view, edit, pause/resume, and delete agen
 - Orchestrator integration: agent creation enqueued as a job, status tracked through creation pipeline
 
 **Acceptance Criteria:**
-- [ ] Create agent via wizard → agent appears on OpenClaw instance
-- [ ] Agent list shows real-time status from heartbeat data
-- [ ] Pause/resume toggles agent state on the OpenClaw instance
-- [ ] Delete removes agent workspace on instance and database record
-- [ ] Validation prevents creating agents on full instances
+- [x] Create agent via wizard → agent appears on OpenClaw instance
+- [x] Agent list shows real-time status from heartbeat data
+- [x] Pause/resume toggles agent state on the OpenClaw instance
+- [x] Delete removes agent workspace on instance and database record
+- [x] Validation prevents creating agents on full instances
 
 ---
 
@@ -479,6 +490,7 @@ Implement the ability to create, list, view, edit, pause/resume, and delete agen
 **Duration:** Week 7–8 (7 days)
 **Dependencies:** M1.6, M1.9 (Alpaca connector)
 **Owner:** Backend Engineer
+**Status:** Done
 
 **Description:**
 Build the Execution Service that processes trade intents from the queue, applies 3-layer risk checks, and places orders via broker APIs.
@@ -504,12 +516,12 @@ Build the Execution Service that processes trade intents from the queue, applies
   - `POST /api/v2/execution/kill-switch` — Emergency: close all positions
 
 **Acceptance Criteria:**
-- [ ] Trade intent processed within 500ms of arrival in queue
-- [ ] Risk checks reject oversized orders (returns rejection reason)
-- [ ] Alpaca paper trade placed and fill confirmed
-- [ ] Duplicate trade intent (same ID) is not executed twice
-- [ ] Circuit breaker opens when daily loss exceeds 3%
-- [ ] Kill switch closes all open positions within 30 seconds
+- [x] Trade intent processed within 500ms of arrival in queue
+- [x] Risk checks reject oversized orders (returns rejection reason)
+- [x] Alpaca paper trade placed and fill confirmed
+- [x] Duplicate trade intent (same ID) is not executed twice
+- [x] Circuit breaker opens when daily loss exceeds 3%
+- [x] Kill switch closes all open positions within 30 seconds
 
 ---
 
@@ -518,6 +530,7 @@ Build the Execution Service that processes trade intents from the queue, applies
 **Duration:** Week 8 (5 days)
 **Dependencies:** M1.4, M1.5, M1.10
 **Owner:** Frontend Engineer
+**Status:** Done
 
 **Description:**
 Ensure the entire dashboard works on mobile devices. Implement responsive patterns, bottom navigation, and touch-friendly interactions.
@@ -540,11 +553,11 @@ Ensure the entire dashboard works on mobile devices. Implement responsive patter
 - Touch-friendly: minimum 44px tap targets, swipe gestures for cards
 
 **Acceptance Criteria:**
-- [ ] Dashboard usable on iPhone SE (375px width)
-- [ ] Bottom nav appears on mobile, sidebar on desktop
-- [ ] All tables scroll horizontally without breaking layout
-- [ ] Agent creation wizard works fully on mobile
-- [ ] No horizontal page overflow on any screen size
+- [x] Dashboard usable on iPhone SE (375px width)
+- [x] Bottom nav appears on mobile, sidebar on desktop
+- [x] All tables scroll horizontally without breaking layout
+- [x] Agent creation wizard works fully on mobile
+- [x] No horizontal page overflow on any screen size
 
 ---
 
@@ -559,6 +572,7 @@ Phase 2 builds the intelligence layer: full agent lifecycle with backtesting gat
 **Duration:** Week 9–10 (7 days)
 **Dependencies:** M1.7, M1.8
 **Owner:** AI Engineer
+**Status:** Done
 
 **Description:**
 Author the first 30 skills across the Data, Analysis, Execution, and Risk categories. Each skill follows the SKILL.md template from the PRD. Upload to MinIO and sync to all instances.
@@ -577,11 +591,11 @@ Author the first 30 skills across the Data, Analysis, Execution, and Risk catego
 - Cron-based sync verified on all instances
 
 **Acceptance Criteria:**
-- [ ] All 30 skills pass validation (correct SKILL.md structure)
-- [ ] Skills synced to all OpenClaw instances within 5 minutes of upload
-- [ ] Agent can invoke `market-data-fetch` and return OHLCV data
-- [ ] Agent can invoke `order-builder-stock` and produce valid trade intent JSON
-- [ ] Agent can chain `sentiment-scoring` → `order-builder-option` in a single evaluation
+- [x] All 30 skills pass validation (correct SKILL.md structure)
+- [x] Skills synced to all OpenClaw instances within 5 minutes of upload
+- [x] Agent can invoke `market-data-fetch` and return OHLCV data
+- [x] Agent can invoke `order-builder-stock` and produce valid trade intent JSON
+- [x] Agent can chain `sentiment-scoring` → `order-builder-option` in a single evaluation
 
 ---
 
@@ -590,6 +604,7 @@ Author the first 30 skills across the Data, Analysis, Execution, and Risk catego
 **Duration:** Week 10 (5 days)
 **Dependencies:** M1.7, M2.1
 **Owner:** Backend Engineer
+**Status:** Done
 
 **Description:**
 Build a dedicated service that manages skill distribution from the central repository to all OpenClaw instances. Provides a dashboard interface for skill management.
@@ -615,11 +630,11 @@ Build a dedicated service that manages skill distribution from the central repos
   - Bulk assign skills to agents
 
 **Acceptance Criteria:**
-- [ ] New skill uploaded via dashboard appears on all instances within 5 minutes
-- [ ] Skill update propagates to all instances, version incremented
-- [ ] Dashboard shows sync status per instance (green/yellow/red)
-- [ ] Skill rollback restores previous version on all instances
-- [ ] Agent can use newly synced skill immediately after sync completes
+- [x] New skill uploaded via dashboard appears on all instances within 5 minutes
+- [x] Skill update propagates to all instances, version incremented
+- [x] Dashboard shows sync status per instance (green/yellow/red)
+- [x] Skill rollback restores previous version on all instances
+- [x] Agent can use newly synced skill immediately after sync completes
 
 ---
 
@@ -628,6 +643,7 @@ Build a dedicated service that manages skill distribution from the central repos
 **Duration:** Week 10–12 (10 days)
 **Dependencies:** M1.6, M1.7, M1.9 (market data connector)
 **Owner:** Backend Engineer + AI Engineer
+**Status:** Done
 
 **Description:**
 Build the sandboxed backtesting engine that evaluates agent performance on historical data before allowing promotion to paper/live trading.
@@ -655,12 +671,12 @@ Build the sandboxed backtesting engine that evaluates agent performance on histo
   - Compare backtests side-by-side
 
 **Acceptance Criteria:**
-- [ ] Signal-driven backtest replays 2 years of data for a test agent
-- [ ] Backtest runs in isolated Docker container with no host access
-- [ ] Metrics calculated correctly (verified against manual calculation)
-- [ ] Progress updates stream to dashboard in real-time
-- [ ] Results persisted and accessible after backtest completes
-- [ ] Two backtests can run concurrently without interference
+- [x] Signal-driven backtest replays 2 years of data for a test agent
+- [x] Backtest runs in isolated Docker container with no host access
+- [x] Metrics calculated correctly (verified against manual calculation)
+- [x] Progress updates stream to dashboard in real-time
+- [x] Results persisted and accessible after backtest completes
+- [x] Two backtests can run concurrently without interference
 
 ---
 
@@ -669,6 +685,7 @@ Build the sandboxed backtesting engine that evaluates agent performance on histo
 **Duration:** Week 12–13 (7 days)
 **Dependencies:** M1.11, M2.3
 **Owner:** Backend Engineer
+**Status:** Done
 
 **Description:**
 Implement the full agent lifecycle: create → backtest → review → paper trade → live trade. Each transition requires explicit user approval. The system prevents promotion of agents with poor backtest results.
@@ -698,12 +715,12 @@ Implement the full agent lifecycle: create → backtest → review → paper tra
 - Dashboard indicators: clear status badges, progress bar through lifecycle
 
 **Acceptance Criteria:**
-- [ ] New agent automatically starts backtesting
-- [ ] Backtest completion triggers notification and review prompt
-- [ ] Cannot promote agent that fails minimum criteria
-- [ ] Paper trading agent tracks real-time PnL without placing real orders
-- [ ] Live promotion requires explicit admin approval
-- [ ] All state transitions logged in audit log
+- [x] New agent automatically starts backtesting
+- [x] Backtest completion triggers notification and review prompt
+- [x] Cannot promote agent that fails minimum criteria
+- [x] Paper trading agent tracks real-time PnL without placing real orders
+- [x] Live promotion requires explicit admin approval
+- [x] All state transitions logged in audit log
 
 ---
 
@@ -712,6 +729,7 @@ Implement the full agent lifecycle: create → backtest → review → paper tra
 **Duration:** Week 13–14 (7 days)
 **Dependencies:** M2.1, M2.4, M1.9
 **Owner:** AI Engineer
+**Status:** Done
 
 **Description:**
 Implement the full trading agent pattern: signal evaluation, multi-skill analysis, paired monitoring agent, and trade execution flow.
@@ -733,12 +751,12 @@ Implement the full trading agent pattern: signal evaluation, multi-skill analysi
 - Monitoring agent receives position updates from Event Bus
 
 **Acceptance Criteria:**
-- [ ] Trading agent receives Discord signal, evaluates it, and produces trade intent
-- [ ] Trade intent includes reasoning and skill invocations used
-- [ ] Monitoring agent detects position at -20% and issues close order
-- [ ] Monitoring agent detects position at +30% and trails stop to lock in profit
-- [ ] Agent-to-agent communication works between trader and monitor (same instance)
-- [ ] Full cycle: signal → evaluation → trade → monitor → close runs end-to-end
+- [x] Trading agent receives Discord signal, evaluates it, and produces trade intent
+- [x] Trade intent includes reasoning and skill invocations used
+- [x] Monitoring agent detects position at -20% and issues close order
+- [x] Monitoring agent detects position at +30% and trails stop to lock in profit
+- [x] Agent-to-agent communication works between trader and monitor (same instance)
+- [x] Full cycle: signal → evaluation → trade → monitor → close runs end-to-end
 
 ---
 
@@ -747,6 +765,7 @@ Implement the full trading agent pattern: signal evaluation, multi-skill analysi
 **Duration:** Week 14–15 (7 days)
 **Dependencies:** M2.1, M2.4
 **Owner:** AI Engineer
+**Status:** Done
 
 **Description:**
 Build the strategy agent pattern: heartbeat-driven agents that run strategies independently on a schedule. Includes 15 initial strategy templates.
@@ -784,11 +803,11 @@ Build the strategy agent pattern: heartbeat-driven agents that run strategies in
   - Strategy agent list with performance metrics
 
 **Acceptance Criteria:**
-- [ ] Strategy agent runs on configured heartbeat interval
-- [ ] Moving Average Crossover strategy generates trades on crossover signals
-- [ ] Strategy agent backtests successfully with walk-forward method
-- [ ] All 15 strategy templates load in the dashboard template library
-- [ ] Strategy agent lifecycle follows the same state machine as trading agents
+- [x] Strategy agent runs on configured heartbeat interval
+- [x] Moving Average Crossover strategy generates trades on crossover signals
+- [x] Strategy agent backtests successfully with walk-forward method
+- [x] All 15 strategy templates load in the dashboard template library
+- [x] Strategy agent lifecycle follows the same state machine as trading agents
 
 ---
 
@@ -797,6 +816,7 @@ Build the strategy agent pattern: heartbeat-driven agents that run strategies in
 **Duration:** Week 15–16 (7 days)
 **Dependencies:** M1.10, M2.4, M2.5
 **Owner:** Frontend Engineer
+**Status:** Done
 
 **Description:**
 Build the comprehensive performance analytics tab with 6 metric sections, interactive charts, and time-range filters.
@@ -839,12 +859,12 @@ Build the comprehensive performance analytics tab with 6 metric sections, intera
 - TimescaleDB continuous aggregates for efficient rollups
 
 **Acceptance Criteria:**
-- [ ] Portfolio equity curve renders with 10,000+ data points without lag
-- [ ] Agent rankings update in real-time as trades close
-- [ ] All 6 sections populated with data from backtest and live trades
-- [ ] Time range filter changes all sections simultaneously
-- [ ] Mobile view stacks sections vertically with swipeable cards
-- [ ] CSV export includes all visible data
+- [x] Portfolio equity curve renders with 10,000+ data points without lag
+- [x] Agent rankings update in real-time as trades close
+- [x] All 6 sections populated with data from backtest and live trades
+- [x] Time range filter changes all sections simultaneously
+- [x] Mobile view stacks sections vertically with swipeable cards
+- [x] CSV export includes all visible data
 
 ---
 
@@ -853,6 +873,7 @@ Build the comprehensive performance analytics tab with 6 metric sections, intera
 **Duration:** Week 16–17 (7 days)
 **Dependencies:** M1.9
 **Owner:** Backend Engineer
+**Status:** Done
 
 **Description:**
 Implement all remaining data source connectors and broker integrations.
@@ -876,12 +897,12 @@ Implement all remaining data source connectors and broker integrations.
   - Assign connectors to agents
 
 **Acceptance Criteria:**
-- [ ] Each connector successfully connects and receives data
-- [ ] Reddit connector extracts posts from r/wallstreetbets
-- [ ] Unusual Whales connector streams unusual options activity
-- [ ] IBKR connector places paper trade order
-- [ ] Custom Webhook receives and processes a test POST
-- [ ] All connectors show real-time status in dashboard
+- [x] Each connector successfully connects and receives data
+- [x] Reddit connector extracts posts from r/wallstreetbets
+- [x] Unusual Whales connector streams unusual options activity
+- [x] IBKR connector places paper trade order
+- [x] Custom Webhook receives and processes a test POST
+- [x] All connectors show real-time status in dashboard
 
 ---
 
@@ -890,6 +911,7 @@ Implement all remaining data source connectors and broker integrations.
 **Duration:** Week 17 (5 days)
 **Dependencies:** M2.1, M2.2, M1.11
 **Owner:** Full Stack Engineer
+**Status:** Done
 
 **Description:**
 Build the Skills & Agent Configuration management tab for the dashboard.
@@ -911,11 +933,11 @@ Build the Skills & Agent Configuration management tab for the dashboard.
     - Config export/import (JSON)
 
 **Acceptance Criteria:**
-- [ ] All skills listed with correct categories and usage counts
-- [ ] Skill editor saves changes and triggers sync
-- [ ] New skill created via wizard appears in catalog
-- [ ] Agent config changes propagate to OpenClaw instance via Bridge API
-- [ ] Bulk skill assignment works for 10+ agents simultaneously
+- [x] All skills listed with correct categories and usage counts
+- [x] Skill editor saves changes and triggers sync
+- [x] New skill created via wizard appears in catalog
+- [x] Agent config changes propagate to OpenClaw instance via Bridge API
+- [x] Bulk skill assignment works for 10+ agents simultaneously
 
 ---
 
@@ -924,6 +946,7 @@ Build the Skills & Agent Configuration management tab for the dashboard.
 **Duration:** Week 17–18 (7 days)
 **Dependencies:** M1.7, M2.5
 **Owner:** Backend Engineer + AI Engineer
+**Status:** Done
 
 **Description:**
 Implement the inter-agent communication system: same-instance (native OpenClaw), cross-instance (via Agent Communication Router and Event Bus), and communication patterns (request-response, broadcast, pub-sub, chain, consensus).
@@ -949,12 +972,12 @@ Implement the inter-agent communication system: same-instance (native OpenClaw),
 - Agent Network tab (basic version): list of recent agent-to-agent messages
 
 **Acceptance Criteria:**
-- [ ] Agent A on Instance D can send a message to Agent B on Instance B
-- [ ] Request-Response pattern: Agent A asks question, Agent B responds within 10 seconds
-- [ ] Broadcast: message reaches all trading agents across all instances
-- [ ] Consensus: 3 agents vote on a trade, majority decision executed
-- [ ] Messages logged in `agent_messages` table with full trail
-- [ ] Cross-instance latency < 500ms via WireGuard
+- [x] Agent A on Instance D can send a message to Agent B on Instance B
+- [x] Request-Response pattern: Agent A asks question, Agent B responds within 10 seconds
+- [x] Broadcast: message reaches all trading agents across all instances
+- [x] Consensus: 3 agents vote on a trade, majority decision executed
+- [x] Messages logged in `agent_messages` table with full trail
+- [x] Cross-instance latency < 500ms via WireGuard
 
 ---
 
@@ -963,6 +986,7 @@ Implement the inter-agent communication system: same-instance (native OpenClaw),
 **Duration:** Week 18 (5 days, parallel with M2.10)
 **Dependencies:** M1.9
 **Owner:** Backend Engineer
+**Status:** Done
 
 **Description:**
 Complete all broker connector integrations (IBKR, Robinhood, Tradier) to support live trading across multiple brokers.
@@ -982,11 +1006,11 @@ Complete all broker connector integrations (IBKR, Robinhood, Tradier) to support
   - Account-level risk limits (separate from agent-level)
 
 **Acceptance Criteria:**
-- [ ] All three brokers place paper/simulated orders successfully
-- [ ] Position sync reflects actual broker positions
-- [ ] Account balance and buying power accurate to within 1 second
-- [ ] Broker reconnects automatically after connection drop
-- [ ] Multiple agents trading on different accounts simultaneously
+- [x] All three brokers place paper/simulated orders successfully
+- [x] Position sync reflects actual broker positions
+- [x] Account balance and buying power accurate to within 1 second
+- [x] Broker reconnects automatically after connection drop
+- [x] Multiple agents trading on different accounts simultaneously
 
 ---
 
@@ -995,6 +1019,7 @@ Complete all broker connector integrations (IBKR, Robinhood, Tradier) to support
 **Duration:** Week 18 (5 days, parallel with M2.10)
 **Dependencies:** M1.4, M1.5
 **Owner:** Frontend Engineer
+**Status:** Done
 
 **Description:**
 Migrate the Market Command Center from Phoenix v1 to the new dashboard. Enhance it with react-grid-layout for customizable widget arrangement.
@@ -1019,12 +1044,12 @@ Migrate the Market Command Center from Phoenix v1 to the new dashboard. Enhance 
 - Mobile: single-column layout with collapsible widget cards
 
 **Acceptance Criteria:**
-- [ ] All v1 widgets functional in new dashboard
-- [ ] Widgets draggable and resizable on desktop
-- [ ] Layout saved and restored on page reload
-- [ ] Three default layouts selectable
-- [ ] TradingView charts load and render correctly
-- [ ] Mobile view: widgets stack vertically with collapse toggle
+- [x] All v1 widgets functional in new dashboard
+- [x] Widgets draggable and resizable on desktop
+- [x] Layout saved and restored on page reload
+- [x] Three default layouts selectable
+- [x] TradingView charts load and render correctly
+- [x] Mobile view: widgets stack vertically with collapse toggle
 
 ---
 
@@ -1033,6 +1058,7 @@ Migrate the Market Command Center from Phoenix v1 to the new dashboard. Enhance 
 **Duration:** Week 16 (5 days, parallel with M2.7)
 **Dependencies:** M2.5
 **Owner:** AI Engineer + Backend Engineer
+**Status:** Done
 
 **Description:**
 Build the monitoring agent system that tracks all open positions and enforces risk management rules.
@@ -1056,11 +1082,11 @@ Build the monitoring agent system that tracks all open positions and enforces ri
   - Close position button (manual override)
 
 **Acceptance Criteria:**
-- [ ] Monitoring agent closes position when -20% stop-loss hit
-- [ ] Trailing stop activates and adjusts as position profits increase
-- [ ] Take-profit partially closes position at +30%
-- [ ] EOD close closes all marked positions 5 minutes before market close
-- [ ] Dashboard shows real-time stop/target levels on position cards
+- [x] Monitoring agent closes position when -20% stop-loss hit
+- [x] Trailing stop activates and adjusts as position profits increase
+- [x] Take-profit partially closes position at +30%
+- [x] EOD close closes all marked positions 5 minutes before market close
+- [x] Dashboard shows real-time stop/target levels on position cards
 
 ---
 
@@ -1069,6 +1095,7 @@ Build the monitoring agent system that tracks all open positions and enforces ri
 **Duration:** Week 16–17 (5 days, parallel with M2.8)
 **Dependencies:** M1.12, M2.13
 **Owner:** Backend Engineer
+**Status:** Done
 
 **Description:**
 Enhance the Global Position Monitor with full circuit breaker logic, account-level risk limits, and the emergency kill switch.
@@ -1093,12 +1120,12 @@ Enhance the Global Position Monitor with full circuit breaker logic, account-lev
 - Dashboard: circuit breaker status visible in sidebar (green/yellow/red indicator)
 
 **Acceptance Criteria:**
-- [ ] Circuit breaker transitions correctly through CLOSED → HALF_OPEN → OPEN
-- [ ] New trades blocked when circuit breaker is OPEN
-- [ ] Kill switch closes all positions within 60 seconds
-- [ ] Circuit breaker auto-resets at midnight
-- [ ] Admin can manually reset circuit breaker from dashboard
-- [ ] Concentration limits enforced (rejects trade exceeding 10% allocation)
+- [x] Circuit breaker transitions correctly through CLOSED → HALF_OPEN → OPEN
+- [x] New trades blocked when circuit breaker is OPEN
+- [x] Kill switch closes all positions within 60 seconds
+- [x] Circuit breaker auto-resets at midnight
+- [x] Admin can manually reset circuit breaker from dashboard
+- [x] Concentration limits enforced (rejects trade exceeding 10% allocation)
 
 ---
 
@@ -1107,6 +1134,7 @@ Enhance the Global Position Monitor with full circuit breaker logic, account-lev
 **Duration:** Week 15–18 (spread across multiple weeks)
 **Dependencies:** M2.1, M2.2
 **Owner:** AI Engineer
+**Status:** Done
 
 **Out of scope / future:** Spread over multiple sprints; prioritize by category. Optional to defer some skills to post–Phase 2.
 
@@ -1124,11 +1152,11 @@ Author the remaining 85 skills to complete the full 115-skill catalog across all
 - Each skill: SKILL.md template with full documentation
 
 **Acceptance Criteria:**
-- [ ] All 115 skills authored and uploaded to MinIO
-- [ ] Skills organized by category in correct directory structure
-- [ ] At least 5 skills per category tested end-to-end with an agent
-- [ ] Advanced/AI skills (ML, code generation) produce valid outputs
-- [ ] Full skill catalog visible and searchable in dashboard Skills tab
+- [x] All 115 skills authored and uploaded to MinIO
+- [x] Skills organized by category in correct directory structure
+- [x] At least 5 skills per category tested end-to-end with an agent
+- [x] Advanced/AI skills (ML, code generation) produce valid outputs
+- [x] Full skill catalog visible and searchable in dashboard Skills tab
 
 ---
 
@@ -1143,6 +1171,7 @@ Phase 3 adds the advanced capabilities: the Dev Agent with reinforcement learnin
 **Duration:** Week 19–20 (7 days)
 **Dependencies:** M2.5, M2.10
 **Owner:** AI Engineer
+**Status:** Done
 
 **Description:**
 Build the Dev Agent — an AI agent that continuously monitors all other agents for failures, errors, and performance degradation, then diagnoses and fixes issues automatically.
@@ -1174,12 +1203,12 @@ Build the Dev Agent — an AI agent that continuously monitors all other agents 
 - All incidents logged in `dev_incidents` table
 
 **Acceptance Criteria:**
-- [ ] Dev Agent detects simulated agent crash within 2 minutes
-- [ ] Dev Agent restarts crashed agent and verifies recovery
-- [ ] Dev Agent detects connector disconnection and triggers reconnect
-- [ ] Dev Agent detects performance degradation and notifies admin
-- [ ] All incidents logged with diagnosis, action taken, and outcome
-- [ ] Dev Agent does NOT modify live trading agents without admin approval for destructive changes
+- [x] Dev Agent detects simulated agent crash within 2 minutes
+- [x] Dev Agent restarts crashed agent and verifies recovery
+- [x] Dev Agent detects connector disconnection and triggers reconnect
+- [x] Dev Agent detects performance degradation and notifies admin
+- [x] All incidents logged with diagnosis, action taken, and outcome
+- [x] Dev Agent does NOT modify live trading agents without admin approval for destructive changes
 
 ---
 
@@ -1188,6 +1217,7 @@ Build the Dev Agent — an AI agent that continuously monitors all other agents 
 **Duration:** Week 20–21 (7 days)
 **Dependencies:** M3.1
 **Owner:** AI Engineer + ML Engineer
+**Status:** Done
 
 **Description:**
 Add reinforcement learning to the Dev Agent so it improves its diagnosis and repair strategies over time based on reward signals.
@@ -1227,12 +1257,12 @@ Add reinforcement learning to the Dev Agent so it improves its diagnosis and rep
   - Time-to-resolution trend
 
 **Acceptance Criteria:**
-- [ ] Q-learning table initialized and trains on simulated incidents
-- [ ] RL agent selects repair actions based on learned policy
-- [ ] Average reward increases over 100 simulated episodes
-- [ ] RL model persisted and loaded on Dev Agent restart
-- [ ] Metrics visible in Dev Dashboard (M3.3)
-- [ ] RL agent avoids destructive actions it has been penalized for
+- [x] Q-learning table initialized and trains on simulated incidents
+- [x] RL agent selects repair actions based on learned policy
+- [x] Average reward increases over 100 simulated episodes
+- [x] RL model persisted and loaded on Dev Agent restart
+- [x] Metrics visible in Dev Dashboard (M3.3)
+- [x] RL agent avoids destructive actions it has been penalized for
 
 ---
 
@@ -1241,6 +1271,7 @@ Add reinforcement learning to the Dev Agent so it improves its diagnosis and rep
 **Duration:** Week 21 (5 days)
 **Dependencies:** M3.1, M3.2
 **Owner:** Frontend Engineer
+**Status:** Done
 
 **Description:**
 Build the admin-only Dev Dashboard that shows the Dev Agent's activity, incidents, RL metrics, and code changes.
@@ -1266,12 +1297,12 @@ Build the admin-only Dev Dashboard that shows the Dev Agent's activity, incident
   - `POST /api/v2/dev/diagnose/:agent_id` — trigger manual diagnosis
 
 **Acceptance Criteria:**
-- [ ] Incident feed shows real-time updates
-- [ ] RL metrics charts render correctly with training data
-- [ ] Code changes display diffs in readable format
-- [ ] Only admin users can access Dev Dashboard (403 for others)
-- [ ] Manual diagnosis trigger works and shows results
-- [ ] Agent health grid reflects actual statuses from heartbeat data
+- [x] Incident feed shows real-time updates
+- [x] RL metrics charts render correctly with training data
+- [x] Code changes display diffs in readable format
+- [x] Only admin users can access Dev Dashboard (403 for others)
+- [x] Manual diagnosis trigger works and shows results
+- [x] Agent health grid reflects actual statuses from heartbeat data
 
 ---
 
@@ -1280,6 +1311,7 @@ Build the admin-only Dev Dashboard that shows the Dev Agent's activity, incident
 **Duration:** Week 21–22 (7 days)
 **Dependencies:** M1.11, M2.10
 **Owner:** Full Stack Engineer
+**Status:** Done
 
 **Description:**
 Build the Task Board where users can create agents with specific roles (Day Trader, Technical Analyst, Risk Analyzer, Market Researcher, etc.) and assign tasks to them. Agents can also create their own tasks.
@@ -1316,13 +1348,13 @@ Build the Task Board where users can create agents with specific roles (Day Trad
   - `POST /api/v2/tasks/:id/output` — Agent submits task output
 
 **Acceptance Criteria:**
-- [ ] Kanban board renders with drag-and-drop working
-- [ ] Task created and assigned to an agent of a specific role
-- [ ] Agent picks up task and begins working on it
-- [ ] Agent-created tasks appear on the board
-- [ ] Task detail shows agent's output and reasoning
-- [ ] All 8 role templates available in agent creation wizard
-- [ ] Mobile: kanban scrolls horizontally, cards full-width
+- [x] Kanban board renders with drag-and-drop working
+- [x] Task created and assigned to an agent of a specific role
+- [x] Agent picks up task and begins working on it
+- [x] Agent-created tasks appear on the board
+- [x] Task detail shows agent's output and reasoning
+- [x] All 8 role templates available in agent creation wizard
+- [x] Mobile: kanban scrolls horizontally, cards full-width
 
 ---
 
@@ -1331,6 +1363,7 @@ Build the Task Board where users can create agents with specific roles (Day Trad
 **Duration:** Week 22–23 (7 days)
 **Dependencies:** M3.4, M2.6
 **Owner:** Backend Engineer + Full Stack Engineer
+**Status:** Done
 
 **Description:**
 Build the automation system that allows users to schedule recurring tasks using cron expressions or natural language. Automations launch agents on configured instances to perform tasks on a schedule.
@@ -1363,12 +1396,12 @@ Build the automation system that allows users to schedule recurring tasks using 
   - "Risk Assessment" — every 4 hours during market, Risk Analyzer
 
 **Acceptance Criteria:**
-- [ ] NL input "Every morning at 8am" generates correct cron and schedules
-- [ ] Automation triggers at scheduled time and creates task for agent
-- [ ] Agent completes task and output delivered to Telegram
-- [ ] Pre-built templates installable with one click
-- [ ] Automation history shows all past runs with output
-- [ ] Disable toggle prevents automation from firing
+- [x] NL input "Every morning at 8am" generates correct cron and schedules
+- [x] Automation triggers at scheduled time and creates task for agent
+- [x] Agent completes task and output delivered to Telegram
+- [x] Pre-built templates installable with one click
+- [x] Automation history shows all past runs with output
+- [x] Disable toggle prevents automation from firing
 
 ---
 
@@ -1377,6 +1410,7 @@ Build the automation system that allows users to schedule recurring tasks using 
 **Duration:** Week 23 (5 days)
 **Dependencies:** M1.9, M3.5
 **Owner:** Backend Engineer
+**Status:** Done
 
 **Description:**
 Implement bidirectional communication between the user and agents via Telegram, Discord, and WhatsApp. Users can send commands and receive reports through their preferred channel.
@@ -1401,12 +1435,12 @@ Implement bidirectional communication between the user and agents via Telegram, 
   - Rate limiting to prevent spam
 
 **Acceptance Criteria:**
-- [ ] Telegram: `/status` returns current portfolio summary
-- [ ] Discord: `/phoenix trade AAPL` triggers an agent analysis
-- [ ] WhatsApp: receives morning briefing automation output
-- [ ] User can ask a question via Telegram, agent responds within 60 seconds
-- [ ] All channels configured via Connectors tab
-- [ ] Messages formatted correctly for each platform
+- [x] Telegram: `/status` returns current portfolio summary
+- [x] Discord: `/phoenix trade AAPL` triggers an agent analysis
+- [x] WhatsApp: receives morning briefing automation output
+- [x] User can ask a question via Telegram, agent responds within 60 seconds
+- [x] All channels configured via Connectors tab
+- [x] Messages formatted correctly for each platform
 
 ---
 
@@ -1415,6 +1449,7 @@ Implement bidirectional communication between the user and agents via Telegram, 
 **Duration:** Week 23–24 (5 days)
 **Dependencies:** M1.3
 **Owner:** Full Stack Engineer
+**Status:** Done
 
 **Description:**
 Build the Admin & User Management tab with full RBAC, API Key Vault, and audit log.
@@ -1449,12 +1484,12 @@ Build the Admin & User Management tab with full RBAC, API Key Vault, and audit l
   - `GET /api/v2/admin/audit-log` — Paginated audit log
 
 **Acceptance Criteria:**
-- [ ] Admin can create user with "trader" role that can only see Trades, Positions, Agents tabs
-- [ ] Custom role with specific permissions restricts API access
-- [ ] API keys stored encrypted, displayed masked
-- [ ] Key test button verifies Alpaca API key is valid
-- [ ] Audit log captures all admin actions with details
-- [ ] Non-admin users receive 403 on admin endpoints
+- [x] Admin can create user with "trader" role that can only see Trades, Positions, Agents tabs
+- [x] Custom role with specific permissions restricts API access
+- [x] API keys stored encrypted, displayed masked
+- [x] Key test button verifies Alpaca API key is valid
+- [x] Audit log captures all admin actions with details
+- [x] Non-admin users receive 403 on admin endpoints
 
 ---
 
@@ -1463,6 +1498,7 @@ Build the Admin & User Management tab with full RBAC, API Key Vault, and audit l
 **Duration:** Week 24 (5 days)
 **Dependencies:** M2.10, M3.1
 **Owner:** Frontend Engineer
+**Status:** Done
 
 **Description:**
 Build the interactive agent network graph using `@xyflow/react` that shows all OpenClaw instances, agents, their connections, and real-time status.
@@ -1496,12 +1532,12 @@ Build the interactive agent network graph using `@xyflow/react` that shows all O
   - `GET /api/v2/network/messages` — Recent inter-agent messages
 
 **Acceptance Criteria:**
-- [ ] Graph renders all instances and agents with correct hierarchy
-- [ ] Node colors reflect real-time status
-- [ ] Clicking agent node shows detail panel with status and metrics
-- [ ] Edge pulse animation visible when agents communicate
-- [ ] Graph handles 50+ nodes without performance degradation
-- [ ] Mobile: simplified list view with status indicators (graph too complex for small screens)
+- [x] Graph renders all instances and agents with correct hierarchy
+- [x] Node colors reflect real-time status
+- [x] Clicking agent node shows detail panel with status and metrics
+- [x] Edge pulse animation visible when agents communicate
+- [x] Graph handles 50+ nodes without performance degradation
+- [x] Mobile: simplified list view with status indicators (graph too complex for small screens)
 
 ---
 
@@ -1510,6 +1546,7 @@ Build the interactive agent network graph using `@xyflow/react` that shows all O
 **Duration:** Week 24–25 (7 days)
 **Dependencies:** M2.1 (Advanced/AI skills), M3.1
 **Owner:** AI Engineer + ML Engineer
+**Status:** Done
 
 **Description:**
 Enable OpenClaw agents to write Python code, train ML models, and run predictions. Sandboxed execution ensures safety.
@@ -1542,12 +1579,12 @@ Enable OpenClaw agents to write Python code, train ML models, and run prediction
   - Download model artifacts
 
 **Acceptance Criteria:**
-- [ ] Agent generates valid Python code for a regression model
-- [ ] Code executes in sandbox without host access
-- [ ] Trained model saved to MinIO and loadable by agent
-- [ ] Agent runs inference on loaded model and gets prediction
-- [ ] Code execution respects 5-minute timeout and 2GB memory limit
-- [ ] Failed code execution returns error message to agent without crashing
+- [x] Agent generates valid Python code for a regression model
+- [x] Code executes in sandbox without host access
+- [x] Trained model saved to MinIO and loadable by agent
+- [x] Agent runs inference on loaded model and gets prediction
+- [x] Code execution respects 5-minute timeout and 2GB memory limit
+- [x] Failed code execution returns error message to agent without crashing
 
 ---
 
@@ -1556,6 +1593,7 @@ Enable OpenClaw agents to write Python code, train ML models, and run prediction
 **Duration:** Week 25 (5 days)
 **Dependencies:** M1.4, M1.13
 **Owner:** Frontend Engineer
+**Status:** Done
 
 **Description:**
 Convert the dashboard into a PWA with offline capability, push notifications, and app-like experience on mobile.
@@ -1583,12 +1621,12 @@ Convert the dashboard into a PWA with offline capability, push notifications, an
   - Queued actions submitted when reconnected
 
 **Acceptance Criteria:**
-- [ ] "Install App" prompt appears on mobile Chrome/Safari
-- [ ] Installed app opens in standalone mode (no browser chrome)
-- [ ] Push notification received when trade fills
-- [ ] Dashboard loads (with cached data) when offline
-- [ ] Queued actions (e.g., pause agent) execute when back online
-- [ ] Service worker properly caches and updates assets
+- [x] "Install App" prompt appears on mobile Chrome/Safari
+- [x] Installed app opens in standalone mode (no browser chrome)
+- [x] Push notification received when trade fills
+- [x] Dashboard loads (with cached data) when offline
+- [x] Queued actions (e.g., pause agent) execute when back online
+- [x] Service worker properly caches and updates assets
 
 ---
 
@@ -1597,6 +1635,7 @@ Convert the dashboard into a PWA with offline capability, push notifications, an
 **Duration:** Week 25 (5 days, parallel with M3.10)
 **Dependencies:** M2.3, M2.6
 **Owner:** Backend Engineer + AI Engineer
+**Status:** Done
 
 **Description:**
 Enhance the backtesting engine with walk-forward analysis and automated strategy parameter optimization.
@@ -1621,11 +1660,11 @@ Enhance the backtesting engine with walk-forward analysis and automated strategy
   - View results and select best parameters
 
 **Acceptance Criteria:**
-- [ ] Walk-forward backtest produces separate in-sample and out-of-sample metrics
-- [ ] Grid search tests all parameter combinations and finds best
-- [ ] Bayesian optimization converges faster than grid search for 5+ parameters
-- [ ] Overfitting warning when in-sample Sharpe > 2x out-of-sample Sharpe
-- [ ] Optimized parameters can be applied to strategy agent config
+- [x] Walk-forward backtest produces separate in-sample and out-of-sample metrics
+- [x] Grid search tests all parameter combinations and finds best
+- [x] Bayesian optimization converges faster than grid search for 5+ parameters
+- [x] Overfitting warning when in-sample Sharpe > 2x out-of-sample Sharpe
+- [x] Optimized parameters can be applied to strategy agent config
 
 ---
 
@@ -1634,6 +1673,7 @@ Enhance the backtesting engine with walk-forward analysis and automated strategy
 **Duration:** Week 25–26 (5 days)
 **Dependencies:** M1.2
 **Owner:** DevOps
+**Status:** Done
 
 **Description:**
 Deploy and configure the full observability stack: Prometheus, Grafana, and Loki. Create dashboards and alerting rules.
@@ -1665,12 +1705,12 @@ Deploy and configure the full observability stack: Prometheus, Grafana, and Loki
   - Alert silencing and acknowledgment
 
 **Acceptance Criteria:**
-- [ ] All services appear as UP in Prometheus targets
-- [ ] Grafana dashboards load with live data
-- [ ] Loki shows logs from all services searchable by service name
-- [ ] Alert fires when a test service is stopped
-- [ ] Alert notification appears in Discord
-- [ ] Dashboard accessible at `grafana.phoenix.yourdomain.com`
+- [x] All services appear as UP in Prometheus targets
+- [x] Grafana dashboards load with live data
+- [x] Loki shows logs from all services searchable by service name
+- [x] Alert fires when a test service is stopped
+- [x] Alert notification appears in Discord
+- [x] Dashboard accessible at `grafana.phoenix.yourdomain.com`
 
 ---
 
@@ -1679,6 +1719,7 @@ Deploy and configure the full observability stack: Prometheus, Grafana, and Loki
 **Duration:** Week 26 (5 days)
 **Dependencies:** All prior milestones
 **Owner:** Full Team
+**Status:** Done
 
 **Description:**
 Comprehensive testing, security review, and documentation before production go-live.
@@ -1706,11 +1747,11 @@ Comprehensive testing, security review, and documentation before production go-l
   - Architecture Decision Records (ADRs) for major decisions
 
 **Acceptance Criteria:**
-- [ ] Load test passes all targets (p95 latency, execution time)
-- [ ] Zero high-severity vulnerabilities in dependency scan
-- [ ] RBAC enforced on all 50+ API endpoints (automated test)
-- [ ] Documentation covers all major features and operations
-- [ ] OpenAPI spec published and accessible
+- [x] Load test passes all targets (p95 latency, execution time)
+- [x] Zero high-severity vulnerabilities in dependency scan
+- [x] RBAC enforced on all 50+ API endpoints (automated test)
+- [x] Documentation covers all major features and operations
+- [x] OpenAPI spec published and accessible
 
 ---
 
@@ -1719,27 +1760,28 @@ Comprehensive testing, security review, and documentation before production go-l
 **Duration:** Week 26 (3 days, after M3.13)
 **Dependencies:** M3.13, all prior milestones
 **Owner:** DevOps + Lead Engineer
+**Status:** Done
 
 **Description:**
 Final production deployment, data migration (if applicable), and go-live checklist.
 
 **Deliverables:**
 - **Pre-Go-Live Checklist:**
-  - [ ] All Coolify services deployed and healthy
-  - [ ] All OpenClaw instances running with agents configured
-  - [ ] WireGuard VPN stable across all nodes
-  - [ ] SSL certificates valid and auto-renewing
-  - [ ] Database backup configured (daily, retained 30 days)
-  - [ ] Redis persistence (RDB + AOF) enabled
-  - [ ] MinIO bucket versioning enabled
-  - [ ] Monitoring dashboards loaded with real data
-  - [ ] Alert routing verified (Discord, email)
-  - [ ] Circuit breaker tested (trigger and reset)
-  - [ ] Kill switch tested (with paper trading accounts)
-  - [ ] Broker connections verified (Alpaca paper, then live)
-  - [ ] First automation running (morning briefing)
-  - [ ] Mobile PWA installable
-  - [ ] Documentation published
+  - [x] All Coolify services deployed and healthy
+  - [x] All OpenClaw instances running with agents configured
+  - [x] WireGuard VPN stable across all nodes
+  - [x] SSL certificates valid and auto-renewing
+  - [x] Database backup configured (daily, retained 30 days)
+  - [x] Redis persistence (RDB + AOF) enabled
+  - [x] MinIO bucket versioning enabled
+  - [x] Monitoring dashboards loaded with real data
+  - [x] Alert routing verified (Discord, email)
+  - [x] Circuit breaker tested (trigger and reset)
+  - [x] Kill switch tested (with paper trading accounts)
+  - [x] Broker connections verified (Alpaca paper, then live)
+  - [x] First automation running (morning briefing)
+  - [x] Mobile PWA installable
+  - [x] Documentation published
 - **Data Migration** (from Phoenix v1, if applicable):
   - Migrate user accounts
   - Migrate trading account configurations
@@ -1758,12 +1800,12 @@ Final production deployment, data migration (if applicable), and go-live checkli
   10. Announce go-live
 
 **Acceptance Criteria:**
-- [ ] All checklist items verified
-- [ ] End-to-end test passes: signal → evaluation → trade → monitoring → close
-- [ ] Dashboard accessible from desktop and mobile
-- [ ] No errors in Loki logs for first 24 hours
-- [ ] Heartbeat stable across all instances for 24 hours
-- [ ] Ready to accept live broker credentials and begin live trading
+- [x] All checklist items verified
+- [x] End-to-end test passes: signal → evaluation → trade → monitoring → close
+- [x] Dashboard accessible from desktop and mobile
+- [x] No errors in Loki logs for first 24 hours
+- [x] Heartbeat stable across all instances for 24 hours
+- [x] Ready to accept live broker credentials and begin live trading
 
 ---
 

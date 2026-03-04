@@ -5,6 +5,7 @@ M1.1: Minimal app with health endpoint. M1.3: Auth routes and JWT middleware.
 Reference: ImplementationPlan.md Section 2, Section 5 M1.1, M1.3.
 """
 
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -12,7 +13,39 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.src.config import settings
 from apps.api.src.middleware.auth import JWTAuthMiddleware
+from apps.api.src.middleware.error_handler import ErrorHandlerMiddleware
+from apps.api.src.middleware.rate_limit import RateLimitMiddleware
+from apps.api.src.middleware.logging import LoggingMiddleware
 from apps.api.src.routes import auth as auth_routes
+from apps.api.src.routes import instances as instance_routes
+from apps.api.src.routes import connectors as connector_routes
+from apps.api.src.routes import trades as trades_routes
+from apps.api.src.routes import positions as positions_routes
+from apps.api.src.routes import agents as agents_routes
+from apps.api.src.routes import execution as execution_routes
+from apps.api.src.routes import skills as skills_routes
+from apps.api.src.routes import backtests as backtests_routes
+from apps.api.src.routes import strategies as strategies_routes
+from apps.api.src.routes import monitoring as monitoring_routes
+from apps.api.src.routes import dev_agent as dev_agent_routes
+from apps.api.src.routes import tasks as tasks_routes
+from apps.api.src.routes import automations as automations_routes
+from apps.api.src.routes import admin as admin_routes
+from apps.api.src.routes import network as network_routes
+from apps.api.src.routes import performance as performance_routes
+from apps.api.src.routes import market as market_routes
+from apps.api.src.routes import ws as ws_routes
+from apps.api.src.routes import agent_learning as agent_learning_routes
+from apps.api.src.routes import daily_signals as daily_signals_routes
+from apps.api.src.routes import onchain_flow as onchain_flow_routes
+from apps.api.src.routes import macro_pulse as macro_pulse_routes
+from apps.api.src.routes import zero_dte as zero_dte_routes
+from apps.api.src.routes import narrative_sentiment as narrative_sentiment_routes
+from apps.api.src.routes import risk_compliance as risk_compliance_routes
+from apps.api.src.routes import agent_messages as agent_messages_routes
+
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -29,16 +62,45 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+app.add_middleware(ErrorHandlerMiddleware)
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(LoggingMiddleware)
 app.add_middleware(JWTAuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.include_router(auth_routes.router)
+app.include_router(instance_routes.router)
+app.include_router(connector_routes.router)
+app.include_router(trades_routes.router)
+app.include_router(positions_routes.router)
+app.include_router(agents_routes.router)
+app.include_router(execution_routes.router)
+app.include_router(skills_routes.router)
+app.include_router(backtests_routes.router)
+app.include_router(strategies_routes.router)
+app.include_router(monitoring_routes.router)
+app.include_router(dev_agent_routes.router)
+app.include_router(tasks_routes.router)
+app.include_router(automations_routes.router)
+app.include_router(admin_routes.router)
+app.include_router(network_routes.router)
+app.include_router(performance_routes.router)
+app.include_router(market_routes.router)
+app.include_router(ws_routes.router)
+app.include_router(daily_signals_routes.router)
+app.include_router(agent_learning_routes.router)
+app.include_router(onchain_flow_routes.router)
+app.include_router(macro_pulse_routes.router)
+app.include_router(zero_dte_routes.router)
+app.include_router(narrative_sentiment_routes.router)
+app.include_router(risk_compliance_routes.router)
+app.include_router(agent_messages_routes.router)
 
 
 @app.get("/health")

@@ -1,0 +1,58 @@
+{
+  "uid": "phoenix-trading-operations",
+  "title": "Phoenix Trading Operations",
+  "tags": ["phoenix", "trading", "operations"],
+  "schemaVersion": 38,
+  "version": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "15s",
+  "templating": {
+    "list": [
+      { "name": "service", "type": "query", "query": "label_values(phoenix_trades_total, service)", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Trade Intents/min",
+      "type": "graph",
+      "targets": [
+        { "expr": "sum(rate(phoenix_trades_total{service=\"phoenix-api\"}[5m])) * 60", "legendFormat": "trades/min" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Fill Rate by Status",
+      "type": "graph",
+      "targets": [
+        { "expr": "rate(phoenix_trades_total{status=\"EXECUTED\"}[5m])", "legendFormat": "filled" },
+        { "expr": "rate(phoenix_trades_total{status=\"REJECTED\"}[5m])", "legendFormat": "rejected" },
+        { "expr": "rate(phoenix_trades_total{status=\"ERROR\"}[5m])", "legendFormat": "error" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Rejection Rate %",
+      "type": "graph",
+      "targets": [
+        { "expr": "100 * rate(phoenix_trades_total{status=\"REJECTED\"}[5m]) / (rate(phoenix_trades_total[5m]) + 1e-9)", "legendFormat": "rejection %" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Execution Latency P99 (s)",
+      "type": "graph",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, rate(phoenix_trade_latency_seconds_bucket[5m]))", "legendFormat": "P99" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "HTTP Request Rate",
+      "type": "graph",
+      "targets": [
+        { "expr": "rate(phoenix_http_requests_total{service=\"phoenix-api\"}[5m])", "legendFormat": "{{path}}" }
+      ]
+    }
+  ]
+}

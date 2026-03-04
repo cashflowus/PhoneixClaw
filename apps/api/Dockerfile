@@ -1,20 +1,13 @@
-# Phoenix v2 API — Production image.
-# M1.1. Reference: ImplementationPlan.md Section 2.
-# Build from repo root: docker build -f apps/api/Dockerfile .
-
 FROM python:3.12-slim
 
 WORKDIR /app
 
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1
+COPY pyproject.toml .
+COPY shared/ shared/
+COPY apps/api/ apps/api/
 
-COPY apps/api/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY apps/ ./apps/
-ENV PYTHONPATH=/app
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir -e .
 
 EXPOSE 8011
 

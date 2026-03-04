@@ -1,0 +1,51 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'phoenix-api'
+    static_configs:
+      - targets: ['phoenix-api:8011']
+    metrics_path: /metrics
+
+  - job_name: 'phoenix-bridge'
+    static_configs:
+      - targets: ['phoenix-bridge:18800']
+    metrics_path: /metrics
+
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  - job_name: 'phoenix-execution'
+    static_configs:
+      - targets: ['phoenix-execution:8020']
+    metrics_path: /metrics
+
+  - job_name: 'phoenix-orchestrator'
+    static_configs:
+      - targets: ['phoenix-orchestrator:8040']
+    metrics_path: /metrics
+
+  - job_name: 'phoenix-global-monitor'
+    static_configs:
+      - targets: ['phoenix-global-monitor:8050']
+    metrics_path: /metrics
+
+  - job_name: 'phoenix-ws-gateway'
+    static_configs:
+      - targets: ['phoenix-ws-gateway:8031']
+    metrics_path: /metrics
+
+  - job_name: 'phoenix-connector-manager'
+    static_configs:
+      - targets: ['phoenix-connector-manager:8060']
+    metrics_path: /metrics
