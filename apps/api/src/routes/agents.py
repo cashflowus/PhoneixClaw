@@ -15,12 +15,13 @@ from sqlalchemy import select, func, desc
 
 from apps.api.src.deps import DbSession
 from shared.db.models.agent import Agent
+from shared.db.models.connector import ConnectorAgent
 
 router = APIRouter(prefix="/api/v2/agents", tags=["agents"])
 
 
 class AgentCreate(BaseModel):
-    """5-step agent creation wizard payload."""
+    """6-step agent creation wizard payload."""
     name: str = Field(..., min_length=1, max_length=100)
     type: str = Field(..., pattern="^(trading|strategy|monitoring|task|dev)$")
     instance_id: str
@@ -28,6 +29,7 @@ class AgentCreate(BaseModel):
     description: str = ""
     data_source: str = ""
     skills: list[str] = Field(default_factory=list)
+    connector_ids: list[str] = Field(default_factory=list)
 
 
 class AgentUpdate(BaseModel):
@@ -107,8 +109,9 @@ async def create_agent(payload: AgentCreate, session: DbSession):
     Create a new agent. Registers in DB and forwards to Bridge Service on the target instance.
     Agent starts in CREATED state; must go through backtesting before live.
     """
+    agent_id = uuid.uuid4()
     agent = Agent(
-        id=uuid.uuid4(),
+        id=agent_id,
         name=payload.name,
         type=payload.type,
         status="CREATED",
@@ -117,17 +120,25 @@ async def create_agent(payload: AgentCreate, session: DbSession):
             "description": payload.description,
             "data_source": payload.data_source,
             "skills": payload.skills,
+            "connector_ids": payload.connector_ids,
             **payload.config,
         },
     )
     session.add(agent)
+
+    for cid in payload.connector_ids:
+        link = ConnectorAgent(
+            id=uuid.uuid4(),
+            connector_id=uuid.UUID(cid),
+            agent_id=agent_id,
+            channel="*",
+        )
+        session.add(link)
+
     await session.commit()
     await session.refresh(agent)
 
     # TODO: Forward to Bridge Service via httpx to create agent workspace on the OpenClaw instance
-    # bridge_url = f"http://{instance.host}:{instance.port}/agents"
-    # async with httpx.AsyncClient() as client:
-    #     await client.post(bridge_url, json={...}, headers={"X-Bridge-Token": token})
 
     return AgentResponse.from_model(agent)
 

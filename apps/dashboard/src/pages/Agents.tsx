@@ -1,11 +1,11 @@
 /**
  * Agents page — manage OpenClaw trading agents.
- * FlexCards for agent overview, 5-step creation wizard, detail panel.
+ * FlexCards for agent overview, 6-step creation wizard, detail panel.
  * M1.11.
  */
 import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import api from '@/lib/api'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { FlexCard } from '@/components/ui/FlexCard'
@@ -19,7 +19,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { AiAssistPopover } from '@/components/AiAssistPopover'
-import { Bot, Plus, Pause, Play, Trash2, CheckCircle2, Rocket, ChevronLeft, ChevronRight } from 'lucide-react'
+import {
+  Bot, Plus, Pause, Play, Trash2, CheckCircle2, Rocket, ChevronLeft, ChevronRight,
+  Plug, MessageSquare, Globe, Radio, Activity, Newspaper, Webhook, TrendingUp, Landmark, BarChart3,
+  CheckSquare, Square as SquareIcon,
+} from 'lucide-react'
 
 interface AgentData {
   id: string
@@ -56,12 +60,71 @@ const AGENT_SKILLS = [
   { id: 'alerting', label: 'Alerting & Notifications', description: 'Push alerts on key events' },
 ]
 
-const WIZARD_STEPS = ['Basic Info', 'Instance', 'Skills', 'Risk Config', 'Review'] as const
+const WIZARD_STEPS = ['Basic Info', 'Connectors', 'Instance', 'Skills', 'Risk Config', 'Review'] as const
+
+interface ConnectorInfo {
+  id: string
+  name: string
+  type: string
+  status: string
+  config: Record<string, unknown>
+  is_active: boolean
+  last_connected_at: string | null
+  error_message: string | null
+  created_at: string
+}
+
+interface PlatformMeta {
+  icon: typeof Plug
+  color: string
+  bgColor: string
+  label: string
+  category: 'data' | 'broker'
+}
+
+const PLATFORM_META: Record<string, PlatformMeta> = {
+  discord:         { icon: MessageSquare, color: 'text-indigo-500',  bgColor: 'bg-indigo-500/10',  label: 'Discord',       category: 'data' },
+  reddit:          { icon: Globe,         color: 'text-orange-500',  bgColor: 'bg-orange-500/10',  label: 'Reddit',        category: 'data' },
+  twitter:         { icon: Radio,         color: 'text-sky-500',     bgColor: 'bg-sky-500/10',     label: 'Twitter / X',   category: 'data' },
+  unusual_whales:  { icon: Activity,      color: 'text-purple-500',  bgColor: 'bg-purple-500/10',  label: 'Unusual Whales', category: 'data' },
+  news_api:        { icon: Newspaper,     color: 'text-emerald-500', bgColor: 'bg-emerald-500/10', label: 'News API',      category: 'data' },
+  custom_webhook:  { icon: Webhook,       color: 'text-zinc-400',    bgColor: 'bg-zinc-500/10',    label: 'Webhook',       category: 'data' },
+  alpaca:          { icon: TrendingUp,    color: 'text-yellow-500',  bgColor: 'bg-yellow-500/10',  label: 'Alpaca',        category: 'broker' },
+  ibkr:            { icon: Landmark,      color: 'text-red-500',     bgColor: 'bg-red-500/10',     label: 'IBKR',          category: 'broker' },
+  tradier:         { icon: BarChart3,     color: 'text-teal-500',    bgColor: 'bg-teal-500/10',    label: 'Tradier',       category: 'broker' },
+}
+
+function getPlatformMeta(type: string): PlatformMeta {
+  return PLATFORM_META[type] ?? { icon: Plug, color: 'text-muted-foreground', bgColor: 'bg-muted', label: type, category: 'data' }
+}
+
+function connectorSummary(c: ConnectorInfo): string {
+  const cfg = c.config || {}
+  switch (c.type) {
+    case 'discord': {
+      const chCount = Array.isArray(cfg.selected_channels) ? (cfg.selected_channels as unknown[]).length : 0
+      return cfg.server_name ? `${cfg.server_name} · ${chCount} ch` : `${chCount} channels`
+    }
+    case 'reddit': {
+      const subs = Array.isArray(cfg.subreddits) ? (cfg.subreddits as string[]) : []
+      return subs.length ? subs.map((s) => `r/${s}`).slice(0, 3).join(', ') : 'Reddit'
+    }
+    case 'twitter': {
+      const accts = Array.isArray(cfg.accounts) ? (cfg.accounts as string[]) : []
+      return accts.length ? accts.map((a) => `@${a}`).slice(0, 3).join(', ') : 'Twitter'
+    }
+    case 'alpaca': return `${(cfg.mode as string) === 'live' ? 'Live' : 'Paper'} trading`
+    case 'ibkr': return `${cfg.host || '127.0.0.1'}:${cfg.port || 7497}`
+    case 'tradier': return cfg.sandbox ? 'Sandbox' : 'Production'
+    default: return c.type
+  }
+}
 
 interface WizardFormData {
   name: string
   type: string
   description: string
+  connector_ids: string[]
   instance_id: string
   skills: string[]
   max_daily_loss_pct: number
@@ -73,6 +136,7 @@ const DEFAULT_FORM: WizardFormData = {
   name: '',
   type: 'trading',
   description: '',
+  connector_ids: [],
   instance_id: '',
   skills: [],
   max_daily_loss_pct: 5,
@@ -203,6 +267,96 @@ function StepBasicInfo({ form, onChange }: { form: WizardFormData; onChange: (f:
         multiline
         context={`agent type: ${form.type}`}
       />
+    </div>
+  )
+}
+
+function StepConnectors({ form, onChange, connectors }: {
+  form: WizardFormData
+  onChange: (f: Partial<WizardFormData>) => void
+  connectors: ConnectorInfo[]
+}) {
+  const toggle = (id: string) => {
+    const next = form.connector_ids.includes(id)
+      ? form.connector_ids.filter((c) => c !== id)
+      : [...form.connector_ids, id]
+    onChange({ connector_ids: next })
+  }
+
+  const dataSources = connectors.filter((c) => getPlatformMeta(c.type).category === 'data')
+  const brokers = connectors.filter((c) => getPlatformMeta(c.type).category === 'broker')
+
+  const renderGroup = (title: string, items: ConnectorInfo[]) => {
+    if (items.length === 0) return null
+    return (
+      <div>
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">{title}</p>
+        <div className="space-y-2">
+          {items.map((c) => {
+            const meta = getPlatformMeta(c.type)
+            const Icon = meta.icon
+            const selected = form.connector_ids.includes(c.id)
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => toggle(c.id)}
+                className={`w-full flex items-center gap-3 rounded-lg border p-3 text-left transition-all ${
+                  selected
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                    : 'border-border hover:border-primary/40 hover:bg-accent/50'
+                }`}
+              >
+                {selected ? (
+                  <CheckSquare className="h-4 w-4 text-primary shrink-0" />
+                ) : (
+                  <SquareIcon className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+                )}
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${meta.bgColor}`}>
+                  <Icon className={`h-4 w-4 ${meta.color}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{c.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{connectorSummary(c)}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge variant="outline" className={`text-[10px] ${meta.color}`}>{meta.label}</Badge>
+                  <StatusBadge status={c.status} />
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Select the data sources and brokers this agent will use. You can pick multiple.
+      </p>
+      {connectors.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-8 text-center">
+          <Plug className="h-8 w-8 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">No connectors configured yet.</p>
+          <Link to="/connectors">
+            <Button variant="outline" size="sm">
+              <Plus className="h-4 w-4 mr-1.5" /> Add Connectors
+            </Button>
+          </Link>
+        </div>
+      ) : (
+        <div className="space-y-4 max-h-72 overflow-y-auto pr-1">
+          {renderGroup('Data Sources', dataSources)}
+          {renderGroup('Brokers', brokers)}
+        </div>
+      )}
+      {form.connector_ids.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {form.connector_ids.length} connector{form.connector_ids.length !== 1 ? 's' : ''} selected
+        </p>
+      )}
     </div>
   )
 }
@@ -353,9 +507,14 @@ function StepRiskConfig({ form, onChange }: { form: WizardFormData; onChange: (f
   )
 }
 
-function StepReview({ form, instances }: { form: WizardFormData; instances: Array<{ id: string; name: string }> }) {
+function StepReview({ form, instances, connectors }: {
+  form: WizardFormData
+  instances: Array<{ id: string; name: string }>
+  connectors: ConnectorInfo[]
+}) {
   const instanceName = instances.find((i) => i.id === form.instance_id)?.name ?? form.instance_id
   const typeName = AGENT_TYPES.find((t) => t.value === form.type)?.label ?? form.type
+  const selectedConnectors = connectors.filter((c) => form.connector_ids.includes(c.id))
 
   return (
     <div className="space-y-4">
@@ -376,6 +535,23 @@ function StepReview({ form, instances }: { form: WizardFormData; instances: Arra
             <p className="text-sm">{form.description}</p>
           </div>
         )}
+        <div className="p-3">
+          <p className="text-xs text-muted-foreground">Connectors</p>
+          <div className="flex flex-wrap gap-1 mt-1">
+            {selectedConnectors.length === 0 ? (
+              <span className="text-sm text-muted-foreground">None selected</span>
+            ) : (
+              selectedConnectors.map((c) => {
+                const meta = getPlatformMeta(c.type)
+                return (
+                  <Badge key={c.id} variant="secondary" className="gap-1">
+                    <span className={meta.color}>●</span> {c.name}
+                  </Badge>
+                )
+              })
+            )}
+          </div>
+        </div>
         <div className="p-3">
           <p className="text-xs text-muted-foreground">Instance</p>
           <p className="font-medium">{instanceName}</p>
@@ -448,6 +624,11 @@ export default function AgentsPage() {
     queryFn: async () => (await api.get('/api/v2/instances')).data,
   })
 
+  const { data: connectors = [] } = useQuery<ConnectorInfo[]>({
+    queryKey: ['connectors'],
+    queryFn: async () => (await api.get('/api/v2/connectors')).data,
+  })
+
   const invalidateAgents = () => {
     queryClient.invalidateQueries({ queryKey: ['agents'] })
     queryClient.invalidateQueries({ queryKey: ['agent-stats'] })
@@ -461,6 +642,7 @@ export default function AgentsPage() {
         instance_id: form.instance_id,
         description: form.description,
         skills: form.skills,
+        connector_ids: form.connector_ids,
         config: {
           max_daily_loss_pct: form.max_daily_loss_pct,
           max_position_pct: form.max_position_pct,
@@ -504,10 +686,11 @@ export default function AgentsPage() {
   const canAdvance = (step: number): boolean => {
     switch (step) {
       case 0: return form.name.trim().length > 0
-      case 1: return form.instance_id.length > 0
-      case 2: return true
-      case 3: return true
-      case 4: return true
+      case 1: return form.connector_ids.length > 0
+      case 2: return form.instance_id.length > 0
+      case 3: return true // skills are optional
+      case 4: return true // risk config has defaults
+      case 5: return true // review
       default: return false
     }
   }
@@ -537,10 +720,11 @@ export default function AgentsPage() {
 
             <div className="min-h-[280px]">
               {wizardStep === 0 && <StepBasicInfo form={form} onChange={updateForm} />}
-              {wizardStep === 1 && <StepInstance form={form} onChange={updateForm} instances={instances} />}
-              {wizardStep === 2 && <StepSkills form={form} onChange={updateForm} />}
-              {wizardStep === 3 && <StepRiskConfig form={form} onChange={updateForm} />}
-              {wizardStep === 4 && <StepReview form={form} instances={instances} />}
+              {wizardStep === 1 && <StepConnectors form={form} onChange={updateForm} connectors={connectors} />}
+              {wizardStep === 2 && <StepInstance form={form} onChange={updateForm} instances={instances} />}
+              {wizardStep === 3 && <StepSkills form={form} onChange={updateForm} />}
+              {wizardStep === 4 && <StepRiskConfig form={form} onChange={updateForm} />}
+              {wizardStep === 5 && <StepReview form={form} instances={instances} connectors={connectors} />}
             </div>
 
             <div className="flex items-center justify-between pt-4 border-t">
