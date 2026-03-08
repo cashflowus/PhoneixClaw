@@ -25,8 +25,11 @@ def _get_fernet() -> Fernet:
 
     key = config.credential_encryption.key
     if key:
-        _fernet_instance = Fernet(key.encode() if isinstance(key, str) else key)
-        return _fernet_instance
+        try:
+            _fernet_instance = Fernet(key.encode() if isinstance(key, str) else key)
+            return _fernet_instance
+        except (ValueError, Exception):
+            logger.warning("CREDENTIAL_ENCRYPTION_KEY is set but invalid — falling back to JWT derivation.")
 
     jwt_secret = config.auth.secret_key
     if jwt_secret and jwt_secret != "dev-secret-key-change-in-production":
@@ -44,13 +47,14 @@ def _get_fernet() -> Fernet:
     )
 
 
-def encrypt_credentials(data: dict) -> bytes:
-    """Encrypt a credentials dict to bytes for DB storage."""
+def encrypt_credentials(data: dict) -> str:
+    """Encrypt a credentials dict to a base64 string for DB Text column storage."""
     f = _get_fernet()
-    return f.encrypt(json.dumps(data).encode("utf-8"))
+    return f.encrypt(json.dumps(data).encode("utf-8")).decode("utf-8")
 
 
-def decrypt_credentials(token: bytes) -> dict:
-    """Decrypt credentials bytes from DB back to a dict."""
+def decrypt_credentials(token: str | bytes) -> dict:
+    """Decrypt credentials from DB back to a dict. Accepts str or bytes."""
     f = _get_fernet()
-    return json.loads(f.decrypt(token).decode("utf-8"))
+    raw = token.encode("utf-8") if isinstance(token, str) else token
+    return json.loads(f.decrypt(raw).decode("utf-8"))
