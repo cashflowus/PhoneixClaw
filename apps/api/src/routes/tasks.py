@@ -35,6 +35,7 @@ class TaskCreate(BaseModel):
     agent_role: str | None = None
     status: str = "TODO"
     priority: str = "medium"
+    skills: list[str] = Field(default_factory=list)
 
 
 class TaskUpdate(BaseModel):
@@ -43,6 +44,7 @@ class TaskUpdate(BaseModel):
     status: str | None = None
     assigned_agent_id: str | None = None
     priority: str | None = None
+    skills: list[str] | None = None
 
 
 @router.get("/roles")

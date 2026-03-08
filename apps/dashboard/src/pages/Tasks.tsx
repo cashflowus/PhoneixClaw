@@ -12,8 +12,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { AiAssistPopover } from '@/components/AiAssistPopover'
 import { Badge } from '@/components/ui/badge'
-import { Plus, User, GripVertical, ListTodo, Bot } from 'lucide-react'
+import { Plus, User, GripVertical, ListTodo, Bot, ChevronDown, ChevronUp } from 'lucide-react'
 
 const COLUMNS = ['BACKLOG', 'IN_PROGRESS', 'UNDER_REVIEW', 'COMPLETED'] as const
 type ColumnStatus = (typeof COLUMNS)[number]
@@ -47,6 +48,21 @@ const AGENT_ROLES = [
   { value: 'risk-analyzer', label: 'Risk Analyzer' },
   { value: 'sentiment-analyst', label: 'Sentiment Analyst' },
   { value: 'portfolio-manager', label: 'Portfolio Manager' },
+  { value: 'market-researcher', label: 'Market Researcher' },
+  { value: 'options-specialist', label: 'Options Specialist' },
+  { value: 'quant-developer', label: 'Quant Developer' },
+  { value: 'compliance-officer', label: 'Compliance Officer' },
+]
+
+const TASK_SKILLS = [
+  { id: 'market_data', label: 'Market Data Ingestion', description: 'Real-time price feeds and OHLCV data' },
+  { id: 'signal_parsing', label: 'Signal Parsing', description: 'Parse trade signals from text sources' },
+  { id: 'order_execution', label: 'Order Execution', description: 'Place and manage orders via broker API' },
+  { id: 'risk_management', label: 'Risk Management', description: 'Position sizing and loss limits' },
+  { id: 'portfolio_tracking', label: 'Portfolio Tracking', description: 'Track positions and P&L in real time' },
+  { id: 'sentiment_analysis', label: 'Sentiment Analysis', description: 'NLP-based market sentiment scoring' },
+  { id: 'backtesting', label: 'Backtesting', description: 'Historical strategy performance testing' },
+  { id: 'alerting', label: 'Alerting & Notifications', description: 'Push alerts on key events' },
 ]
 
 interface Task {
@@ -56,6 +72,7 @@ interface Task {
   status: ColumnStatus
   agent_role: string
   priority: Priority
+  skills?: string[]
   created_at: string
 }
 
@@ -64,6 +81,7 @@ interface NewTaskForm {
   description: string
   agent_role: string
   priority: Priority
+  skills: string[]
 }
 
 const INITIAL_FORM: NewTaskForm = {
@@ -71,6 +89,7 @@ const INITIAL_FORM: NewTaskForm = {
   description: '',
   agent_role: 'day-trader',
   priority: 'medium',
+  skills: [],
 }
 
 function PriorityBadge({ priority }: { priority: Priority }) {
@@ -93,6 +112,8 @@ function SortableTaskCard({ task, onDelete }: { task: Task; onDelete: (id: strin
     transition,
     opacity: isDragging ? 0.4 : 1,
   }
+
+  const skills = task.skills ?? []
 
   return (
     <div
@@ -117,7 +138,7 @@ function SortableTaskCard({ task, onDelete }: { task: Task; onDelete: (id: strin
           {task.description && (
             <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{task.description}</p>
           )}
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <User className="h-3 w-3" />
               <Badge variant="outline" className="text-[10px] px-1.5 py-0">
@@ -126,6 +147,15 @@ function SortableTaskCard({ task, onDelete }: { task: Task; onDelete: (id: strin
             </div>
             <StatusBadge status={task.status} className="text-[10px]" />
           </div>
+          {skills.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {skills.map((s) => (
+                <Badge key={s} variant="secondary" className="text-[9px] px-1.5 py-0">
+                  {TASK_SKILLS.find((sk) => sk.id === s)?.label ?? s}
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
       </div>
       <div className="flex justify-end mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -194,6 +224,7 @@ export default function TasksPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [newTask, setNewTask] = useState<NewTaskForm>(INITIAL_FORM)
   const [activeTask, setActiveTask] = useState<Task | null>(null)
+  const [skillsExpanded, setSkillsExpanded] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -230,13 +261,14 @@ export default function TasksPage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: async (payload: { title: string; description: string; agent_role: string; status: string; priority: string }) => {
+    mutationFn: async (payload: { title: string; description: string; agent_role: string; status: string; priority: string; skills: string[] }) => {
       const res = await api.post('/api/v2/tasks', payload)
       return res.data
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
       setNewTask(INITIAL_FORM)
+      setSkillsExpanded(false)
       setCreateOpen(false)
     },
   })
@@ -295,6 +327,15 @@ export default function TasksPage() {
     moveMutation.mutate({ id: activeId, status: targetColumn })
   }
 
+  function toggleSkill(skillId: string) {
+    setNewTask((prev) => ({
+      ...prev,
+      skills: prev.skills.includes(skillId)
+        ? prev.skills.filter((s) => s !== skillId)
+        : [...prev.skills, skillId],
+    }))
+  }
+
   function handleCreate() {
     if (!newTask.title.trim()) return
     createMutation.mutate({
@@ -303,6 +344,7 @@ export default function TasksPage() {
       agent_role: newTask.agent_role,
       status: 'BACKLOG',
       priority: newTask.priority,
+      skills: newTask.skills,
     })
   }
 
@@ -320,85 +362,141 @@ export default function TasksPage() {
             title="Tasks"
             description="Kanban board with agent role assignment"
           >
-            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <Dialog open={createOpen} onOpenChange={(v) => { setCreateOpen(v); if (!v) { setNewTask(INITIAL_FORM); setSkillsExpanded(false) } }}>
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="h-4 w-4 mr-2" /> Create Task
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md w-[calc(100vw-2rem)] sm:w-full">
+              <DialogContent className="max-w-lg w-[calc(100vw-2rem)] sm:w-full max-h-[85vh] flex flex-col">
                 <DialogHeader>
                   <DialogTitle>Create Task</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4">
+                <div className="space-y-4 flex-1 overflow-y-auto pr-1">
                   <div className="space-y-1.5">
                     <Label>Title</Label>
                     <Input
                       value={newTask.title}
                       onChange={(e) => setNewTask((prev) => ({ ...prev, title: e.target.value }))}
-                      placeholder="Task title"
+                      placeholder="e.g. Analyze SPY options flow for unusual activity"
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Description</Label>
-                    <Input
-                      value={newTask.description}
-                      onChange={(e) => setNewTask((prev) => ({ ...prev, description: e.target.value }))}
-                      placeholder="Optional description"
-                    />
+
+                  <AiAssistPopover
+                    label="Description"
+                    value={newTask.description}
+                    onChange={(v) => setNewTask((prev) => ({ ...prev, description: v }))}
+                    placeholder="Describe what the agent should do..."
+                    multiline
+                    context={`task for agent role: ${newTask.agent_role}`}
+                  />
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Agent Role</Label>
+                      <Select
+                        value={newTask.agent_role}
+                        onValueChange={(v) => setNewTask((prev) => ({ ...prev, agent_role: v }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AGENT_ROLES.map((r) => (
+                            <SelectItem key={r.value} value={r.value}>
+                              {r.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label>Priority</Label>
+                      <Select
+                        value={newTask.priority}
+                        onValueChange={(v) => setNewTask((prev) => ({ ...prev, priority: v as Priority }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select priority" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(Object.keys(PRIORITY_CONFIG) as Priority[]).map((p) => (
+                            <SelectItem key={p} value={p}>
+                              <span className="flex items-center gap-2">
+                                <span
+                                  className={`inline-block h-2 w-2 rounded-full ${
+                                    p === 'low' ? 'bg-slate-400' :
+                                    p === 'medium' ? 'bg-blue-500' :
+                                    p === 'high' ? 'bg-orange-500' :
+                                    'bg-red-500'
+                                  }`}
+                                />
+                                {PRIORITY_CONFIG[p].label}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Assign Agent Role</Label>
-                    <Select
-                      value={newTask.agent_role}
-                      onValueChange={(v) => setNewTask((prev) => ({ ...prev, agent_role: v }))}
+
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => setSkillsExpanded(!skillsExpanded)}
+                      className="flex items-center gap-2 text-sm font-medium w-full"
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {AGENT_ROLES.map((r) => (
-                          <SelectItem key={r.value} value={r.value}>
-                            {r.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Priority</Label>
-                    <Select
-                      value={newTask.priority}
-                      onValueChange={(v) => setNewTask((prev) => ({ ...prev, priority: v as Priority }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select priority" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(Object.keys(PRIORITY_CONFIG) as Priority[]).map((p) => (
-                          <SelectItem key={p} value={p}>
-                            <span className="flex items-center gap-2">
-                              <span
-                                className={`inline-block h-2 w-2 rounded-full ${
-                                  p === 'low' ? 'bg-slate-400' :
-                                  p === 'medium' ? 'bg-blue-500' :
-                                  p === 'high' ? 'bg-orange-500' :
-                                  'bg-red-500'
-                                }`}
+                      <Label className="cursor-pointer">Skills</Label>
+                      {newTask.skills.length > 0 && (
+                        <Badge variant="secondary" className="text-[10px]">{newTask.skills.length}</Badge>
+                      )}
+                      <div className="flex-1" />
+                      {skillsExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                    </button>
+                    {skillsExpanded && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {TASK_SKILLS.map((skill) => {
+                          const checked = newTask.skills.includes(skill.id)
+                          return (
+                            <label
+                              key={skill.id}
+                              className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                                checked ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleSkill(skill.id)}
+                                className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
                               />
-                              {PRIORITY_CONFIG[p].label}
-                            </span>
-                          </SelectItem>
+                              <div>
+                                <p className="text-xs font-medium">{skill.label}</p>
+                                <p className="text-[10px] text-muted-foreground leading-tight">{skill.description}</p>
+                              </div>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {!skillsExpanded && newTask.skills.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {newTask.skills.map((s) => (
+                          <Badge key={s} variant="secondary" className="text-[10px]">
+                            {TASK_SKILLS.find((sk) => sk.id === s)?.label ?? s}
+                          </Badge>
                         ))}
-                      </SelectContent>
-                    </Select>
+                      </div>
+                    )}
                   </div>
+
                   <Button
                     className="w-full"
                     onClick={handleCreate}
                     disabled={!newTask.title.trim() || createMutation.isPending}
                   >
-                    {createMutation.isPending ? 'Creating…' : 'Create'}
+                    {createMutation.isPending ? 'Creating…' : 'Create Task'}
                   </Button>
                 </div>
               </DialogContent>

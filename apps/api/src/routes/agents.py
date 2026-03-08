@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/v2/agents", tags=["agents"])
 class AgentCreate(BaseModel):
     """6-step agent creation wizard payload."""
     name: str = Field(..., min_length=1, max_length=100)
-    type: str = Field(..., pattern="^(trading|strategy|monitoring|task|dev)$")
+    type: str = Field(..., pattern="^(trading|sentiment)$")
     instance_id: str
     config: dict[str, Any] = Field(default_factory=dict)
     description: str = ""

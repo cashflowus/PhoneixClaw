@@ -22,7 +22,7 @@ import { AiAssistPopover } from '@/components/AiAssistPopover'
 import {
   Bot, Plus, Pause, Play, Trash2, CheckCircle2, Rocket, ChevronLeft, ChevronRight,
   Plug, MessageSquare, Globe, Radio, Activity, Newspaper, Webhook, TrendingUp, Landmark, BarChart3,
-  CheckSquare, Square as SquareIcon,
+  CheckSquare, Square as SquareIcon, Hash,
 } from 'lucide-react'
 
 interface AgentData {
@@ -44,9 +44,7 @@ interface AgentStats {
 
 const AGENT_TYPES = [
   { value: 'trading', label: 'Trading Agent' },
-  { value: 'strategy', label: 'Strategy Agent' },
-  { value: 'monitoring', label: 'Monitoring Agent' },
-  { value: 'task', label: 'Task Agent' },
+  { value: 'sentiment', label: 'Sentiment Agent' },
 ]
 
 const AGENT_SKILLS = [
@@ -120,11 +118,17 @@ function connectorSummary(c: ConnectorInfo): string {
   }
 }
 
+interface SelectedChannel {
+  channel_id: string
+  channel_name: string
+}
+
 interface WizardFormData {
   name: string
   type: string
   description: string
   connector_ids: string[]
+  selected_channel: SelectedChannel | null
   instance_id: string
   skills: string[]
   max_daily_loss_pct: number
@@ -137,6 +141,7 @@ const DEFAULT_FORM: WizardFormData = {
   type: 'trading',
   description: '',
   connector_ids: [],
+  selected_channel: null,
   instance_id: '',
   skills: [],
   max_daily_loss_pct: 5,
@@ -276,70 +281,49 @@ function StepConnectors({ form, onChange, connectors }: {
   onChange: (f: Partial<WizardFormData>) => void
   connectors: ConnectorInfo[]
 }) {
-  const toggle = (id: string) => {
-    const next = form.connector_ids.includes(id)
-      ? form.connector_ids.filter((c) => c !== id)
-      : [...form.connector_ids, id]
-    onChange({ connector_ids: next })
+  const isTrading = form.type === 'trading'
+
+  const allowed = isTrading
+    ? connectors.filter((c) => c.type === 'discord')
+    : connectors.filter((c) => ['discord', 'reddit', 'twitter'].includes(c.type))
+
+  const selectConnector = (id: string) => {
+    if (isTrading) {
+      onChange({ connector_ids: [id], selected_channel: null })
+    } else {
+      const next = form.connector_ids.includes(id)
+        ? form.connector_ids.filter((c) => c !== id)
+        : [...form.connector_ids, id]
+      onChange({ connector_ids: next })
+    }
   }
 
-  const dataSources = connectors.filter((c) => getPlatformMeta(c.type).category === 'data')
-  const brokers = connectors.filter((c) => getPlatformMeta(c.type).category === 'broker')
+  const selectedConnector = isTrading && form.connector_ids.length === 1
+    ? connectors.find((c) => c.id === form.connector_ids[0])
+    : null
 
-  const renderGroup = (title: string, items: ConnectorInfo[]) => {
-    if (items.length === 0) return null
-    return (
-      <div>
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">{title}</p>
-        <div className="space-y-2">
-          {items.map((c) => {
-            const meta = getPlatformMeta(c.type)
-            const Icon = meta.icon
-            const selected = form.connector_ids.includes(c.id)
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => toggle(c.id)}
-                className={`w-full flex items-center gap-3 rounded-lg border p-3 text-left transition-all ${
-                  selected
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                    : 'border-border hover:border-primary/40 hover:bg-accent/50'
-                }`}
-              >
-                {selected ? (
-                  <CheckSquare className="h-4 w-4 text-primary shrink-0" />
-                ) : (
-                  <SquareIcon className="h-4 w-4 text-muted-foreground/40 shrink-0" />
-                )}
-                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${meta.bgColor}`}>
-                  <Icon className={`h-4 w-4 ${meta.color}`} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{c.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{connectorSummary(c)}</p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Badge variant="outline" className={`text-[10px] ${meta.color}`}>{meta.label}</Badge>
-                  <StatusBadge status={c.status} />
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-    )
+  const channelsFromConnector = (c: ConnectorInfo | null | undefined): Array<{ channel_id: string; channel_name: string }> => {
+    if (!c) return []
+    const chs = c.config?.selected_channels
+    if (!Array.isArray(chs)) return []
+    return chs as Array<{ channel_id: string; channel_name: string }>
   }
+
+  const channels = channelsFromConnector(selectedConnector)
+
+  const description = isTrading
+    ? 'Select a Discord connector and one channel to ingest trading signals from.'
+    : 'Select Discord, Reddit, or Twitter connectors for sentiment analysis. You can pick multiple.'
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Select the data sources and brokers this agent will use. You can pick multiple.
-      </p>
-      {connectors.length === 0 ? (
+      <p className="text-sm text-muted-foreground">{description}</p>
+      {allowed.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-8 text-center">
           <Plug className="h-8 w-8 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">No connectors configured yet.</p>
+          <p className="text-sm text-muted-foreground">
+            {isTrading ? 'No Discord connectors found.' : 'No matching connectors found.'}
+          </p>
           <Link to="/connectors">
             <Button variant="outline" size="sm">
               <Plus className="h-4 w-4 mr-1.5" /> Add Connectors
@@ -347,12 +331,77 @@ function StepConnectors({ form, onChange, connectors }: {
           </Link>
         </div>
       ) : (
-        <div className="space-y-4 max-h-72 overflow-y-auto pr-1">
-          {renderGroup('Data Sources', dataSources)}
-          {renderGroup('Brokers', brokers)}
+        <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            {isTrading ? 'Discord Servers' : 'Data Sources'}
+          </p>
+          {allowed.map((c) => {
+            const meta = getPlatformMeta(c.type)
+            const Icon = meta.icon
+            const selected = form.connector_ids.includes(c.id)
+            return (
+              <div key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => selectConnector(c.id)}
+                  className={`w-full flex items-center gap-3 rounded-lg border p-3 text-left transition-all ${
+                    selected
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                      : 'border-border hover:border-primary/40 hover:bg-accent/50'
+                  }`}
+                >
+                  {isTrading ? (
+                    <div className={`h-4 w-4 rounded-full border-2 shrink-0 ${selected ? 'border-primary bg-primary' : 'border-muted-foreground/40'}`}>
+                      {selected && <div className="h-full w-full rounded-full bg-primary" />}
+                    </div>
+                  ) : selected ? (
+                    <CheckSquare className="h-4 w-4 text-primary shrink-0" />
+                  ) : (
+                    <SquareIcon className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+                  )}
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${meta.bgColor}`}>
+                    <Icon className={`h-4 w-4 ${meta.color}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{c.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{connectorSummary(c)}</p>
+                  </div>
+                  <Badge variant="outline" className={`text-[10px] ${meta.color}`}>{meta.label}</Badge>
+                </button>
+
+                {/* Channel picker for Trading Agent */}
+                {isTrading && selected && channels.length > 0 && (
+                  <div className="ml-7 mt-2 space-y-1 border-l-2 border-primary/20 pl-4">
+                    <p className="text-xs font-medium text-muted-foreground mb-1.5">Select one channel:</p>
+                    {channels.map((ch) => {
+                      const isActive = form.selected_channel?.channel_id === ch.channel_id
+                      return (
+                        <button
+                          key={ch.channel_id}
+                          type="button"
+                          onClick={() => onChange({ selected_channel: { channel_id: ch.channel_id, channel_name: ch.channel_name } })}
+                          className={`w-full flex items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm transition-all ${
+                            isActive
+                              ? 'bg-primary/10 text-primary font-medium'
+                              : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                          }`}
+                        >
+                          <div className={`h-3.5 w-3.5 rounded-full border-2 shrink-0 flex items-center justify-center ${isActive ? 'border-primary' : 'border-muted-foreground/40'}`}>
+                            {isActive && <div className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                          </div>
+                          <Hash className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                          <span className="truncate">{ch.channel_name}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
-      {form.connector_ids.length > 0 && (
+      {form.connector_ids.length > 0 && !isTrading && (
         <p className="text-xs text-muted-foreground">
           {form.connector_ids.length} connector{form.connector_ids.length !== 1 ? 's' : ''} selected
         </p>
@@ -551,6 +600,11 @@ function StepReview({ form, instances, connectors }: {
               })
             )}
           </div>
+          {form.selected_channel && (
+            <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
+              <Hash className="h-3 w-3" /> Channel: <span className="font-medium text-foreground">{form.selected_channel.channel_name}</span>
+            </p>
+          )}
         </div>
         <div className="p-3">
           <p className="text-xs text-muted-foreground">Instance</p>
@@ -636,6 +690,14 @@ export default function AgentsPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      const config: Record<string, unknown> = {
+        max_daily_loss_pct: form.max_daily_loss_pct,
+        max_position_pct: form.max_position_pct,
+        stop_loss_pct: form.stop_loss_pct,
+      }
+      if (form.type === 'trading' && form.selected_channel) {
+        config.selected_channel = form.selected_channel
+      }
       const payload = {
         name: form.name,
         type: form.type,
@@ -643,11 +705,7 @@ export default function AgentsPage() {
         description: form.description,
         skills: form.skills,
         connector_ids: form.connector_ids,
-        config: {
-          max_daily_loss_pct: form.max_daily_loss_pct,
-          max_position_pct: form.max_position_pct,
-          stop_loss_pct: form.stop_loss_pct,
-        },
+        config,
       }
       await api.post('/api/v2/agents', payload)
     },
@@ -686,7 +744,12 @@ export default function AgentsPage() {
   const canAdvance = (step: number): boolean => {
     switch (step) {
       case 0: return form.name.trim().length > 0
-      case 1: return form.connector_ids.length > 0
+      case 1: {
+        if (form.type === 'trading') {
+          return form.connector_ids.length === 1 && form.selected_channel !== null
+        }
+        return form.connector_ids.length > 0
+      }
       case 2: return form.instance_id.length > 0
       case 3: return true // skills are optional
       case 4: return true // risk config has defaults
