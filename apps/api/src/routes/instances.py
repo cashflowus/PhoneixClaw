@@ -9,12 +9,14 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+import httpx
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select, update
+from sqlalchemy import select, func
 
 from apps.api.src.deps import DbSession
 from shared.db.models.openclaw_instance import OpenClawInstance
+from shared.db.models.agent import Agent
 
 router = APIRouter(prefix="/api/v2/instances", tags=["instances"])
 
@@ -81,12 +83,23 @@ class InstanceResponse(BaseModel):
 
 @router.get("", response_model=list[InstanceResponse])
 async def list_instances(session: DbSession):
-    """List all registered OpenClaw instances."""
+    """List all registered OpenClaw instances with agent counts."""
     result = await session.execute(
         select(OpenClawInstance).order_by(OpenClawInstance.created_at.desc())
     )
     instances = result.scalars().all()
-    return [InstanceResponse.from_model(i) for i in instances]
+
+    counts: dict[str, int] = {}
+    for inst in instances:
+        cnt = await session.execute(
+            select(func.count(Agent.id)).where(Agent.instance_id == inst.id)
+        )
+        counts[str(inst.id)] = cnt.scalar() or 0
+
+    return [
+        {**InstanceResponse.from_model(i).model_dump(), "agent_count": counts.get(str(i.id), 0)}
+        for i in instances
+    ]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=InstanceResponse)
@@ -101,6 +114,21 @@ async def create_instance(payload: InstanceCreate, session: DbSession):
             detail=f"Instance '{payload.name}' already exists",
         )
 
+    initial_status = "UNKNOWN"
+    base = f"http://{payload.host}:{payload.port}"
+    for path in ["/health", "/api/health", "/api/v1/health"]:
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get(f"{base}{path}")
+                if resp.status_code == 200:
+                    initial_status = "ONLINE"
+                    break
+        except Exception:
+            pass
+
+    if initial_status != "ONLINE":
+        initial_status = "OFFLINE"
+
     instance = OpenClawInstance(
         id=uuid.uuid4(),
         name=payload.name,
@@ -109,13 +137,120 @@ async def create_instance(payload: InstanceCreate, session: DbSession):
         role=payload.role,
         node_type=payload.node_type,
         capabilities=payload.capabilities,
-        status="ONLINE",
+        status=initial_status,
         auto_registered=payload.node_type == "local",
     )
+    if initial_status == "ONLINE":
+        instance.last_heartbeat_at = datetime.now(timezone.utc)
     session.add(instance)
     await session.commit()
     await session.refresh(instance)
-    return InstanceResponse.from_model(instance)
+    return {**InstanceResponse.from_model(instance).model_dump(), "agent_count": 0}
+
+
+class VerifyRequest(BaseModel):
+    host: str
+    port: int = 18800
+
+
+@router.post("/verify")
+async def verify_instance(payload: VerifyRequest):
+    """
+    Probe a host:port to check if it's a reachable OpenClaw instance.
+    Tries /health, then /api/health, then a raw TCP check.
+    Returns reachable status and any metadata from the health endpoint.
+    """
+    base = f"http://{payload.host}:{payload.port}"
+    result: dict[str, Any] = {"reachable": False, "is_openclaw": False, "detail": "", "metadata": {}}
+
+    for path in ["/health", "/api/health", "/api/v1/health"]:
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get(f"{base}{path}")
+                result["reachable"] = True
+                if resp.status_code == 200:
+                    body = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+                    result["is_openclaw"] = True
+                    result["metadata"] = body
+                    result["detail"] = f"Health OK at {path}"
+                    return result
+                else:
+                    result["detail"] = f"{path} returned {resp.status_code}"
+        except httpx.ConnectError:
+            result["detail"] = f"Connection refused at {payload.host}:{payload.port}"
+        except httpx.TimeoutException:
+            result["detail"] = f"Timeout connecting to {payload.host}:{payload.port}"
+            result["reachable"] = False
+        except Exception as exc:
+            result["detail"] = str(exc)[:200]
+
+    if result["reachable"] and not result["is_openclaw"]:
+        result["detail"] = f"Host reachable but no health endpoint found. It may not be an OpenClaw instance."
+
+    return result
+
+
+@router.post("/{instance_id}/check")
+async def check_instance_health(instance_id: str, session: DbSession):
+    """
+    Actively probe a registered instance's health endpoint and update its status.
+    Also counts agents assigned to this instance.
+    """
+    inst_result = await session.execute(
+        select(OpenClawInstance).where(OpenClawInstance.id == uuid.UUID(instance_id))
+    )
+    instance = inst_result.scalar_one_or_none()
+    if not instance:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instance not found")
+
+    agent_count_result = await session.execute(
+        select(func.count(Agent.id)).where(Agent.instance_id == instance.id)
+    )
+    agent_count = agent_count_result.scalar() or 0
+
+    base = f"http://{instance.host}:{instance.port}"
+    online = False
+    detail = ""
+    metadata: dict[str, Any] = {}
+
+    for path in ["/health", "/api/health", "/api/v1/health"]:
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get(f"{base}{path}")
+                if resp.status_code == 200:
+                    online = True
+                    try:
+                        metadata = resp.json()
+                    except Exception:
+                        pass
+                    detail = "Online"
+                    break
+                else:
+                    detail = f"{path} returned {resp.status_code}"
+        except httpx.ConnectError:
+            detail = "Connection refused"
+        except httpx.TimeoutException:
+            detail = "Timeout"
+        except Exception as exc:
+            detail = str(exc)[:100]
+
+    now = datetime.now(timezone.utc)
+    instance.status = "ONLINE" if online else "OFFLINE"
+    if online:
+        instance.last_heartbeat_at = now
+    instance.updated_at = now
+    await session.commit()
+
+    return {
+        "id": str(instance.id),
+        "name": instance.name,
+        "status": instance.status,
+        "online": online,
+        "detail": detail,
+        "metadata": metadata,
+        "agent_count": agent_count,
+        "checked_at": now.isoformat(),
+    }
 
 
 @router.get("/{instance_id}", response_model=InstanceResponse)
