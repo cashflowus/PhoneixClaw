@@ -16,8 +16,20 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _has_timescaledb(connection) -> bool:
+    """Check if TimescaleDB extension is available on this server."""
+    result = connection.execute(
+        sa.text("SELECT 1 FROM pg_available_extensions WHERE name = 'timescaledb'")
+    )
+    return result.fetchone() is not None
+
+
 def upgrade() -> None:
-    op.execute("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE")
+    conn = op.get_bind()
+    use_timescale = _has_timescaledb(conn)
+
+    if use_timescale:
+        op.execute("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE")
 
     op.create_table(
         "market_bars",
@@ -32,7 +44,8 @@ def upgrade() -> None:
         sa.Column("vwap", sa.Float(), nullable=True),
         sa.Column("trade_count", sa.Integer(), nullable=True),
     )
-    op.execute("SELECT create_hypertable('market_bars', 'time', chunk_time_interval => INTERVAL '7 days')")
+    if use_timescale:
+        op.execute("SELECT create_hypertable('market_bars', 'time', chunk_time_interval => INTERVAL '7 days')")
     op.create_index("ix_market_bars_symbol_time", "market_bars", ["symbol", "time"])
 
     op.create_table(
@@ -44,7 +57,8 @@ def upgrade() -> None:
         sa.Column("value", sa.Float(), nullable=False),
         sa.Column("metadata", postgresql.JSONB(), nullable=False, server_default="{}"),
     )
-    op.execute("SELECT create_hypertable('performance_metrics', 'time', chunk_time_interval => INTERVAL '7 days')")
+    if use_timescale:
+        op.execute("SELECT create_hypertable('performance_metrics', 'time', chunk_time_interval => INTERVAL '7 days')")
     op.create_index("ix_perf_metrics_agent_time", "performance_metrics", ["agent_id", "time"])
 
     op.create_table(
@@ -59,18 +73,23 @@ def upgrade() -> None:
         sa.Column("pnl", sa.Float(), nullable=False, server_default="0"),
         sa.Column("metadata", postgresql.JSONB(), nullable=False, server_default="{}"),
     )
-    op.execute("SELECT create_hypertable('agent_heartbeats', 'time', chunk_time_interval => INTERVAL '1 day')")
+    if use_timescale:
+        op.execute("SELECT create_hypertable('agent_heartbeats', 'time', chunk_time_interval => INTERVAL '1 day')")
     op.create_index("ix_heartbeats_instance_time", "agent_heartbeats", ["instance_id", "time"])
 
-    op.execute("SELECT add_retention_policy('market_bars', INTERVAL '2 years')")
-    op.execute("SELECT add_retention_policy('performance_metrics', INTERVAL '1 year')")
-    op.execute("SELECT add_retention_policy('agent_heartbeats', INTERVAL '90 days')")
+    if use_timescale:
+        op.execute("SELECT add_retention_policy('market_bars', INTERVAL '2 years')")
+        op.execute("SELECT add_retention_policy('performance_metrics', INTERVAL '1 year')")
+        op.execute("SELECT add_retention_policy('agent_heartbeats', INTERVAL '90 days')")
 
 
 def downgrade() -> None:
-    op.execute("SELECT remove_retention_policy('agent_heartbeats', if_exists => true)")
-    op.execute("SELECT remove_retention_policy('performance_metrics', if_exists => true)")
-    op.execute("SELECT remove_retention_policy('market_bars', if_exists => true)")
+    conn = op.get_bind()
+    use_timescale = _has_timescaledb(conn)
+    if use_timescale:
+        op.execute("SELECT remove_retention_policy('agent_heartbeats', if_exists => true)")
+        op.execute("SELECT remove_retention_policy('performance_metrics', if_exists => true)")
+        op.execute("SELECT remove_retention_policy('market_bars', if_exists => true)")
     op.drop_table("agent_heartbeats")
     op.drop_table("performance_metrics")
     op.drop_table("market_bars")

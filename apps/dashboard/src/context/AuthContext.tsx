@@ -58,15 +58,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     setError(null)
-    const res = await fetch(`${API_BASE}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    })
+    let res: Response
+    try {
+      res = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+    } catch {
+      const msg = 'Cannot reach the API server. Make sure the backend is running on port 8011.'
+      setError(msg)
+      throw new Error(msg)
+    }
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      setError(data.detail ?? 'Login failed')
-      throw new Error(data.detail ?? 'Login failed')
+      const msg = res.status === 401
+        ? 'Invalid email or password.'
+        : (data.detail ?? `Login failed (${res.status})`)
+      setError(msg)
+      throw new Error(msg)
     }
     if (data.requires_mfa) {
       setError('MFA required — use /mfa/verify with your code')
@@ -74,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const accessToken = data.access_token
     if (!accessToken) {
-      setError('Invalid response')
+      setError('Invalid response from server')
       throw new Error('Invalid response')
     }
     localStorage.setItem(TOKEN_KEY, accessToken)
@@ -85,15 +95,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = useCallback(async (email: string, password: string, name: string) => {
     setError(null)
-    const res = await fetch(`${API_BASE}/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, name }),
-    })
+    let res: Response
+    try {
+      res = await fetch(`${API_BASE}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, name }),
+      })
+    } catch {
+      const msg = 'Cannot reach the API server. Make sure the backend is running on port 8011.'
+      setError(msg)
+      throw new Error(msg)
+    }
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      setError(data.detail ?? 'Registration failed')
-      throw new Error(data.detail ?? 'Registration failed')
+      const msg = data.detail ?? `Registration failed (${res.status})`
+      setError(msg)
+      throw new Error(msg)
     }
     if (res.status === 201) {
       await login(email, password)

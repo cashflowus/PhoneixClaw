@@ -14,7 +14,11 @@ from sqlalchemy.pool import NullPool
 _DEFAULT_URL = "postgresql+asyncpg://phoenixtrader:localdev@localhost:5432/phoenixtrader"
 
 def get_database_url() -> str:
-    return os.environ.get("DATABASE_URL", _DEFAULT_URL)
+    return (
+        os.environ.get("API_DATABASE_URL")
+        or os.environ.get("DATABASE_URL")
+        or _DEFAULT_URL
+    )
 
 
 def get_engine():

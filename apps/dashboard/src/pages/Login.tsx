@@ -22,18 +22,23 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [localError, setLocalError] = useState('')
+  const [loading, setLoading] = useState(false)
   const { login, error: contextError } = useAuth()
   const navigate = useNavigate()
-  const error = contextError ?? localError
+  const error = localError || contextError
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLocalError('')
+    setLoading(true)
     try {
       await login(email, password)
       navigate('/', { replace: true })
-    } catch {
-      setLocalError('Login failed. Try again.')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Login failed. Try again.'
+      setLocalError(msg)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -127,8 +132,8 @@ export default function Login() {
               {error && (
                 <p className="text-sm text-destructive">{error}</p>
               )}
-              <Button type="submit" variant="default" className="w-full rounded-xl">
-                Sign in
+              <Button type="submit" variant="default" className="w-full rounded-xl" disabled={loading}>
+                {loading ? 'Signing in…' : 'Sign in'}
               </Button>
             </form>
             <p className="mt-6 text-center text-sm text-muted-foreground">
