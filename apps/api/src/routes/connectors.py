@@ -234,6 +234,8 @@ async def test_connector(connector_id: str, session: DbSession):
         logger.exception("Failed to decrypt credentials for connector %s", connector_id)
         return {"connection_status": "ERROR", "detail": "Could not decrypt stored credentials"}
 
+    config = connector.config or {}
+
     try:
         if connector.type == "discord":
             token = creds.get("user_token") or creds.get("bot_token", "")
@@ -249,9 +251,131 @@ async def test_connector(connector_id: str, session: DbSession):
                     detail = resp.json().get("username", "")
                 else:
                     detail = f"Discord API returned {resp.status_code}"
+
+        elif connector.type == "reddit":
+            client_id = creds.get("client_id", "")
+            client_secret = creds.get("client_secret", "")
+            user_agent = creds.get("user_agent", "PhoenixTrade/1.0")
+            if not client_id or not client_secret:
+                return {"connection_status": "ERROR", "detail": "Missing Reddit client_id or client_secret"}
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(
+                    "https://www.reddit.com/api/v1/access_token",
+                    data={"grant_type": "client_credentials"},
+                    auth=(client_id, client_secret),
+                    headers={"User-Agent": user_agent},
+                )
+                if resp.status_code == 200 and "access_token" in resp.json():
+                    conn_status = "connected"
+                    detail = "Reddit OAuth credentials valid"
+                else:
+                    detail = f"Reddit OAuth returned {resp.status_code}: {resp.text[:100]}"
+
+        elif connector.type == "twitter":
+            bearer = creds.get("bearer_token", "")
+            if not bearer:
+                return {"connection_status": "ERROR", "detail": "Missing Twitter bearer_token"}
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://api.twitter.com/2/users/me",
+                    headers={"Authorization": f"Bearer {bearer}"},
+                )
+                if resp.status_code == 200:
+                    conn_status = "connected"
+                    detail = resp.json().get("data", {}).get("username", "Authenticated")
+                elif resp.status_code == 403:
+                    conn_status = "connected"
+                    detail = "Bearer token valid (app-only auth)"
+                else:
+                    detail = f"Twitter API returned {resp.status_code}"
+
+        elif connector.type == "unusual_whales":
+            api_key = creds.get("api_key", "")
+            if not api_key:
+                return {"connection_status": "ERROR", "detail": "Missing Unusual Whales API key"}
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://api.unusualwhales.com/api/stock/SPY/options-volume",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                )
+                if resp.status_code == 200:
+                    conn_status = "connected"
+                    detail = "Unusual Whales API key valid"
+                elif resp.status_code == 401:
+                    detail = "Invalid API key"
+                else:
+                    detail = f"Unusual Whales API returned {resp.status_code}"
+
+        elif connector.type == "news_api":
+            api_key = creds.get("api_key", "")
+            if not api_key:
+                return {"connection_status": "ERROR", "detail": "Missing News API key"}
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"https://newsapi.org/v2/top-headlines?country=us&pageSize=1&apiKey={api_key}",
+                )
+                if resp.status_code == 200:
+                    conn_status = "connected"
+                    detail = "News API key valid"
+                elif resp.status_code == 401:
+                    detail = "Invalid API key"
+                else:
+                    detail = f"News API returned {resp.status_code}"
+
+        elif connector.type == "alpaca":
+            api_key = creds.get("api_key", "")
+            api_secret = creds.get("api_secret", "")
+            if not api_key or not api_secret:
+                return {"connection_status": "ERROR", "detail": "Missing Alpaca API key or secret"}
+            mode = config.get("mode", "paper")
+            base = "https://api.alpaca.markets" if mode == "live" else "https://paper-api.alpaca.markets"
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"{base}/v2/account",
+                    headers={"APCA-API-KEY-ID": api_key, "APCA-API-SECRET-KEY": api_secret},
+                )
+                if resp.status_code == 200:
+                    conn_status = "connected"
+                    acct = resp.json()
+                    detail = f"Account {acct.get('account_number', '')} ({mode})"
+                elif resp.status_code == 403:
+                    detail = "Invalid API credentials"
+                else:
+                    detail = f"Alpaca API returned {resp.status_code}"
+
+        elif connector.type == "tradier":
+            api_key = creds.get("api_key", "")
+            if not api_key:
+                return {"connection_status": "ERROR", "detail": "Missing Tradier API key"}
+            sandbox = config.get("sandbox", True)
+            base = "https://sandbox.tradier.com" if sandbox else "https://api.tradier.com"
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"{base}/v1/user/profile",
+                    headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+                )
+                if resp.status_code == 200:
+                    conn_status = "connected"
+                    detail = "Tradier credentials valid"
+                elif resp.status_code == 401:
+                    detail = "Invalid API key"
+                else:
+                    detail = f"Tradier API returned {resp.status_code}"
+
+        elif connector.type == "ibkr":
+            conn_status = "connected"
+            host = config.get("host", "127.0.0.1")
+            port = config.get("port", 7497)
+            detail = f"IBKR configured for {host}:{port} (connect via TWS/Gateway)"
+
+        elif connector.type == "custom_webhook":
+            conn_status = "connected"
+            detail = "Webhook endpoint is ready to receive signals"
+
         else:
             conn_status = "connected"
-            detail = f"Test not fully implemented for {connector.type}"
+            detail = f"No specific test for {connector.type}"
+
     except httpx.TimeoutException:
         detail = "Connection timed out"
     except Exception as exc:
