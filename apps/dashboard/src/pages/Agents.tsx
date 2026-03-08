@@ -3,7 +3,7 @@
  * FlexCards for agent overview, 6-step creation wizard, detail panel.
  * M1.11.
  */
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, Link } from 'react-router-dom'
 import api from '@/lib/api'
@@ -22,7 +22,8 @@ import { AiAssistPopover } from '@/components/AiAssistPopover'
 import {
   Bot, Plus, Pause, Play, Trash2, CheckCircle2, Rocket, ChevronLeft, ChevronRight,
   Plug, MessageSquare, Globe, Radio, Activity, Newspaper, Webhook, TrendingUp, Landmark, BarChart3,
-  CheckSquare, Square as SquareIcon, Hash,
+  CheckSquare, Square as SquareIcon, Hash, Loader2, Eye, ArrowUpRight, ArrowDownRight, Minus,
+  FlaskConical, Zap, Shield,
 } from 'lucide-react'
 
 interface AgentData {
@@ -40,6 +41,40 @@ interface AgentStats {
   running: number
   paused: number
   backtesting: number
+}
+
+interface BacktestData {
+  id: string
+  agent_id: string
+  status: string
+  strategy_template: string | null
+  start_date: string | null
+  end_date: string | null
+  parameters: Record<string, unknown>
+  metrics: Record<string, unknown>
+  equity_curve: Array<{ day: number; date: string; equity: number }>
+  total_trades: number
+  win_rate: number | null
+  sharpe_ratio: number | null
+  max_drawdown: number | null
+  total_return: number | null
+  error_message: string | null
+  completed_at: string | null
+  created_at: string | null
+}
+
+const STATUS_CONFIG: Record<string, { color: string; bgColor: string; borderColor: string; label: string; pulse?: boolean }> = {
+  BACKTESTING:       { color: 'text-amber-600 dark:text-amber-400',   bgColor: 'bg-amber-500/10',   borderColor: 'border-amber-500/30',   label: 'Backtesting',       pulse: true },
+  BACKTEST_COMPLETE: { color: 'text-blue-600 dark:text-blue-400',     bgColor: 'bg-blue-500/10',     borderColor: 'border-blue-500/30',    label: 'Review Ready' },
+  PAPER:             { color: 'text-purple-600 dark:text-purple-400', bgColor: 'bg-purple-500/10',   borderColor: 'border-purple-500/30',  label: 'Paper Trading' },
+  APPROVED:          { color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', label: 'Approved' },
+  RUNNING:           { color: 'text-green-600 dark:text-green-400',   bgColor: 'bg-green-500/10',    borderColor: 'border-green-500/30',   label: 'Live Trading' },
+  PAUSED:            { color: 'text-zinc-500 dark:text-zinc-400',     bgColor: 'bg-zinc-500/10',     borderColor: 'border-zinc-500/30',    label: 'Paused' },
+  CREATED:           { color: 'text-muted-foreground',                bgColor: 'bg-muted/50',        borderColor: 'border-border',         label: 'Created' },
+}
+
+function getStatusConfig(status: string) {
+  return STATUS_CONFIG[status] ?? STATUS_CONFIG.CREATED
 }
 
 const AGENT_TYPES = [
@@ -149,66 +184,187 @@ const DEFAULT_FORM: WizardFormData = {
   stop_loss_pct: 2,
 }
 
-function AgentCard({ agent, onSelect, onPause, onResume, onDelete, onApprove, onPromote }: {
+function MiniEquityCurve({ data }: { data: Array<{ equity: number }> }) {
+  if (!data || data.length < 2) return null
+  const vals = data.map((d) => d.equity)
+  const min = Math.min(...vals)
+  const max = Math.max(...vals)
+  const range = max - min || 1
+  const w = 120
+  const h = 32
+  const points = vals.map((v, i) => `${(i / (vals.length - 1)) * w},${h - ((v - min) / range) * h}`).join(' ')
+  const isPositive = vals[vals.length - 1] >= vals[0]
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-8" preserveAspectRatio="none">
+      <polyline
+        points={points}
+        fill="none"
+        stroke={isPositive ? '#22c55e' : '#ef4444'}
+        strokeWidth="1.5"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  )
+}
+
+function BacktestingSpinner() {
+  return (
+    <div className="flex items-center gap-2 py-2">
+      <div className="relative">
+        <Loader2 className="h-5 w-5 text-amber-500 animate-spin" />
+        <div className="absolute inset-0 h-5 w-5 rounded-full border-2 border-amber-500/20" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+          <div className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-400 animate-pulse" style={{ width: '60%' }} />
+        </div>
+        <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 font-medium">Running backtest...</p>
+      </div>
+    </div>
+  )
+}
+
+function MetricPill({ label, value, trend }: { label: string; value: string; trend?: 'up' | 'down' | 'neutral' }) {
+  const Icon = trend === 'up' ? ArrowUpRight : trend === 'down' ? ArrowDownRight : Minus
+  const trendColor = trend === 'up' ? 'text-green-600 dark:text-green-400' : trend === 'down' ? 'text-red-500' : 'text-muted-foreground'
+  return (
+    <div className="flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1">
+      <span className="text-[10px] text-muted-foreground uppercase">{label}</span>
+      <span className={`text-xs font-semibold font-mono ${trendColor}`}>{value}</span>
+      {trend && <Icon className={`h-3 w-3 ${trendColor}`} />}
+    </div>
+  )
+}
+
+function AgentCard({ agent, onSelect, onPause, onResume, onDelete, onReview, onPromote }: {
   agent: AgentData
   onSelect: () => void
   onPause: () => void
   onResume: () => void
   onDelete: () => void
-  onApprove: () => void
+  onReview: () => void
   onPromote: () => void
 }) {
   const config = agent.config as Record<string, unknown>
+  const sc = getStatusConfig(agent.status)
+
+  const { data: backtest } = useQuery<BacktestData>({
+    queryKey: ['agent-backtest', agent.id],
+    queryFn: async () => (await api.get(`/api/v2/agents/${agent.id}/backtest`)).data,
+    enabled: agent.status === 'BACKTEST_COMPLETE',
+    staleTime: 60_000,
+  })
+
   return (
-    <FlexCard
-      className="cursor-pointer hover:border-primary/50 transition-colors"
-      action={
-        <div className="flex gap-1">
-          {agent.status === 'CREATED' && (
-            <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); onApprove() }} title="Approve">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-            </Button>
-          )}
-          {agent.status === 'APPROVED' && (
-            <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); onPromote() }} title="Promote to Running">
-              <Rocket className="h-4 w-4 text-blue-500" />
-            </Button>
-          )}
-          {agent.status === 'RUNNING' && (
-            <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); onPause() }}>
-              <Pause className="h-4 w-4" />
-            </Button>
-          )}
-          {agent.status === 'PAUSED' && (
-            <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); onResume() }}>
-              <Play className="h-4 w-4" />
-            </Button>
-          )}
-          <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); onDelete() }}>
-            <Trash2 className="h-4 w-4 text-destructive" />
-          </Button>
-        </div>
-      }
+    <div
+      className={`group relative rounded-xl border bg-card overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20 hover:-translate-y-0.5 cursor-pointer ${sc.borderColor}`}
+      onClick={onSelect}
     >
-      <div className="space-y-3" onClick={onSelect}>
-        <div className="flex items-center gap-2">
-          <Bot className="h-5 w-5 text-primary shrink-0" />
-          <span className="font-semibold truncate">{agent.name}</span>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <Badge variant="outline">{agent.type}</Badge>
-          <StatusBadge status={agent.status} />
-        </div>
-        {config.data_source ? (
-          <p className="text-xs text-muted-foreground truncate">
-            Source: {String(config.data_source)}
-          </p>
-        ) : null}
-        <p className="text-xs text-muted-foreground">
-          Created {new Date(agent.created_at).toLocaleDateString()}
-        </p>
+      {/* Status strip */}
+      <div className={`h-1 w-full ${sc.bgColor}`}>
+        {sc.pulse && <div className="h-full w-full bg-amber-500/60 animate-pulse" />}
       </div>
-    </FlexCard>
+
+      <div className="p-4 space-y-3">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${sc.bgColor}`}>
+              {agent.status === 'BACKTESTING' ? (
+                <FlaskConical className={`h-4 w-4 ${sc.color}`} />
+              ) : agent.status === 'RUNNING' ? (
+                <Zap className={`h-4 w-4 ${sc.color}`} />
+              ) : (
+                <Bot className={`h-4 w-4 ${sc.color}`} />
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-sm truncate">{agent.name}</p>
+              <p className="text-[11px] text-muted-foreground capitalize">{agent.type} agent</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            {agent.status === 'RUNNING' && (
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); onPause() }}>
+                <Pause className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {agent.status === 'PAUSED' && (
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); onResume() }}>
+                <Play className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); onDelete() }}>
+              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Status badge */}
+        <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${sc.bgColor} ${sc.color}`}>
+          {agent.status === 'RUNNING' && <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />}
+          {sc.label}
+        </div>
+
+        {/* BACKTESTING: spinner */}
+        {agent.status === 'BACKTESTING' && <BacktestingSpinner />}
+
+        {/* BACKTEST_COMPLETE: metrics preview */}
+        {agent.status === 'BACKTEST_COMPLETE' && backtest && (
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-1.5">
+              <MetricPill label="Return" value={`${backtest.total_return?.toFixed(1)}%`} trend={(backtest.total_return ?? 0) >= 0 ? 'up' : 'down'} />
+              <MetricPill label="Win" value={`${((backtest.win_rate ?? 0) * 100).toFixed(0)}%`} trend={(backtest.win_rate ?? 0) >= 0.5 ? 'up' : 'down'} />
+              <MetricPill label="Sharpe" value={`${backtest.sharpe_ratio?.toFixed(2)}`} trend={(backtest.sharpe_ratio ?? 0) >= 1.0 ? 'up' : 'neutral'} />
+            </div>
+            {backtest.equity_curve?.length > 0 && <MiniEquityCurve data={backtest.equity_curve} />}
+            <Button
+              size="sm"
+              className="w-full gap-1.5"
+              variant="default"
+              onClick={(e) => { e.stopPropagation(); onReview() }}
+            >
+              <Eye className="h-3.5 w-3.5" /> Review & Approve
+            </Button>
+          </div>
+        )}
+
+        {/* PAPER / APPROVED: promote button */}
+        {(agent.status === 'PAPER' || agent.status === 'APPROVED') && (
+          <Button
+            size="sm"
+            className="w-full gap-1.5"
+            variant="outline"
+            onClick={(e) => { e.stopPropagation(); onPromote() }}
+          >
+            <Rocket className="h-3.5 w-3.5" /> Promote to Live
+          </Button>
+        )}
+
+        {/* RUNNING: live indicator */}
+        {agent.status === 'RUNNING' && (
+          <div className="flex items-center gap-2 rounded-md bg-green-500/5 border border-green-500/20 px-2.5 py-1.5">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+            </span>
+            <span className="text-[11px] font-medium text-green-700 dark:text-green-400">Active &middot; Live trading</span>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-1 border-t border-border/50">
+          <p className="text-[11px] text-muted-foreground">
+            {new Date(agent.created_at).toLocaleDateString()}
+          </p>
+          {config.data_source && (
+            <p className="text-[11px] text-muted-foreground truncate max-w-[50%]">
+              {String(config.data_source)}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -644,6 +800,163 @@ function StepReview({ form, instances, connectors }: {
   )
 }
 
+function BacktestReviewDialog({ agent, open, onOpenChange }: {
+  agent: AgentData | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const queryClient = useQueryClient()
+
+  const { data: backtest, isLoading } = useQuery<BacktestData>({
+    queryKey: ['agent-backtest', agent?.id],
+    queryFn: async () => (await api.get(`/api/v2/agents/${agent!.id}/backtest`)).data,
+    enabled: !!agent && open,
+  })
+
+  const approveMutation = useMutation({
+    mutationFn: async ({ mode }: { mode: 'paper' | 'live' }) => {
+      await api.post(`/api/v2/agents/${agent!.id}/approve`, { trading_mode: mode })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agents'] })
+      queryClient.invalidateQueries({ queryKey: ['agent-stats'] })
+      onOpenChange(false)
+    },
+  })
+
+  const curve = backtest?.equity_curve ?? []
+  const curveVals = curve.map((d) => d.equity)
+  const curveMin = curveVals.length ? Math.min(...curveVals) : 0
+  const curveMax = curveVals.length ? Math.max(...curveVals) : 1
+  const curveRange = curveMax - curveMin || 1
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] sm:w-full max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FlaskConical className="h-5 w-5 text-blue-500" />
+            Backtest Results &mdash; {agent?.name}
+          </DialogTitle>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : !backtest ? (
+          <p className="text-center py-8 text-muted-foreground">No backtest data found.</p>
+        ) : (
+          <div className="space-y-6">
+            {/* Summary metrics */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: 'Total Return', value: `${backtest.total_return?.toFixed(2)}%`, good: (backtest.total_return ?? 0) > 0, icon: TrendingUp },
+                { label: 'Win Rate', value: `${((backtest.win_rate ?? 0) * 100).toFixed(1)}%`, good: (backtest.win_rate ?? 0) >= 0.5, icon: CheckCircle2 },
+                { label: 'Sharpe Ratio', value: `${backtest.sharpe_ratio?.toFixed(2)}`, good: (backtest.sharpe_ratio ?? 0) >= 1.0, icon: Activity },
+                { label: 'Max Drawdown', value: `${backtest.max_drawdown?.toFixed(2)}%`, good: (backtest.max_drawdown ?? 0) < 10, icon: Shield },
+              ].map((m) => (
+                <div key={m.label} className={`rounded-lg border p-3 ${m.good ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <m.icon className={`h-3.5 w-3.5 ${m.good ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`} />
+                    <span className="text-[11px] text-muted-foreground uppercase tracking-wider">{m.label}</span>
+                  </div>
+                  <p className={`text-lg font-bold font-mono ${m.good ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{m.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Additional metrics */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg border p-3">
+                <p className="text-[11px] text-muted-foreground uppercase">Total Trades</p>
+                <p className="text-base font-bold font-mono">{backtest.total_trades}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-[11px] text-muted-foreground uppercase">Profit Factor</p>
+                <p className="text-base font-bold font-mono">{(backtest.metrics as Record<string, number>)?.profit_factor?.toFixed(2) ?? 'N/A'}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-[11px] text-muted-foreground uppercase">Avg Trade P&L</p>
+                <p className="text-base font-bold font-mono">${(backtest.metrics as Record<string, number>)?.avg_trade_pnl?.toFixed(2) ?? 'N/A'}</p>
+              </div>
+            </div>
+
+            {/* Equity curve */}
+            {curve.length > 1 && (
+              <div className="rounded-lg border p-4">
+                <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wider">Equity Curve (90 days)</p>
+                <div className="relative h-40">
+                  <svg viewBox={`0 0 ${curve.length} 100`} className="w-full h-full" preserveAspectRatio="none">
+                    <defs>
+                      <linearGradient id="eq-grad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={curveVals[curveVals.length - 1] >= curveVals[0] ? '#22c55e' : '#ef4444'} stopOpacity="0.3" />
+                        <stop offset="100%" stopColor={curveVals[curveVals.length - 1] >= curveVals[0] ? '#22c55e' : '#ef4444'} stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <polygon
+                      points={`0,100 ${curveVals.map((v, i) => `${i},${100 - ((v - curveMin) / curveRange) * 100}`).join(' ')} ${curveVals.length - 1},100`}
+                      fill="url(#eq-grad)"
+                    />
+                    <polyline
+                      points={curveVals.map((v, i) => `${i},${100 - ((v - curveMin) / curveRange) * 100}`).join(' ')}
+                      fill="none"
+                      stroke={curveVals[curveVals.length - 1] >= curveVals[0] ? '#22c55e' : '#ef4444'}
+                      strokeWidth="0.8"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  </svg>
+                  <div className="absolute top-0 left-0 text-[10px] font-mono text-muted-foreground">${curveMax.toLocaleString()}</div>
+                  <div className="absolute bottom-0 left-0 text-[10px] font-mono text-muted-foreground">${curveMin.toLocaleString()}</div>
+                </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+                  <span>{curve[0]?.date}</span>
+                  <span>{curve[curve.length - 1]?.date}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Strategy info */}
+            <div className="rounded-lg border p-3 text-sm">
+              <p className="text-xs text-muted-foreground uppercase mb-1">Strategy</p>
+              <p className="font-medium">{backtest.strategy_template ?? 'Default'}</p>
+              {backtest.start_date && backtest.end_date && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Period: {new Date(backtest.start_date).toLocaleDateString()} &mdash; {new Date(backtest.end_date).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+
+            {/* Approve actions */}
+            <div className="border-t pt-4">
+              <p className="text-sm text-muted-foreground mb-3">Approve this agent for trading:</p>
+              <div className="flex gap-3">
+                <Button
+                  className="flex-1 gap-2"
+                  variant="outline"
+                  onClick={() => approveMutation.mutate({ mode: 'paper' })}
+                  disabled={approveMutation.isPending}
+                >
+                  <FlaskConical className="h-4 w-4" />
+                  {approveMutation.isPending ? 'Approving...' : 'Start Paper Trading'}
+                </Button>
+                <Button
+                  className="flex-1 gap-2"
+                  onClick={() => approveMutation.mutate({ mode: 'live' })}
+                  disabled={approveMutation.isPending}
+                >
+                  <Zap className="h-4 w-4" />
+                  {approveMutation.isPending ? 'Approving...' : 'Start Live Trading'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function AgentsPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -651,6 +964,7 @@ export default function AgentsPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [wizardStep, setWizardStep] = useState(0)
   const [form, setForm] = useState<WizardFormData>({ ...DEFAULT_FORM })
+  const [reviewAgent, setReviewAgent] = useState<AgentData | null>(null)
 
   const updateForm = useCallback((partial: Partial<WizardFormData>) => {
     setForm((prev) => ({ ...prev, ...partial }))
@@ -664,8 +978,31 @@ export default function AgentsPage() {
   const { data: agents = [], isLoading } = useQuery<AgentData[]>({
     queryKey: ['agents'],
     queryFn: async () => (await api.get('/api/v2/agents')).data,
-    refetchInterval: 10000,
+    refetchInterval: (query) => {
+      const data = query.state.data as AgentData[] | undefined
+      const hasBacktesting = data?.some((a) => a.status === 'BACKTESTING')
+      return hasBacktesting ? 5000 : 10000
+    },
   })
+
+  const backtestCompleteMutation = useMutation({
+    mutationFn: async (agentId: string) => api.post(`/api/v2/agents/${agentId}/backtest-complete`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agents'] })
+      queryClient.invalidateQueries({ queryKey: ['agent-stats'] })
+    },
+  })
+
+  useEffect(() => {
+    const backtestingAgents = agents.filter((a) => a.status === 'BACKTESTING')
+    backtestingAgents.forEach((a) => {
+      const created = new Date(a.created_at).getTime()
+      const elapsed = Date.now() - created
+      if (elapsed > 15_000) {
+        backtestCompleteMutation.mutate(a.id)
+      }
+    })
+  }, [agents])
 
   const { data: stats } = useQuery<AgentStats>({
     queryKey: ['agent-stats'],
@@ -724,11 +1061,6 @@ export default function AgentsPage() {
   const resumeMutation = useMutation({
     mutationFn: async (id: string) => api.post(`/api/v2/agents/${id}/resume`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agents'] }),
-  })
-
-  const approveMutation = useMutation({
-    mutationFn: async (id: string) => api.post(`/api/v2/agents/${id}/approve`),
-    onSuccess: invalidateAgents,
   })
 
   const promoteMutation = useMutation({
@@ -846,10 +1178,10 @@ export default function AgentsPage() {
             <AgentCard
               key={agent.id}
               agent={agent}
-              onSelect={() => navigate(`/agents/${agent.id}`)}
+              onSelect={() => setSelected(agent)}
               onPause={() => pauseMutation.mutate(agent.id)}
               onResume={() => resumeMutation.mutate(agent.id)}
-              onApprove={() => approveMutation.mutate(agent.id)}
+              onReview={() => setReviewAgent(agent)}
               onPromote={() => promoteMutation.mutate(agent.id)}
               onDelete={() => deleteMutation.mutate(agent.id)}
             />
@@ -876,32 +1208,36 @@ export default function AgentsPage() {
               <span>{new Date(selected.created_at).toLocaleString()}</span>
             </div>
 
-            {selected.status === 'CREATED' && (
+            {selected.status === 'BACKTESTING' && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+                <BacktestingSpinner />
+                <p className="text-xs text-muted-foreground mt-2">Backtest will complete automatically. Agent will be ready for review once done.</p>
+              </div>
+            )}
+
+            {selected.status === 'BACKTEST_COMPLETE' && (
               <Button
-                className="w-full"
-                variant="outline"
+                className="w-full gap-2"
                 onClick={() => {
-                  approveMutation.mutate(selected.id)
-                  setSelected({ ...selected, status: 'APPROVED' })
+                  setReviewAgent(selected)
+                  setSelected(null)
                 }}
-                disabled={approveMutation.isPending}
               >
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-                {approveMutation.isPending ? 'Approving...' : 'Approve Agent'}
+                <Eye className="h-4 w-4" /> Review Backtest & Approve
               </Button>
             )}
 
-            {selected.status === 'APPROVED' && (
+            {(selected.status === 'PAPER' || selected.status === 'APPROVED') && (
               <Button
-                className="w-full"
+                className="w-full gap-2"
                 onClick={() => {
                   promoteMutation.mutate(selected.id)
                   setSelected({ ...selected, status: 'RUNNING' })
                 }}
                 disabled={promoteMutation.isPending}
               >
-                <Rocket className="h-4 w-4 mr-2" />
-                {promoteMutation.isPending ? 'Promoting...' : 'Promote to Running'}
+                <Rocket className="h-4 w-4" />
+                {promoteMutation.isPending ? 'Promoting...' : 'Promote to Live Trading'}
               </Button>
             )}
 
@@ -916,6 +1252,12 @@ export default function AgentsPage() {
           </div>
         )}
       </SidePanel>
+
+      <BacktestReviewDialog
+        agent={reviewAgent}
+        open={!!reviewAgent}
+        onOpenChange={(open) => { if (!open) setReviewAgent(null) }}
+      />
     </div>
   )
 }
