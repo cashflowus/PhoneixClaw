@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 ENCRYPTION_KEY = os.getenv("CREDENTIAL_ENCRYPTION_KEY", "")
 AGENTS_DIR = Path(__file__).resolve().parents[4] / "agents"
 
+_PATH_PREFIX = 'export PATH="$HOME/.local/bin:$HOME/.claude/bin:$PATH"; '
+
 
 def _decrypt(value: str) -> str:
     if not value or not ENCRYPTION_KEY:
@@ -96,7 +98,7 @@ class AgentGateway:
         if result.exit_code != 0 or "REACHABLE" not in result.stdout:
             return HealthStatus(reachable=False, claude_installed=False)
 
-        claude_result = await ssh_pool.run(instance_id, "export PATH=\"$HOME/.claude/bin:$HOME/.local/bin:$PATH\"; claude --version 2>/dev/null || echo NOT_INSTALLED")
+        claude_result = await ssh_pool.run(instance_id, f"{_PATH_PREFIX}claude --version 2>/dev/null || echo NOT_INSTALLED")
         claude_installed = "NOT_INSTALLED" not in claude_result.stdout
         claude_version = claude_result.stdout.strip() if claude_installed else None
 
@@ -131,7 +133,18 @@ class AgentGateway:
     async def install_claude_code(self, instance_id: UUID) -> SSHResult:
         return await ssh_pool.run(
             instance_id,
-            "which bash >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq bash >/dev/null 2>&1; curl -fsSL https://claude.ai/install.sh | bash && export PATH=\"$HOME/.claude/bin:$PATH\" && claude --version",
+            (
+                "which bash >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq bash >/dev/null 2>&1; "
+                "curl -fsSL https://claude.ai/install.sh | bash; "
+                # Add PATH before the non-interactive guard in .bashrc (Ubuntu's default
+                # .bashrc exits early for non-interactive shells, so appending doesn't help
+                # SSH commands)
+                "grep -q '.local/bin.*claude' ~/.bashrc 2>/dev/null || "
+                "sed -i '1i export PATH=\"$HOME/.local/bin:$HOME/.claude/bin:$PATH\"' ~/.bashrc; "
+                "grep -q '.local/bin' ~/.profile 2>/dev/null || "
+                "echo 'export PATH=\"$HOME/.local/bin:$HOME/.claude/bin:$PATH\"' >> ~/.profile; "
+                f"{_PATH_PREFIX}claude --version"
+            ),
             timeout=600,
         )
 
@@ -159,7 +172,7 @@ class AgentGateway:
     async def run_backtesting(self, instance_id: UUID, config: dict) -> SSHResult:
         await self.ship_agent(instance_id, "backtesting", config)
         command = (
-            "export PATH=\"$HOME/.claude/bin:$HOME/.local/bin:$PATH\"; "
+            f"{_PATH_PREFIX}"
             "cd ~/agents/backtesting && "
             "claude --print 'Read config.json and run the backtesting pipeline. "
             "Report progress as JSON lines to stdout.'"
@@ -180,7 +193,7 @@ class AgentGateway:
         escaped = message.replace("'", "'\\''")
         result = await ssh_pool.run(
             instance_id,
-            f"cd ~/agents/live/{agent_name} && claude --print '{escaped}'",
+            f"{_PATH_PREFIX}cd ~/agents/live/{agent_name} && claude --print '{escaped}'",
             timeout=120,
         )
         return result.stdout if result.exit_code == 0 else f"Error: {result.stderr}"
