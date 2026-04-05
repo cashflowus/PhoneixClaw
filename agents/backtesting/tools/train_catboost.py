@@ -54,10 +54,10 @@ def main():
     cat_test = np.load(data_dir / "categoricals_test.npy") if (data_dir / "categoricals_test.npy").exists() else None
 
     if cat_train is not None:
-        X_train_full = np.hstack([X_train, cat_train])
-        X_val_full = np.hstack([X_val, cat_val])
-        X_test_full = np.hstack([X_test, cat_test])
-        cat_feature_indices = list(range(X_train.shape[1], X_train_full.shape[1]))
+        X_train_full = np.hstack([X_train, cat_train.astype(np.float64)])
+        X_val_full = np.hstack([X_val, cat_val.astype(np.float64)]) if len(X_val) > 0 and cat_val is not None and len(cat_val) > 0 else X_val
+        X_test_full = np.hstack([X_test, cat_test.astype(np.float64)]) if len(X_test) > 0 and cat_test is not None and len(cat_test) > 0 else X_test
+        cat_feature_indices = []
         n_cat = cat_train.shape[1]
         cat_names = [f"cat_{j}" for j in range(n_cat)]
         if tabular_names is not None:
