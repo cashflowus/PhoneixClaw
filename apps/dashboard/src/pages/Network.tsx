@@ -88,6 +88,8 @@ interface InstanceFormData {
   ssh_private_key: string
   role: string
   node_type: string
+  auto_install_claude: boolean
+  anthropic_api_key: string
 }
 
 interface VerifyResult {
@@ -108,6 +110,8 @@ const EMPTY_FORM: InstanceFormData = {
   ssh_private_key: '',
   role: 'general',
   node_type: 'vps',
+  auto_install_claude: false,
+  anthropic_api_key: '',
 }
 
 function instanceToEditForm(inst: Instance): InstanceFormData {
@@ -119,6 +123,8 @@ function instanceToEditForm(inst: Instance): InstanceFormData {
     ssh_private_key: '',
     role: inst.role,
     node_type: inst.node_type,
+    auto_install_claude: false,
+    anthropic_api_key: '',
   }
 }
 
@@ -361,8 +367,9 @@ function AddInstanceDialog({
   const [error, setError] = useState('')
   const [verifying, setVerifying] = useState(false)
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null)
+  const [installProgress, setInstallProgress] = useState<string | null>(null)
 
-  useEffect(() => { if (open) { setForm(initial); setError(''); setVerifyResult(null) } }, [open, initial])
+  useEffect(() => { if (open) { setForm(initial); setError(''); setVerifyResult(null); setInstallProgress(null) } }, [open, initial])
 
   const handleVerify = async () => {
     if (!form.host.trim()) { setError('Host is required to verify'); return }
@@ -399,9 +406,16 @@ function AddInstanceDialog({
         setError('SSH private key is required (min 10 characters).')
         return
       }
+      if (form.auto_install_claude && !form.anthropic_api_key.trim()) {
+        setError('Anthropic API key is required for auto-install.')
+        return
+      }
     }
     setSaving(true); setError('')
-    try { await onSubmit(form); onOpenChange(false) } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Save failed') } finally { setSaving(false) }
+    try {
+      await onSubmit(form)
+      onOpenChange(false)
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Save failed') } finally { setSaving(false) }
   }
 
   const verifyDetail = verifyResult && [
@@ -511,6 +525,51 @@ function AddInstanceDialog({
                 </span>
               </div>
               {verifyDetail ? <p className="text-xs mt-1 opacity-80">{verifyDetail}</p> : null}
+            </div>
+          )}
+
+          {mode === 'create' && verifyResult?.reachable && !verifyResult?.claude_installed && (
+            <div className="space-y-3 rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.auto_install_claude}
+                  onChange={(e) => setForm((f) => ({ ...f, auto_install_claude: e.target.checked }))}
+                  className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+                />
+                <div>
+                  <span className="text-sm font-medium text-foreground">Auto-install Claude Code &amp; authenticate</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Installs Claude Code CLI on the VPS and authenticates with your Anthropic API key.
+                    This runs after the instance is created.
+                  </p>
+                </div>
+              </label>
+              {form.auto_install_claude && (
+                <div className="space-y-1.5 pl-7">
+                  <Label htmlFor="anthropic-key">Anthropic API Key</Label>
+                  <Input
+                    id="anthropic-key"
+                    type="password"
+                    value={form.anthropic_api_key}
+                    onChange={(e) => setForm((f) => ({ ...f, anthropic_api_key: e.target.value }))}
+                    placeholder="sk-ant-api03-..."
+                    className="font-mono text-xs"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Used once during setup to authenticate Claude Code. Stored encrypted on the VPS, not in our database.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {installProgress && (
+            <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 text-sm">
+              <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                <span className="font-medium">{installProgress}</span>
+              </div>
             </div>
           )}
 
@@ -1070,7 +1129,19 @@ export default function NetworkPage() {
         role: data.role,
         node_type: data.node_type,
       })
-      return res.data
+      const instance = res.data as Instance
+
+      if (data.auto_install_claude && data.anthropic_api_key.trim()) {
+        try {
+          await api.post(`/api/v2/instances/${instance.id}/setup-claude`, {
+            anthropic_api_key: data.anthropic_api_key.trim(),
+          })
+        } catch {
+          // Instance created but setup failed — user can retry from instance detail
+        }
+      }
+
+      return instance
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['instances'] }),
     onError: (err: unknown) => { throw err instanceof Error ? err : new Error('Create failed') },

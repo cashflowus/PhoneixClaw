@@ -135,6 +135,9 @@ class AgentGateway:
             timeout=600,
         )
 
+    async def run_command(self, instance_id: UUID, command: str, timeout: int = 300) -> SSHResult:
+        return await ssh_pool.run(instance_id, command, timeout=timeout)
+
     async def ship_agent(self, instance_id: UUID, agent_type: str, config: dict) -> SSHResult:
         local_path = str(AGENTS_DIR / agent_type)
         if not os.path.isdir(local_path):

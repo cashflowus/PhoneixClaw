@@ -241,6 +241,84 @@ async def install_claude(instance_id: str, session: DbSession):
     return {"success": ssh_result.exit_code == 0, "output": ssh_result.stdout, "error": ssh_result.stderr}
 
 
+class SetupClaudeRequest(BaseModel):
+    anthropic_api_key: str = Field(..., min_length=10)
+
+
+@router.post("/{instance_id}/setup-claude")
+async def setup_claude(instance_id: str, payload: SetupClaudeRequest, session: DbSession):
+    """Install Claude Code on VPS and authenticate with the Anthropic API key.
+
+    Steps:
+    1. Install Claude Code CLI via official installer
+    2. Set ANTHROPIC_API_KEY in the shell profile so Claude Code can authenticate
+    3. Verify claude --version works
+    """
+    result = await session.execute(
+        select(ClaudeCodeInstance).where(ClaudeCodeInstance.id == uuid.UUID(instance_id))
+    )
+    inst = result.scalar_one_or_none()
+    if not inst:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instance not found")
+
+    from apps.api.src.services.agent_gateway import gateway
+
+    gateway.register_instance(inst.id, inst.host, inst.ssh_port, inst.ssh_username, inst.ssh_key_encrypted)
+
+    inst.status = "PROVISIONING"
+    await session.commit()
+
+    steps_log: list[dict] = []
+
+    install_result = await gateway.install_claude_code(inst.id)
+    steps_log.append({
+        "step": "install",
+        "success": install_result.exit_code == 0,
+        "output": install_result.stdout[-500:] if install_result.stdout else "",
+        "error": install_result.stderr[-500:] if install_result.stderr else "",
+    })
+
+    if install_result.exit_code != 0:
+        inst.status = "ERROR"
+        await session.commit()
+        return {
+            "success": False,
+            "step_failed": "install",
+            "steps": steps_log,
+        }
+
+    api_key = payload.anthropic_api_key
+    escaped_key = api_key.replace("'", "'\\''")
+    auth_cmd = (
+        f"grep -q 'ANTHROPIC_API_KEY' ~/.bashrc 2>/dev/null && "
+        f"sed -i 's|^export ANTHROPIC_API_KEY=.*|export ANTHROPIC_API_KEY=\\'{escaped_key}\\'|' ~/.bashrc || "
+        f"echo 'export ANTHROPIC_API_KEY=\\'{escaped_key}\\'' >> ~/.bashrc; "
+        f"export ANTHROPIC_API_KEY='{escaped_key}'; "
+        f"claude --version"
+    )
+    auth_result = await gateway.run_command(inst.id, auth_cmd)
+    steps_log.append({
+        "step": "authenticate",
+        "success": auth_result.exit_code == 0,
+        "output": auth_result.stdout[-500:] if auth_result.stdout else "",
+    })
+
+    if auth_result.exit_code == 0:
+        inst.status = "ONLINE"
+        inst.claude_version = auth_result.stdout.strip().split("\n")[-1]
+    else:
+        inst.status = "ERROR"
+
+    inst.last_heartbeat_at = datetime.now(timezone.utc)
+    await session.commit()
+
+    return {
+        "success": auth_result.exit_code == 0,
+        "claude_version": inst.claude_version,
+        "steps": steps_log,
+    }
+
+
 @router.post("/{instance_id}/ship-agent")
 async def ship_agent(instance_id: str, session: DbSession, agent_type: str = "backtesting"):
     """Ship a backtesting agent to the VPS instance."""
