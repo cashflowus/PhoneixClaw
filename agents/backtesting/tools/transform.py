@@ -102,11 +102,14 @@ def parse_signal(content: str, posted_at: datetime) -> Optional[dict]:
 
 # ── Discord Fetching ────────────────────────────────────────────────────────
 
-async def fetch_discord_history(token: str, channel_id: str, lookback_days: int = 730) -> list[dict]:
+async def fetch_discord_history(token: str, channel_id: str, lookback_days: int = 730, auth_type: str = "bot_token") -> list[dict]:
     """Fetch message history from Discord REST API."""
     import httpx
 
-    headers = {"Authorization": f"Bot {token}"}
+    if auth_type == "user_token":
+        headers = {"Authorization": token}
+    else:
+        headers = {"Authorization": f"Bot {token}"}
     base_url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
     since = datetime.now(timezone.utc) - timedelta(days=lookback_days)
     messages = []
@@ -311,6 +314,7 @@ def main():
             token=config["discord_token"],
             channel_id=config["channel_id"],
             lookback_days=config.get("lookback_days", 730),
+            auth_type=config.get("discord_auth_type", "bot_token"),
         ))
 
     print(f"Fetched {len(raw_messages)} messages from {channel_name}")

@@ -6,9 +6,12 @@ Cloud Tasks), and promoted to Docker-managed trading workers.  All state
 lives in PostgreSQL; no SSH or VPS management.
 """
 
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -197,14 +200,22 @@ async def create_agent(payload: AgentCreate, session: DbSession):
     connector_ids = payload.connector_ids
     discord_token = ""
     server_id = ""
+    discord_auth_type = "bot_token"
     if connector_ids:
         conn_result = await session.execute(
             select(Connector).where(Connector.id == uuid.UUID(connector_ids[0]))
         )
         connector = conn_result.scalar_one_or_none()
-        if connector and connector.config:
-            discord_token = connector.config.get("bot_token", "")
-            server_id = connector.config.get("server_id", "")
+        if connector:
+            server_id = (connector.config or {}).get("server_id", "")
+            discord_auth_type = (connector.config or {}).get("auth_type", "bot_token")
+            if connector.credentials_encrypted:
+                try:
+                    from shared.crypto.credentials import decrypt_credentials
+                    creds = decrypt_credentials(connector.credentials_encrypted)
+                    discord_token = creds.get("user_token") or creds.get("bot_token", "")
+                except Exception:
+                    logger.warning("Could not decrypt credentials for connector %s", connector_ids[0])
 
     channel_id = ""
     if isinstance(selected_channel, dict):
@@ -217,6 +228,7 @@ async def create_agent(payload: AgentCreate, session: DbSession):
         "channel_name": channel_name or "",
         "server_id": server_id,
         "discord_token": discord_token,
+        "discord_auth_type": discord_auth_type,
         "analyst_name": payload.config.get("analyst_name", analyst_name or ""),
         "lookback_days": payload.config.get("lookback_days", 730),
         "phoenix_api_url": phoenix_api_url,
