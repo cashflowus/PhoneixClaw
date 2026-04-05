@@ -55,7 +55,7 @@ Launch all base model training scripts in parallel. Each writes results to `outp
 
 **After base models complete**, run the ensemble models (they need base model predictions):
 - `python tools/train_hybrid.py --data output/ --output output/models/`
-- `python tools/train_meta_learner.py --data output/ --output output/models/`
+- `python tools/train_meta_learner.py --models-dir output/models/ --data output/ --output output/models/`
 
 ### Step 6: Evaluate and Select
 Run: `python tools/evaluate_models.py --models-dir output/models/ --output output/models/best_model.json`
