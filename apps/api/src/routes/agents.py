@@ -312,27 +312,95 @@ async def approve_agent(agent_id: str, session: DbSession, payload: AgentApprove
 
     agent.status = "PAPER" if payload.trading_mode == "paper" else "APPROVED"
     agent.updated_at = datetime.now(timezone.utc)
-    await session.commit()
 
-    # TODO: Forward approval config to Bridge Service to update agent workspace
-    # with trading parameters (paper/live mode, risk limits)
+    if not agent.manifest or not agent.manifest.get("identity"):
+        channel = agent.channel_name or agent.name.lower().replace(" ", "-")
+        agent.manifest = {
+            "version": "1.0",
+            "template": "live-trader-v1",
+            "identity": {
+                "name": agent.name,
+                "channel": channel,
+                "analyst": agent.analyst_name or "",
+                "character": "balanced-intraday",
+            },
+            "rules": (agent.config or {}).get("rules", []),
+            "modes": (agent.config or {}).get("modes", {}),
+            "risk": {
+                "max_daily_loss_pct": payload.max_daily_loss_pct or (agent.config or {}).get("max_daily_loss_pct", 3.0),
+                "max_position_size_pct": payload.max_position_pct or (agent.config or {}).get("max_position_pct", 5.0),
+                "stop_loss_pct": payload.stop_loss_pct or (agent.config or {}).get("stop_loss_pct", 2.0),
+            },
+            "models": {},
+            "knowledge": {},
+            "credentials": {},
+        }
+
+    await session.commit()
 
     return {"id": agent_id, "status": "APPROVED", "config": agent.config}
 
 
 @router.post("/{agent_id}/promote")
 async def promote_agent(agent_id: str, session: DbSession):
-    """Promote an approved agent to live trading. Transitions APPROVED -> RUNNING."""
+    """Promote an approved agent to live trading. Ships agent to VPS and transitions to RUNNING."""
     result = await session.execute(select(Agent).where(Agent.id == uuid.UUID(agent_id)))
     agent = result.scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
     if agent.status not in ("APPROVED", "PAPER", "BACKTEST_COMPLETE"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Only APPROVED/PAPER agents can be promoted, current: {agent.status}")
+
+    ship_result_info: dict[str, Any] = {}
+    if agent.instance_id:
+        try:
+            from shared.db.models.claude_code_instance import ClaudeCodeInstance
+            from apps.api.src.services.agent_builder import agent_builder
+
+            inst_result = await session.execute(
+                select(ClaudeCodeInstance).where(ClaudeCodeInstance.id == agent.instance_id)
+            )
+            inst = inst_result.scalar_one_or_none()
+            if inst:
+                from apps.api.src.services.agent_gateway import gateway
+                gateway.register_instance(inst.id, inst.host, inst.ssh_port, inst.ssh_username, inst.ssh_key_encrypted)
+
+                manifest = agent.manifest or {}
+                if not manifest.get("identity"):
+                    channel = agent.channel_name or agent.name.lower().replace(" ", "-")
+                    manifest = {
+                        "version": "1.0",
+                        "template": "live-trader-v1",
+                        "identity": {
+                            "name": agent.name,
+                            "channel": channel,
+                            "analyst": agent.analyst_name or "",
+                            "character": "balanced-intraday",
+                        },
+                        "rules": (agent.config or {}).get("rules", []),
+                        "modes": (agent.config or {}).get("modes", {}),
+                        "risk": (agent.config or {}).get("risk_params", (agent.config or {}).get("risk", {})),
+                        "models": {},
+                        "knowledge": {},
+                        "credentials": {},
+                    }
+
+                ship_res = await agent_builder.ship_agent(manifest, inst.id)
+                ship_result_info = {"shipped": ship_res.exit_code == 0, "message": ship_res.stdout or ship_res.stderr}
+                if ship_res.exit_code != 0:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=f"Failed to ship agent to VPS: {ship_res.stderr}",
+                    )
+        except HTTPException:
+            raise
+        except Exception as e:
+            ship_result_info = {"shipped": False, "message": str(e)[:300]}
+
     agent.status = "RUNNING"
     agent.updated_at = datetime.now(timezone.utc)
     await session.commit()
-    return {"id": agent_id, "status": "RUNNING"}
+    return {"id": agent_id, "status": "RUNNING", "ship": ship_result_info}
 
 
 class LiveMessagePayload(BaseModel):
@@ -878,7 +946,30 @@ async def send_agent_chat(agent_id: str, payload: dict[str, Any], session: DbSes
                 from apps.api.src.services.agent_gateway import gateway
                 gateway.register_instance(inst.id, inst.host, inst.ssh_port, inst.ssh_username, inst.ssh_key_encrypted)
                 agent_name = agent.channel_name or agent.name.lower().replace(" ", "-")
-                response_text = await gateway.send_message(inst.id, agent_name, content)
+
+                check = await gateway.run_command(inst.id, f"test -d ~/agents/live/{agent_name} && echo EXISTS || echo MISSING", timeout=15)
+                if "MISSING" in (check.stdout or ""):
+                    try:
+                        from apps.api.src.services.agent_builder import agent_builder
+                        manifest = agent.manifest or {}
+                        if not manifest.get("identity"):
+                            manifest = {
+                                "version": "1.0", "template": "live-trader-v1",
+                                "identity": {"name": agent.name, "channel": agent_name, "analyst": agent.analyst_name or "", "character": "balanced-intraday"},
+                                "rules": (agent.config or {}).get("rules", []),
+                                "modes": (agent.config or {}).get("modes", {}),
+                                "risk": (agent.config or {}).get("risk_params", (agent.config or {}).get("risk", {})),
+                                "models": {}, "knowledge": {}, "credentials": {},
+                            }
+                        ship_res = await agent_builder.ship_agent(manifest, inst.id)
+                        if ship_res.exit_code != 0:
+                            response_text = f"Agent workspace not found on VPS and auto-deploy failed: {ship_res.stderr}"
+                        else:
+                            response_text = await gateway.send_message(inst.id, agent_name, content)
+                    except Exception as ship_err:
+                        response_text = f"Agent workspace not found on VPS and auto-deploy failed: {str(ship_err)[:200]}"
+                else:
+                    response_text = await gateway.send_message(inst.id, agent_name, content)
 
                 if msg_type == "trade_request":
                     response_type = "trade_proposal"
