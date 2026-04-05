@@ -11,7 +11,6 @@ from shared.db.models import (
     Connector,
     ConnectorAgent,
     DevIncident,
-    OpenClawInstance,
     Position,
     Skill,
     Task,
@@ -38,7 +37,6 @@ _EXPECTED_TABLES = {
     AuditLog: "audit_logs",
     ApiKeyEntry: "api_keys",
     TradingAccount: "trading_accounts",
-    OpenClawInstance: "openclaw_instances",
     AgentMessage: "agent_messages",
 }
 

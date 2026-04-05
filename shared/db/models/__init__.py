@@ -16,7 +16,6 @@ from shared.db.models.dev_incident import DevIncident
 from shared.db.models.error_log import ErrorLog
 from shared.db.models.learning_session import LearningSession
 from shared.db.models.notification import Notification
-from shared.db.models.openclaw_instance import OpenClawInstance
 from shared.db.models.skill import AgentSkill, Skill
 from shared.db.models.strategy import Strategy
 from shared.db.models.system_log import SystemLog
@@ -29,7 +28,6 @@ from shared.db.models.user import User
 __all__ = [
     "Base",
     "User",
-    "OpenClawInstance",
     "Agent",
     "AgentBacktest",
     "AgentChatMessage",

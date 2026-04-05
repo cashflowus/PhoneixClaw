@@ -4,6 +4,7 @@
  */
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { useRealtimeQuery } from '@/hooks/use-websocket'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { MetricCard } from '@/components/ui/MetricCard'
@@ -118,22 +119,28 @@ const closedColumns: Column<PositionData>[] = [
 ]
 
 export default function PositionsPage() {
+  // Real-time updates via WebSocket — invalidates position queries on events
+  useRealtimeQuery({
+    channel: 'positions',
+    queryKeys: [['positions-open'], ['positions-closed'], ['position-summary']],
+  })
+
   const { data: openPositions = [], isLoading: openLoading } = useQuery<PositionData[]>({
     queryKey: ['positions-open'],
     queryFn: async () => (await api.get('/api/v2/positions?status=OPEN')).data,
-    refetchInterval: 5000,
+    refetchInterval: 30000, // Fallback polling (WS handles real-time)
   })
 
   const { data: closedPositions = [], isLoading: closedLoading } = useQuery<PositionData[]>({
     queryKey: ['positions-closed'],
     queryFn: async () => (await api.get('/api/v2/positions/closed')).data,
-    refetchInterval: 30000,
+    refetchInterval: 60000,
   })
 
   const { data: summary } = useQuery<PositionSummary>({
     queryKey: ['position-summary'],
     queryFn: async () => (await api.get('/api/v2/positions/summary')).data,
-    refetchInterval: 10000,
+    refetchInterval: 30000,
   })
 
   return (

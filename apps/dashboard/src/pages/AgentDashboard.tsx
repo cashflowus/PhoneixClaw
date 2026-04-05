@@ -8,6 +8,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { useRealtimeQuery } from '@/hooks/use-websocket'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { DataTable, type Column } from '@/components/ui/DataTable'
@@ -838,6 +839,13 @@ export default function AgentDashboardPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
+  // Real-time agent status + metrics updates via WebSocket
+  useRealtimeQuery({
+    channel: 'agent-status',
+    queryKeys: [['agent', id ?? ''], ['agent-metrics', id ?? ''], ['positions', id ?? '']],
+    enabled: !!id,
+  })
+
   const { data: agent, isLoading } = useQuery<AgentData>({
     queryKey: ['agent', id],
     queryFn: async () => {
@@ -851,7 +859,7 @@ export default function AgentDashboardPage() {
     queryKey: ['agent-metrics', id],
     queryFn: async () => { try { return (await api.get(`/api/v2/agents/${id}/metrics`)).data } catch { return {} } },
     enabled: !!id,
-    refetchInterval: 15000,
+    refetchInterval: 60000, // Fallback; WS handles real-time
   })
 
   const pauseMut = useMutation({

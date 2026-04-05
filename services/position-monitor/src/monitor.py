@@ -6,30 +6,32 @@ from sqlalchemy import select
 from services.position_monitor.src.exit_engine import ExitEngine
 from shared.broker.factory import create_broker_adapter
 from shared.config.base_config import config
+from shared.db.engine import async_session
+from shared.db.models.trade import Position
+from shared.db.models.trading_account import TradingAccount
+from shared.events.envelope import Envelope, EventType
+from shared.events.producers import EventProducer
 from shared.feature_flags import feature_flags
-from shared.kafka_utils.producer import KafkaProducerWrapper
-from shared.models.database import AsyncSessionLocal
-from shared.models.trade import Position, TradingAccount
 
 logger = logging.getLogger(__name__)
 
 
 class PositionMonitorService:
     def __init__(self):
-        self.producer = KafkaProducerWrapper()
+        self.producer = EventProducer()
         self.exit_engine = ExitEngine()
         self._running = False
         self._broker_cache: dict[str, object] = {}
         self._poll_interval = config.monitor.poll_interval_seconds
 
     async def start(self):
-        await self.producer.start()
+        await self.producer.connect()
         self._running = True
         logger.info("Position monitor service started (poll_interval=%ds)", self._poll_interval)
 
     async def stop(self):
         self._running = False
-        await self.producer.stop()
+        await self.producer.close()
 
     async def run(self):
         while self._running:
@@ -40,7 +42,7 @@ class PositionMonitorService:
             await asyncio.sleep(self._poll_interval)
 
     async def _poll_cycle(self):
-        async with AsyncSessionLocal() as session:
+        async with async_session() as session:
             result = await session.execute(
                 select(Position).where(Position.status == "OPEN")
             )
@@ -94,7 +96,7 @@ class PositionMonitorService:
                 )
                 if new_hwm != pos_dict.get("high_water_mark"):
                     pos_dict["high_water_mark"] = new_hwm
-                    async with AsyncSessionLocal() as session:
+                    async with async_session() as session:
                         db_pos = await session.get(Position, pos.id)
                         if db_pos:
                             db_pos.high_water_mark = new_hwm
@@ -107,7 +109,7 @@ class PositionMonitorService:
     async def _get_broker(self, ta_id: str):
         if ta_id in self._broker_cache:
             return self._broker_cache[ta_id]
-        async with AsyncSessionLocal() as session:
+        async with async_session() as session:
             import uuid as _uuid
             account = await session.get(TradingAccount, _uuid.UUID(ta_id))
             if not account:
@@ -120,20 +122,21 @@ class PositionMonitorService:
 
     async def _publish_exit_signal(self, position: dict, signal):
         exit_msg = {
-            "position_id": signal.position_id,
+            "position_id": str(signal.position_id),
             "reason": signal.reason,
-            "trigger_price": signal.trigger_price,
+            "trigger_price": str(signal.trigger_price),
             "user_id": str(position.get("user_id", "")),
             "trading_account_id": str(position.get("trading_account_id", "")),
             "ticker": position.get("ticker", ""),
             "broker_symbol": position.get("broker_symbol", ""),
-            "quantity": position.get("quantity", 0),
+            "quantity": str(position.get("quantity", 0)),
         }
-        headers = []
-        uid = str(position.get("user_id", ""))
-        if uid:
-            headers.append(("user_id", uid.encode("utf-8")))
-        await self.producer.send("exit-signals", value=exit_msg, headers=headers or None)
+        envelope = Envelope(
+            event_type=EventType.TRADE_INTENT_CREATED,
+            data=exit_msg,
+            source="position-monitor",
+        )
+        await self.producer.publish("stream:exit-signals", envelope)
         logger.info(
             "Exit signal: %s for position %s (price=%.2f)",
             signal.reason, signal.position_id, signal.trigger_price,

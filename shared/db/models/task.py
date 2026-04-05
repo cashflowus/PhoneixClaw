@@ -52,8 +52,8 @@ class Automation(Base):
     natural_language: Mapped[str | None] = mapped_column(String(500), nullable=True)
     agent_role: Mapped[str] = mapped_column(String(50), nullable=False)
     instance_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("openclaw_instances.id", ondelete="SET NULL"), nullable=True
-    )
+        UUID(as_uuid=True), nullable=True
+    )  # FK to openclaw_instances removed in V3 migration
     delivery_channel: Mapped[str] = mapped_column(String(30), nullable=False, default="dashboard")
     delivery_config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     template_id: Mapped[str | None] = mapped_column(String(100), nullable=True)

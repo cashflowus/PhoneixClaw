@@ -1,10 +1,17 @@
+"""
+DEPRECATED — V3 uses AgentMetric/AgentTrade models instead of DailyMetrics/Trade.
+This aggregator references V1 models that no longer exist. Do not use in new code.
+See shared/db/models/agent_metric.py and shared/db/models/agent_trade.py for V3 equivalents.
+"""
+
 import logging
 from datetime import date
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models.trade import DailyMetrics, Position, Trade
+# V1 imports — will fail at runtime. Kept for migration reference only.
+# from shared.models.trade import DailyMetrics, Position, Trade
 
 logger = logging.getLogger(__name__)
 

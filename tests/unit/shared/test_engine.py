@@ -16,7 +16,8 @@ class TestGetDatabaseUrl:
 
     def test_returns_env_override(self):
         custom = "postgresql+asyncpg://user:pass@host:5432/testdb"
-        with patch.dict(os.environ, {"DATABASE_URL": custom}):
+        with patch.dict(os.environ, {"DATABASE_URL": custom}, clear=False):
+            os.environ.pop("API_DATABASE_URL", None)
             url = get_database_url()
         assert url == custom
 

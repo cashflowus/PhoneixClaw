@@ -1,126 +1,90 @@
-"""Unit tests for BERT entity extractor (nlp-parser)."""
+"""Unit tests for V3 NLP modules (signal_parser + ticker_extractor).
 
-import sys
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+Replaces the original tests that targeted the non-existent nlp-parser service.
+"""
 
-# Add nlp-parser to path so "from src.bert_entity_extractor" works
-_nlp_path = Path(__file__).resolve().parents[2] / "services" / "nlp-parser"
-if _nlp_path.exists() and str(_nlp_path) not in sys.path:
-    sys.path.insert(0, str(_nlp_path))
+from shared.nlp.signal_parser import ParsedSignal, parse_signal
+from shared.nlp.ticker_extractor import TickerExtractor
 
 
-class TestBertEntityExtractor:
-    """Test extract_entities_bert with mocked model."""
+class TestTickerExtractor:
+    def test_extracts_cashtag(self):
+        ext = TickerExtractor()
+        result = ext.extract("Buying $AAPL at 190")
+        assert "AAPL" in result
 
-    def test_returns_none_when_model_unavailable(self):
-        """When transformers/model fails to load, returns None."""
-        with patch("src.bert_entity_extractor._get_model", return_value=(None, None)):
-            from src.bert_entity_extractor import extract_entities_bert
+    def test_extracts_option_format(self):
+        ext = TickerExtractor()
+        result = ext.extract("AAPL 190C 3/21")
+        assert "AAPL" in result
 
-            result = extract_entities_bert("BTO AAPL 190C 3/21 @ 2.50")
-            assert result is None
+    def test_deduplicates(self):
+        ext = TickerExtractor()
+        result = ext.extract("$AAPL is great, AAPL to the moon")
+        assert result.count("AAPL") == 1
 
-    def test_parses_valid_json_output(self):
-        """When model returns valid JSON, returns parsed entities."""
-        mock_output = (
-            '{"ticker": "AAPL", "strike": 190, "option_type": "CALL",'
-            ' "price": 2.5, "quantity": 1, "expiration": "2025-03-21"}'
-        )
+    def test_extract_primary(self):
+        ext = TickerExtractor()
+        result = ext.extract_primary("$TSLA calls looking good")
+        assert result == "TSLA"
 
-        mock_model = MagicMock()
-        mock_tokenizer = MagicMock()
-        mock_tokenizer.batch_decode.return_value = [mock_output]
-        mock_tokenizer.return_value = {"input_ids": MagicMock()}
+    def test_returns_none_for_no_ticker(self):
+        ext = TickerExtractor()
+        result = ext.extract_primary("the market is crazy today")
+        assert result is None
 
-        with patch("src.bert_entity_extractor._get_model", return_value=(mock_model, mock_tokenizer)):
-            with patch.object(mock_tokenizer, "__call__", return_value={"input_ids": MagicMock()}):
-                mock_model.generate.return_value = MagicMock()
+    def test_filters_common_words(self):
+        ext = TickerExtractor()
+        result = ext.extract("I AM going TO BUY something")
+        assert "AM" not in result
+        assert "TO" not in result
+        assert "BUY" not in result
 
-                from src.bert_entity_extractor import extract_entities_bert
 
-                extract_entities_bert("BTO AAPL 190C 3/21 @ 2.50")
-                pass
+class TestSignalParser:
+    def test_buy_signal_detected(self):
+        sig = parse_signal("BTO $AAPL 190C 3/21 @ 2.50")
+        assert sig.signal_type == "buy_signal"
+        assert "AAPL" in sig.tickers
+        assert sig.confidence > 0.3
 
-        # Simpler: test the helper functions directly
-        from src.bert_entity_extractor import (
-            _extract_json_from_output,
-            _normalize_option_type,
-            _safe_expiration,
-            _safe_float,
-            _safe_int,
-            _safe_str,
-        )
+    def test_sell_signal_detected(self):
+        sig = parse_signal("STC $TSLA sold at 250")
+        assert sig.signal_type == "sell_signal"
+        assert "TSLA" in sig.tickers
 
-        assert _safe_str("AAPL") == "AAPL"
-        assert _safe_str("  aapl  ") == "AAPL"
-        assert _safe_str(None) is None
-        assert _safe_float(2.5) == 2.5
-        assert _safe_float("3.00") == 3.0
-        assert _safe_float(None) is None
-        assert _safe_int(5) == 5
-        assert _safe_int("10") == 10
-        assert _normalize_option_type("CALL") == "CALL"
-        assert _normalize_option_type("put") == "PUT"
-        assert _normalize_option_type("C") == "CALL"
-        assert _normalize_option_type("P") == "PUT"
-        assert _safe_expiration("2025-03-21") == "2025-03-21"
-        assert _extract_json_from_output('{"ticker":"AAPL"}') == '{"ticker":"AAPL"}'
-        assert _extract_json_from_output("extra {\"ticker\":\"AAPL\"} more") == '{"ticker":"AAPL"}'
+    def test_close_signal_detected(self):
+        sig = parse_signal("Closed $SPY position, took profit at 500")
+        assert sig.signal_type == "close_signal"
+        assert "SPY" in sig.tickers
 
-    def test_extract_entities_bert_with_mocked_generate(self):
-        """Test full flow with mocked model.generate."""
-        from src.bert_entity_extractor import extract_entities_bert
+    def test_noise_detected(self):
+        sig = parse_signal("good morning everyone, happy trading")
+        assert sig.signal_type == "noise"
+        assert sig.confidence < 0.3
 
-        # Mock the model and tokenizer to return our expected output
-        mock_outputs = MagicMock()
-        mock_tokenizer = MagicMock()
-        mock_tokenizer.batch_decode.return_value = [
-            '{"ticker": "AAPL", "strike": 190, "option_type": "CALL",'
-            ' "price": 2.5, "quantity": 1, "expiration": "2025-03-21"}'
-        ]
-        mock_tokenizer.return_value = {"input_ids": MagicMock()}
+    def test_info_with_ticker(self):
+        sig = parse_signal("$NVDA earnings coming up next week")
+        assert sig.signal_type == "info"
+        assert "NVDA" in sig.tickers
 
-        mock_model = MagicMock()
-        mock_model.generate.return_value = mock_outputs
+    def test_price_extraction(self):
+        sig = parse_signal("Bought $AAPL @ 192.50")
+        assert sig.price == 192.50
 
-        with patch("src.bert_entity_extractor._model", mock_model):
-            with patch("src.bert_entity_extractor._tokenizer", mock_tokenizer):
-                # Force _get_model to return our mocks
-                with patch("src.bert_entity_extractor._get_model", return_value=(mock_model, mock_tokenizer)):
-                    result = extract_entities_bert("BTO AAPL 190C 3/21 @ 2.50")
+    def test_option_extraction(self):
+        sig = parse_signal("BTO AAPL 3/21 190C")
+        assert sig.option_type == "C"
+        assert sig.option_strike == 190.0
+        assert sig.option_expiry == "3/21"
 
-        if result:
-            assert result["ticker"] == "AAPL"
-            assert result["strike"] == 190.0
-            assert result["option_type"] == "CALL"
-            assert result["price"] == 2.5
-            assert result["quantity"] == 1
-            assert result["expiration"] == "2025-03-21"
+    def test_returns_parsed_signal_type(self):
+        sig = parse_signal("some message")
+        assert isinstance(sig, ParsedSignal)
 
-    def test_returns_none_when_json_invalid(self):
-        """When model returns invalid JSON, returns None."""
-        from src.bert_entity_extractor import extract_entities_bert
-
-        mock_tokenizer = MagicMock()
-        mock_tokenizer.batch_decode.return_value = ["not valid json at all"]
-        mock_model = MagicMock()
-
-        with patch("src.bert_entity_extractor._get_model", return_value=(mock_model, mock_tokenizer)):
-            result = extract_entities_bert("BTO AAPL 190C 3/21 @ 2.50")
-            assert result is None
-
-    def test_returns_none_when_missing_fields(self):
-        """When BERT returns insufficient fields (no ticker), returns None."""
-        from src.bert_entity_extractor import extract_entities_bert
-
-        mock_tokenizer = MagicMock()
-        mock_tokenizer.batch_decode.return_value = [
-            '{"ticker": null, "strike": 190, "option_type": "CALL", "price": 2.5, "quantity": 1, "expiration": null}'
-        ]
-        mock_model = MagicMock()
-
-        with patch("src.bert_entity_extractor._get_model", return_value=(mock_model, mock_tokenizer)):
-            result = extract_entities_bert("some message")
-            # ticker is None, so we return None (fallback)
-            assert result is None
+    def test_confidence_increases_with_ticker_and_price(self):
+        bare = parse_signal("buying something")
+        with_ticker = parse_signal("buying $AAPL")
+        with_both = parse_signal("buying $AAPL @ 190")
+        assert with_ticker.confidence > bare.confidence
+        assert with_both.confidence > with_ticker.confidence

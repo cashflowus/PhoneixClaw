@@ -7,12 +7,7 @@ from cryptography.fernet import Fernet
 def setup_encryption_key(monkeypatch):
     key = Fernet.generate_key().decode()
     monkeypatch.setenv("CREDENTIAL_ENCRYPTION_KEY", key)
-    import importlib
-
-    import shared.config.base_config
-    importlib.reload(shared.config.base_config)
-    import shared.crypto.credentials
-    importlib.reload(shared.crypto.credentials)
+    monkeypatch.delenv("FERNET_KEY", raising=False)
 
 
 class TestCredentialEncryption:
@@ -21,7 +16,7 @@ class TestCredentialEncryption:
 
         original = {"api_key": "AKTEST123", "secret_key": "secret456"}
         encrypted = encrypt_credentials(original)
-        assert isinstance(encrypted, bytes)
+        assert isinstance(encrypted, str)
         assert encrypted != original
 
         decrypted = decrypt_credentials(encrypted)
@@ -51,15 +46,10 @@ class TestCredentialEncryption:
         assert enc1 != enc2  # Fernet uses random IV
 
     def test_invalid_key_raises(self, monkeypatch):
-        monkeypatch.setenv("CREDENTIAL_ENCRYPTION_KEY", "")
-        monkeypatch.setenv("JWT_SECRET_KEY", "dev-secret-key-change-in-production")
-        import importlib
-
-        import shared.config.base_config
-        importlib.reload(shared.config.base_config)
-        import shared.crypto.credentials
-        importlib.reload(shared.crypto.credentials)
+        monkeypatch.delenv("CREDENTIAL_ENCRYPTION_KEY", raising=False)
+        monkeypatch.delenv("FERNET_KEY", raising=False)
 
         from shared.crypto.credentials import encrypt_credentials
-        with pytest.raises(ValueError):
+
+        with pytest.raises(RuntimeError, match="FERNET_KEY"):
             encrypt_credentials({"key": "value"})

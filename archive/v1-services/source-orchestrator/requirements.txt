@@ -1,2 +1,0 @@
-cryptography>=42.0.0
-discord.py-self>=2.1.0

@@ -1,88 +1,146 @@
 """
-On-Chain/Flow API routes: whale alerts, Mag 7, meme stocks, sectors, indices, flow monitor agent.
+On-Chain/Flow API routes: whale alerts, Mag 7, meme stocks, sectors, indices.
+
+Phoenix v3 — Live options flow data from Unusual Whales API.
 """
 
-from fastapi import APIRouter
-from pydantic import BaseModel
+import logging
+from datetime import datetime, timezone
 
+from fastapi import APIRouter, Query
+
+from shared.unusual_whales.client import UnusualWhalesClient
+
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v2/onchain-flow", tags=["onchain-flow"])
 
+_uw = UnusualWhalesClient()
 
-class DeployFlowMonitorBody(BaseModel):
-    instance_id: str = "inst-1"
-    watched_tickers: list[str] = []
-    min_premium: int = 500000
-    min_size: int = 100
+MAG7_TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA"]
+MEME_TICKERS = ["GME", "AMC", "BBBY", "PLTR", "SOFI", "RIVN"]
+INDEX_TICKERS = ["SPY", "QQQ", "IWM", "DIA"]
+SECTOR_ETFS = {
+    "Technology": "XLK", "Healthcare": "XLV", "Financials": "XLF",
+    "Energy": "XLE", "Consumer Discretionary": "XLY", "Consumer Staples": "XLP",
+    "Industrials": "XLI", "Materials": "XLB", "Utilities": "XLU",
+    "Real Estate": "XLRE", "Communications": "XLC",
+}
+
+
+async def _get_ticker_flow_summary(ticker: str) -> dict:
+    """Fetch flow for a single ticker and summarize."""
+    flows = await _uw.get_options_flow(ticker, limit=30)
+    if not flows:
+        return {"ticker": ticker, "call_put_ratio": 0, "total_premium": 0, "sentiment": "NEUTRAL", "whale_trades": []}
+
+    call_vol = sum(f.volume for f in flows if f.option_type == "CALL")
+    put_vol = sum(f.volume for f in flows if f.option_type == "PUT")
+    ratio = round(call_vol / put_vol, 2) if put_vol > 0 else (99.0 if call_vol > 0 else 0)
+    total_premium = sum(f.premium or 0 for f in flows)
+
+    bullish = sum(1 for f in flows if f.sentiment and f.sentiment.upper() == "BULLISH")
+    bearish = sum(1 for f in flows if f.sentiment and f.sentiment.upper() == "BEARISH")
+    if bullish > bearish * 1.5:
+        inst_flow = "ACCUMULATING"
+    elif bearish > bullish * 1.5:
+        inst_flow = "DISTRIBUTING"
+    else:
+        inst_flow = "NEUTRAL"
+
+    # Top whale trades (>$500k premium)
+    whales = sorted(flows, key=lambda f: f.premium or 0, reverse=True)[:3]
+    whale_strs = [
+        f"${(f.premium or 0) / 1e6:.1f}M {f.option_type.lower()} {f.trade_type or 'block'} {f.strike}{f.option_type[0]}"
+        for f in whales if (f.premium or 0) >= 500000
+    ]
+
+    return {
+        "ticker": ticker,
+        "call_put_ratio": ratio,
+        "total_premium": total_premium,
+        "institutional_flow": inst_flow,
+        "whale_trades": whale_strs,
+    }
 
 
 @router.get("/whale-alerts")
-async def get_whale_alerts():
-    """Return recent whale alerts."""
+async def get_whale_alerts(min_premium: int = Query(500000, ge=0)):
+    """Recent large options trades (whale alerts) across all tickers."""
+    flows = await _uw.get_options_flow(limit=100)
+    whales = [f for f in flows if (f.premium or 0) >= min_premium]
+    whales.sort(key=lambda f: f.premium or 0, reverse=True)
+
     return [
-        {"timestamp": "2025-03-03T14:32:00Z", "ticker": "NVDA", "type": "CALL", "size": 500, "premium": 2400000, "sentiment": "BULLISH", "exchange": "CBOE"},
-        {"timestamp": "2025-03-03T14:28:00Z", "ticker": "SPY", "type": "PUT", "size": 1200, "premium": 1800000, "sentiment": "BEARISH", "exchange": "PHLX"},
-        {"timestamp": "2025-03-03T14:25:00Z", "ticker": "AAPL", "type": "STOCK", "size": 25000, "premium": 4500000, "sentiment": "BULLISH", "exchange": "DARK"},
-        {"timestamp": "2025-03-03T14:20:00Z", "ticker": "TSLA", "type": "PUT", "size": 800, "premium": 1200000, "sentiment": "BEARISH", "exchange": "CBOE"},
-        {"timestamp": "2025-03-03T14:15:00Z", "ticker": "AMZN", "type": "CALL", "size": 600, "premium": 3100000, "sentiment": "BULLISH", "exchange": "ISE"},
+        {
+            "timestamp": f.timestamp or datetime.now(timezone.utc).isoformat(),
+            "ticker": f.ticker,
+            "type": f.option_type,
+            "strike": f.strike,
+            "size": f.volume,
+            "premium": f.premium,
+            "sentiment": f.sentiment or "UNKNOWN",
+            "trade_type": f.trade_type,
+        }
+        for f in whales[:20]
     ]
 
 
 @router.get("/mag7")
 async def get_mag7_flow():
-    """Return Mag 7 flow data."""
-    return {
-        "tickers": [
-            {"ticker": "AAPL", "whale_trades": ["$12M call sweep 180C", "$8M put block 175P"], "call_put_ratio": 1.42, "dark_pool_pct": 35, "institutional_flow": "ACCUMULATING"},
-            {"ticker": "MSFT", "whale_trades": ["$15M call block 420C"], "call_put_ratio": 1.85, "dark_pool_pct": 42, "institutional_flow": "ACCUMULATING"},
-            {"ticker": "GOOGL", "whale_trades": ["$6M put sweep 150P"], "call_put_ratio": 0.92, "dark_pool_pct": 31, "institutional_flow": "NEUTRAL"},
-            {"ticker": "AMZN", "whale_trades": ["$22M call block 185C"], "call_put_ratio": 2.1, "dark_pool_pct": 45, "institutional_flow": "ACCUMULATING"},
-            {"ticker": "META", "whale_trades": ["$9M put block 480P"], "call_put_ratio": 1.12, "dark_pool_pct": 38, "institutional_flow": "NEUTRAL"},
-            {"ticker": "NVDA", "whale_trades": ["$45M call sweep 900C"], "call_put_ratio": 2.8, "dark_pool_pct": 52, "institutional_flow": "ACCUMULATING"},
-            {"ticker": "TSLA", "whale_trades": ["$14M put sweep 240P"], "call_put_ratio": 0.78, "dark_pool_pct": 41, "institutional_flow": "DISTRIBUTING"},
-        ]
-    }
+    """Mag 7 options flow summary."""
+    tickers = []
+    for ticker in MAG7_TICKERS:
+        summary = await _get_ticker_flow_summary(ticker)
+        tickers.append(summary)
+    return {"tickers": tickers}
 
 
 @router.get("/meme")
 async def get_meme_flow():
-    """Return meme stock flow with social sentiment."""
-    return {
-        "tickers": [
-            {"ticker": "GME", "whale_trades": ["$3.2M call sweep 28C"], "call_put_ratio": 1.65, "dark_pool_pct": 28, "institutional_flow": "NEUTRAL", "social_sentiment": 78},
-            {"ticker": "AMC", "whale_trades": ["$1.8M put block 4P"], "call_put_ratio": 0.85, "dark_pool_pct": 22, "institutional_flow": "DISTRIBUTING", "social_sentiment": 45},
-            {"ticker": "BBBY", "whale_trades": ["$0.5M call sweep"], "call_put_ratio": 1.2, "dark_pool_pct": 18, "institutional_flow": "NEUTRAL", "social_sentiment": 62},
-        ]
-    }
+    """Meme stock options flow with institutional direction."""
+    tickers = []
+    for ticker in MEME_TICKERS:
+        summary = await _get_ticker_flow_summary(ticker)
+        tickers.append(summary)
+    return {"tickers": tickers}
 
 
 @router.get("/sectors")
 async def get_sector_flow():
-    """Return sector flow with net direction and top movers."""
-    return {
-        "sectors": [
-            {"sector": "Technology", "net_direction": "ACCUMULATING", "top_movers": [{"ticker": "NVDA", "flow_pct": 12.4}, {"ticker": "AMD", "flow_pct": 8.2}]},
-            {"sector": "Healthcare", "net_direction": "NEUTRAL", "top_movers": [{"ticker": "PFE", "flow_pct": -2.1}, {"ticker": "JNJ", "flow_pct": 1.3}]},
-            {"sector": "Energy", "net_direction": "DISTRIBUTING", "top_movers": [{"ticker": "XOM", "flow_pct": -4.2}, {"ticker": "CVX", "flow_pct": -2.8}]},
-            {"sector": "Financials", "net_direction": "ACCUMULATING", "top_movers": [{"ticker": "JPM", "flow_pct": 5.1}, {"ticker": "BAC", "flow_pct": 3.2}]},
-            {"sector": "Consumer", "net_direction": "NEUTRAL", "top_movers": [{"ticker": "AMZN", "flow_pct": 2.4}, {"ticker": "WMT", "flow_pct": -1.1}]},
-        ]
-    }
+    """Sector flow via sector ETFs."""
+    sectors = []
+    for sector_name, etf in SECTOR_ETFS.items():
+        summary = await _get_ticker_flow_summary(etf)
+        sectors.append({
+            "sector": sector_name,
+            "etf": etf,
+            "net_direction": summary["institutional_flow"],
+            "call_put_ratio": summary["call_put_ratio"],
+            "total_premium": summary["total_premium"],
+        })
+    return {"sectors": sectors}
 
 
 @router.get("/indices")
 async def get_index_flow():
-    """Return index flow with GEX, 0DTE volume, put/call skew, dark pool."""
-    return {
-        "indices": [
-            {"symbol": "SPY", "gex_level": "$4.2B", "odte_volume": "2.1M", "put_call_skew": 1.12, "dark_pool_pct": 44},
-            {"symbol": "QQQ", "gex_level": "$2.8B", "odte_volume": "1.8M", "put_call_skew": 1.08, "dark_pool_pct": 48},
-            {"symbol": "IWM", "gex_level": "$0.6B", "odte_volume": "0.4M", "put_call_skew": 1.25, "dark_pool_pct": 35},
-            {"symbol": "DIA", "gex_level": "$0.9B", "odte_volume": "0.3M", "put_call_skew": 1.15, "dark_pool_pct": 38},
-        ]
-    }
+    """Index flow with GEX and volume data."""
+    indices = []
+    for symbol in INDEX_TICKERS:
+        gex = await _uw.get_gex(symbol)
+        flows = await _uw.get_options_flow(symbol, limit=50)
 
+        call_vol = sum(f.volume for f in flows if f.option_type == "CALL")
+        put_vol = sum(f.volume for f in flows if f.option_type == "PUT")
+        ratio = round(put_vol / call_vol, 2) if call_vol > 0 else 0
 
-@router.post("/agent/create")
-async def deploy_flow_monitor_agent(body: DeployFlowMonitorBody):
-    """Deploy flow monitor agent to an instance."""
-    return {"status": "deployed", "instance_id": body.instance_id, "agent": "flow-monitor"}
+        indices.append({
+            "symbol": symbol,
+            "gex_total": gex.total_gex,
+            "call_gex": gex.call_gex,
+            "put_gex": gex.put_gex,
+            "zero_gamma": gex.zero_gamma_level,
+            "call_volume": call_vol,
+            "put_volume": put_vol,
+            "put_call_ratio": ratio,
+        })
+    return {"indices": indices}

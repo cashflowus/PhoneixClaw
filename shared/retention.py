@@ -1,16 +1,29 @@
-"""Data retention policy — archive and purge old records.
+"""
+DEPRECATED — V3 removed the V2 models (NotificationLog, RawMessage, TradeEvent)
+this module referenced. Kept for reference only. Do not use in new code.
 
-Run periodically (e.g., daily cron or background task) to keep
-the database lean while preserving an audit trail.
+Original purpose: Data retention policy — archive and purge old records.
 """
 
 import logging
+import warnings
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, func, select
+warnings.warn(
+    "shared.retention is deprecated — V3 removed the models it referenced.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-from shared.models.database import AsyncSessionLocal
-from shared.models.trade import NotificationLog, RawMessage, TradeEvent
+try:
+    from sqlalchemy import delete, func, select
+    from shared.db.engine import async_session as AsyncSessionLocal
+    # V1 models no longer exist — stubs for type reference only
+    NotificationLog = None
+    RawMessage = None
+    TradeEvent = None
+except ImportError:
+    pass
 
 logger = logging.getLogger(__name__)
 

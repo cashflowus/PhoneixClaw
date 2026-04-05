@@ -6,7 +6,7 @@ Usage:
 
 import argparse
 import warnings
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 import numpy as np
@@ -277,6 +277,147 @@ def enrich_trade(row: pd.Series, cache: dict) -> dict:
     opex_date = date(yr, mo, opex_day)
     attrs["days_to_opex"] = (opex_date - entry_date).days if hasattr(entry_date, "year") else 0
     attrs["is_opex_week"] = float(abs(attrs["days_to_opex"]) <= 5)
+
+    # ── Category 7: Sentiment & Events ────────────────────────────────
+    # FinBERT sentiment on the original Discord message
+    msg_text = row.get("raw_message", row.get("content", ""))
+    if msg_text and isinstance(msg_text, str):
+        try:
+            from shared.nlp.sentiment_classifier import SentimentClassifier
+            _clf = SentimentClassifier()
+            sent = _clf.classify(msg_text)
+            attrs["sentiment_score"] = sent.score
+            attrs["sentiment_confidence"] = sent.confidence
+            attrs["sentiment_numeric"] = sent.numeric
+            attrs["sentiment_bullish"] = float(sent.is_bullish)
+            attrs["sentiment_bearish"] = float(sent.is_bearish)
+        except Exception:
+            attrs["sentiment_score"] = np.nan
+            attrs["sentiment_confidence"] = np.nan
+            attrs["sentiment_numeric"] = np.nan
+            attrs["sentiment_bullish"] = np.nan
+            attrs["sentiment_bearish"] = np.nan
+
+    # Earnings calendar (yfinance)
+    try:
+        import yfinance as yf
+        yf_ticker = yf.Ticker(ticker)
+        cal = yf_ticker.calendar
+        if cal is not None:
+            earn_date = None
+            if isinstance(cal, dict):
+                earn_date = cal.get("Earnings Date")
+                if isinstance(earn_date, list) and earn_date:
+                    earn_date = earn_date[0]
+            elif isinstance(cal, pd.DataFrame) and "Earnings Date" in cal.index:
+                earn_date = cal.loc["Earnings Date"].iloc[0]
+            if earn_date:
+                earn_dt = pd.Timestamp(earn_date).date()
+                attrs["days_to_earnings"] = (earn_dt - entry_date).days
+                attrs["earnings_within_7d"] = float(abs(attrs["days_to_earnings"]) <= 7)
+                attrs["earnings_within_14d"] = float(abs(attrs["days_to_earnings"]) <= 14)
+        # Analyst recommendations
+        recs = yf_ticker.recommendations
+        if recs is not None and not recs.empty:
+            # Filter to recs before entry date for no look-ahead
+            if hasattr(recs.index, 'date'):
+                recs = recs[recs.index.date <= entry_date]
+            recent = recs.tail(5)
+            grade_map = {"Strong Buy": 5, "Buy": 4, "Overweight": 4,
+                         "Hold": 3, "Neutral": 3, "Equal-Weight": 3,
+                         "Underweight": 2, "Sell": 1, "Strong Sell": 0}
+            grades = []
+            for _, r in recent.iterrows():
+                g = r.get("To Grade", r.get("toGrade", ""))
+                if g in grade_map:
+                    grades.append(grade_map[g])
+            if grades:
+                attrs["analyst_avg_grade"] = np.mean(grades)
+                attrs["analyst_recent_upgrades"] = sum(1 for g in grades if g >= 4)
+                attrs["analyst_recent_downgrades"] = sum(1 for g in grades if g <= 2)
+    except Exception:
+        pass
+
+    # FOMC/CPI/NFP proximity
+    fomc_dates = [
+        "2024-01-31", "2024-03-20", "2024-05-01", "2024-06-12",
+        "2024-07-31", "2024-09-18", "2024-11-07", "2024-12-18",
+        "2025-01-29", "2025-03-19", "2025-05-07", "2025-06-18",
+        "2025-07-30", "2025-09-17", "2025-11-05", "2025-12-17",
+        "2026-01-28", "2026-03-18", "2026-05-06", "2026-06-17",
+        "2026-07-29", "2026-09-16", "2026-11-04", "2026-12-16",
+    ]
+    cpi_dates = [
+        "2024-01-11", "2024-02-13", "2024-03-12", "2024-04-10",
+        "2024-05-15", "2024-06-12", "2024-07-11", "2024-08-14",
+        "2024-09-11", "2024-10-10", "2024-11-13", "2024-12-11",
+        "2025-01-15", "2025-02-12", "2025-03-12", "2025-04-10",
+        "2025-05-13", "2025-06-11", "2025-07-15", "2025-08-12",
+        "2025-09-10", "2025-10-14", "2025-11-12", "2025-12-10",
+        "2026-01-14", "2026-02-11", "2026-03-11", "2026-04-10",
+        "2026-05-12", "2026-06-10", "2026-07-14", "2026-08-12",
+        "2026-09-11", "2026-10-13", "2026-11-10", "2026-12-10",
+    ]
+    from datetime import date as date_cls
+    for name, dates in [("fomc", fomc_dates), ("cpi", cpi_dates)]:
+        future = [d for d in (date_cls.fromisoformat(d) for d in dates) if d >= entry_date]
+        if future:
+            days_away = (future[0] - entry_date).days
+            attrs[f"days_to_{name}"] = days_away
+            attrs[f"{name}_within_3d"] = float(days_away <= 3)
+
+    # ── Category 8: Options Data ──────────────────────────────────────
+    try:
+        import asyncio
+        from shared.unusual_whales.client import UnusualWhalesClient
+        uw = UnusualWhalesClient()
+        _loop = asyncio.new_event_loop()
+        # Options flow
+        flow = _loop.run_until_complete(uw.get_options_flow(ticker=ticker))
+        if flow:
+            total_premium = sum(float(f.premium or 0) for f in flow[:50])
+            call_premium = sum(float(f.premium or 0) for f in flow[:50]
+                               if f.option_type == "CALL")
+            put_premium = total_premium - call_premium
+            attrs["options_total_premium_50"] = total_premium
+            attrs["options_call_premium_pct"] = call_premium / total_premium if total_premium > 0 else 0.5
+            attrs["options_put_call_ratio"] = put_premium / call_premium if call_premium > 0 else np.nan
+            attrs["options_flow_count"] = len(flow)
+        # GEX
+        gex = _loop.run_until_complete(uw.get_gex(ticker))
+        if gex and gex.total_gex is not None:
+            attrs["gex_value"] = float(gex.total_gex)
+            attrs["gex_positive"] = float(attrs.get("gex_value", 0) > 0)
+        # IV rank & Greeks from options chain
+        try:
+            chain = _loop.run_until_complete(uw.get_option_chain(ticker))
+            contracts = chain.contracts if chain else []
+            if contracts:
+                ivs = [c.implied_volatility for c in contracts if c.implied_volatility]
+                if ivs:
+                    current_iv = ivs[0]
+                    iv_min, iv_max = min(ivs), max(ivs)
+                    attrs["iv_current"] = current_iv
+                    attrs["iv_rank"] = ((current_iv - iv_min) / (iv_max - iv_min)
+                                        if iv_max > iv_min else 0.5)
+                    attrs["iv_percentile"] = sum(1 for iv in ivs if iv <= current_iv) / len(ivs)
+                # Average Greeks from near-the-money contracts
+                entry_price = float(row.get("entry_price", 0))
+                atm = [c for c in contracts if entry_price > 0 and
+                       abs(c.strike - entry_price) < entry_price * 0.05]
+                if not atm:
+                    atm = contracts[:5]
+                if atm:
+                    attrs["avg_delta"] = np.mean([c.delta or 0 for c in atm])
+                    attrs["avg_gamma"] = np.mean([c.gamma or 0 for c in atm])
+                    attrs["avg_theta"] = np.mean([c.theta or 0 for c in atm])
+                    attrs["avg_vega"] = np.mean([c.vega or 0 for c in atm])
+        except Exception:
+            pass
+        _loop.run_until_complete(uw.close())
+        _loop.close()
+    except Exception:
+        pass
 
     return attrs
 

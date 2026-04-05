@@ -4,6 +4,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { useRealtimeQuery } from '@/hooks/use-websocket'
 import {
   FlaskConical, Play, CheckCircle2, XCircle, Clock, Loader2,
   ArrowRight, BarChart3,
@@ -61,10 +62,16 @@ interface LogEntry {
 export default function Backtests() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
+  // Real-time updates via WebSocket — invalidates backtest queries on events
+  useRealtimeQuery({
+    channel: 'backtest-progress',
+    queryKeys: [['backtests'], ['backtest-logs', selectedId ?? '']],
+  })
+
   const { data: backtests = [] } = useQuery({
     queryKey: ['backtests'],
     queryFn: () => api.get<Backtest[]>('/api/v2/backtests').then(r => r.data),
-    refetchInterval: 5000,
+    refetchInterval: 30000, // Fallback polling (WS handles real-time)
   })
 
   const { data: agents = [] } = useQuery({
@@ -78,7 +85,7 @@ export default function Backtests() {
       ? api.get<LogEntry[]>(`/api/v2/system-logs?backtest_id=${selectedId}&limit=200`).then(r => r.data)
       : Promise.resolve([]),
     enabled: !!selectedId,
-    refetchInterval: selectedId ? 3000 : false,
+    refetchInterval: selectedId ? 15000 : false, // Fallback; WS handles real-time
   })
 
   const agentName = (agentId: string) => agents.find(a => a.id === agentId)?.name || agentId.slice(0, 8)

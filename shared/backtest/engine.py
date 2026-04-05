@@ -8,7 +8,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from services.trade_parser.src.parser import parse_trade_message
+from shared.nlp.signal_parser import parse_signal
 
 OPTIONS_MULTIPLIER = 100
 
@@ -103,95 +103,108 @@ def run_backtest(
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
 
-        parsed = parse_trade_message(content)
-        if not parsed or "actions" not in parsed:
+        parsed = parse_signal(content)
+        if parsed.signal_type == "noise" or parsed.signal_type == "info":
+            continue
+        if not parsed.primary_ticker:
             continue
 
-        raw = parsed.get("raw_message", content)
+        raw = content
 
-        for act in parsed["actions"]:
-            action = act.get("action", "").upper()
-            ticker = act.get("ticker", "")
-            strike = float(act.get("strike", 0))
-            opt_type = act.get("option_type", "CALL")
-            exp = act.get("expiration")
-            raw_qty = act.get("quantity", 1)
-            price = float(act.get("price", 0))
+        # V3 parse_signal returns one signal per message (not a list of actions).
+        # Map signal_type → action: buy_signal → BUY, sell_signal/close_signal → SELL
+        if parsed.signal_type == "buy_signal":
+            action = "BUY"
+        elif parsed.signal_type in ("sell_signal", "close_signal"):
+            action = "SELL"
+        else:
+            continue
 
-            if not ticker or price <= 0:
-                continue
+        ticker = parsed.primary_ticker
+        strike = float(parsed.option_strike or 0)
+        opt_type = (parsed.option_type or "C").upper()
+        if opt_type == "C":
+            opt_type = "CALL"
+        elif opt_type == "P":
+            opt_type = "PUT"
+        exp = parsed.option_expiry
+        raw_qty = 1
+        price = float(parsed.price or 0)
 
-            key = _position_key(ticker, strike, opt_type, exp)
+        if not ticker or price <= 0:
+            continue
 
-            if action == "BUY":
-                qty = _resolve_qty(raw_qty)
-                pos = OpenPosition(
-                    ticker=ticker,
-                    strike=strike,
-                    option_type=opt_type,
-                    expiration=exp,
-                    entry_price=price,
-                    entry_ts=ts,
-                    quantity=qty,
-                    raw_message=raw,
-                )
-                for _ in range(qty):
-                    positions[key].append(pos)
+        key = _position_key(ticker, strike, opt_type, exp)
 
-            elif action == "SELL":
-                stack = positions.get(key, [])
-                qty = _resolve_qty(raw_qty, stack_size=len(stack))
-                to_close = min(qty, len(stack))
-                closed = 0
+        if action == "BUY":
+            qty = _resolve_qty(raw_qty)
+            pos = OpenPosition(
+                ticker=ticker,
+                strike=strike,
+                option_type=opt_type,
+                expiration=exp,
+                entry_price=price,
+                entry_ts=ts,
+                quantity=qty,
+                raw_message=raw,
+            )
+            for _ in range(qty):
+                positions[key].append(pos)
 
-                while closed < to_close and stack:
-                    p = stack.pop(0)
-                    closed += 1
-                    entry = float(p.entry_price)
-                    tp_price = entry * (1 + profit_target)
-                    sl_price = entry * (1 - stop_loss)
+        elif action == "SELL":
+            stack = positions.get(key, [])
+            qty = _resolve_qty(raw_qty, stack_size=len(stack))
+            to_close = min(qty, len(stack))
+            closed = 0
 
-                    if price >= tp_price:
-                        exit_price = tp_price
-                        exit_reason = "TAKE_PROFIT"
-                    elif price <= sl_price:
-                        exit_price = sl_price
-                        exit_reason = "STOP_LOSS"
-                    else:
-                        exit_price = price
-                        exit_reason = "MANUAL"
+            while closed < to_close and stack:
+                p = stack.pop(0)
+                closed += 1
+                entry = float(p.entry_price)
+                tp_price = entry * (1 + profit_target)
+                sl_price = entry * (1 - stop_loss)
 
-                    raw_diff = exit_price - entry
-                    pnl = raw_diff * OPTIONS_MULTIPLIER
-                    total_pnl += pnl
-                    if pnl > 0:
-                        winning += 1
-                        wins_sum += pnl
-                    else:
-                        losing += 1
-                        loss_sum += pnl
+                if price >= tp_price:
+                    exit_price = tp_price
+                    exit_reason = "TAKE_PROFIT"
+                elif price <= sl_price:
+                    exit_price = sl_price
+                    exit_reason = "STOP_LOSS"
+                else:
+                    exit_price = price
+                    exit_reason = "MANUAL"
 
-                    peak = max(peak, total_pnl)
-                    max_drawdown = max(max_drawdown, peak - total_pnl)
+                raw_diff = exit_price - entry
+                pnl = raw_diff * OPTIONS_MULTIPLIER
+                total_pnl += pnl
+                if pnl > 0:
+                    winning += 1
+                    wins_sum += pnl
+                else:
+                    losing += 1
+                    loss_sum += pnl
 
-                    trades.append(
-                        SimulatedTrade(
-                            trade_id=str(uuid.uuid4()),
-                            ticker=p.ticker,
-                            strike=p.strike,
-                            option_type=p.option_type,
-                            expiration=p.expiration,
-                            action="SELL",
-                            quantity=1,
-                            entry_price=p.entry_price,
-                            exit_price=exit_price,
-                            entry_ts=p.entry_ts,
-                            exit_ts=ts,
-                            exit_reason=exit_reason,
-                            realized_pnl=pnl,
-                            raw_message=p.raw_message,
-                        )
+                peak = max(peak, total_pnl)
+                max_drawdown = max(max_drawdown, peak - total_pnl)
+
+                trades.append(
+                    SimulatedTrade(
+                        trade_id=str(uuid.uuid4()),
+                        ticker=p.ticker,
+                        strike=p.strike,
+                        option_type=p.option_type,
+                        expiration=p.expiration,
+                        action="SELL",
+                        quantity=1,
+                        entry_price=p.entry_price,
+                        exit_price=exit_price,
+                        entry_ts=p.entry_ts,
+                        exit_ts=ts,
+                        exit_reason=exit_reason,
+                        realized_pnl=pnl,
+                        raw_message=p.raw_message,
                     )
+                )
 
     # Mark remaining positions as EXPIRED at breakeven (no assumption about direction)
     for key, stack in list(positions.items()):

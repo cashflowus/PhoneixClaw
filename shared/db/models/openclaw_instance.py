@@ -1,5 +1,6 @@
 """
-OpenClaw instance (node) registry. M1.6, ImplementationPlan Section 13.
+DEPRECATED — V3 removed the VPS layer (migration 007_v3_remove_vps_add_workers.py).
+This model is kept only for Alembic migration history. Do not use in new code.
 """
 
 import uuid

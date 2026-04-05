@@ -38,9 +38,15 @@ PRICE_PATTERN = re.compile(
     r"(?:\$|@|at\s+)\s*(\d+(?:\.\d{1,2})?)"
 )
 
-OPTION_PATTERN = re.compile(
+# Date-first: "3/21 190C" or "2025-03-21 190C"
+_OPTION_DATE_FIRST = re.compile(
     r"(\d{1,2}/\d{1,2}(?:/\d{2,4})?|\d{4}-\d{2}-\d{2})\s*"
     r"(\d+(?:\.\d+)?)\s*([CcPp])",
+)
+# Strike-first: "190C 3/21" or "190C" (no date)
+_OPTION_STRIKE_FIRST = re.compile(
+    r"(\d+(?:\.\d+)?)\s*([CcPp])\b"
+    r"(?:\s+(\d{1,2}/\d{1,2}(?:/\d{2,4})?|\d{4}-\d{2}-\d{2}))?",
 )
 
 PROFIT_PATTERN = re.compile(
@@ -97,7 +103,7 @@ def parse_signal(content: str) -> ParsedSignal:
     option_strike = None
     option_type = None
     option_expiry = None
-    om = OPTION_PATTERN.search(content)
+    om = _OPTION_DATE_FIRST.search(content)
     if om:
         option_expiry = om.group(1)
         try:
@@ -105,6 +111,15 @@ def parse_signal(content: str) -> ParsedSignal:
         except ValueError:
             pass
         option_type = om.group(3).upper()
+    else:
+        om2 = _OPTION_STRIKE_FIRST.search(content)
+        if om2:
+            try:
+                option_strike = float(om2.group(1))
+            except ValueError:
+                pass
+            option_type = om2.group(2).upper()
+            option_expiry = om2.group(3)  # may be None if no date
 
     # Classify signal type with confidence scoring
     buy_score = sum(1 for p in BUY_PATTERNS if p.search(content))
