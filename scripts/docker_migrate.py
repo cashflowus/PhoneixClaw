@@ -24,6 +24,8 @@ V3_ADD_COLUMNS_SQL = [
     "ALTER TABLE agents ADD COLUMN IF NOT EXISTS phoenix_api_key VARCHAR(200)",
     "ALTER TABLE agents ADD COLUMN IF NOT EXISTS worker_container_id VARCHAR(100)",
     "ALTER TABLE agents ADD COLUMN IF NOT EXISTS worker_status VARCHAR(30) NOT NULL DEFAULT 'STOPPED'",
+    "ALTER TABLE agent_backtests ADD COLUMN IF NOT EXISTS current_step VARCHAR(100)",
+    "ALTER TABLE agent_backtests ADD COLUMN IF NOT EXISTS progress_pct INTEGER NOT NULL DEFAULT 0",
 ]
 
 
