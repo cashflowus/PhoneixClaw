@@ -941,11 +941,23 @@ async def report_backtest_progress(agent_id: str, payload: BacktestProgressPaylo
     if payload.status == "COMPLETED" and bt:
         bt.status = "COMPLETED"
         bt.completed_at = datetime.now(timezone.utc)
+
+        m = bt.metrics or {}
+        bt.total_trades = m.get("total_trades") or m.get("trades") or 0
+        bt.win_rate = m.get("win_rate")
+        bt.sharpe_ratio = m.get("sharpe_ratio")
+        bt.max_drawdown = m.get("max_drawdown")
+        bt.total_return = m.get("total_return")
+
         agent_result = await session.execute(select(Agent).where(Agent.id == uuid.UUID(agent_id)))
         agent = agent_result.scalar_one_or_none()
         if agent:
             agent.status = "BACKTEST_COMPLETE"
             agent.updated_at = datetime.now(timezone.utc)
+            agent.model_type = m.get("best_model") or m.get("model")
+            agent.model_accuracy = m.get("accuracy")
+            agent.total_trades = bt.total_trades
+            agent.win_rate = bt.win_rate or 0.0
 
     if payload.status == "FAILED" and bt:
         bt.status = "FAILED"
