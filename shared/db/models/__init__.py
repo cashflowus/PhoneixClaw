@@ -19,6 +19,7 @@ from shared.db.models.notification import Notification
 from shared.db.models.openclaw_instance import OpenClawInstance
 from shared.db.models.skill import AgentSkill, Skill
 from shared.db.models.strategy import Strategy
+from shared.db.models.system_log import SystemLog
 from shared.db.models.task import Automation, Task
 from shared.db.models.token_usage import TokenUsage
 from shared.db.models.trade import Position, TradeIntent
@@ -54,4 +55,5 @@ __all__ = [
     "Notification",
     "ErrorLog",
     "LearningSession",
+    "SystemLog",
 ]

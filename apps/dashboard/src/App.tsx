@@ -35,6 +35,8 @@ import NarrativeSentimentPage from '@/pages/NarrativeSentiment'
 import RiskCompliancePage from '@/pages/RiskCompliance'
 import DevSprintBoardPage from '@/pages/DevSprintBoard'
 import AgentDashboardPage from '@/pages/AgentDashboard'
+import LogsPage from '@/pages/Logs'
+import BacktestsPage from '@/pages/Backtests'
 import { Toaster } from 'sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import './index.css'
@@ -113,6 +115,8 @@ function AppRoutes() {
         <Route path="agent-learning" element={<AgentLearningPage />} />
         <Route path="dev" element={<DevDashboard />} />
         <Route path="dev-sprint" element={<DevSprintBoardPage />} />
+        <Route path="logs" element={<LogsPage />} />
+        <Route path="backtests" element={<BacktestsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

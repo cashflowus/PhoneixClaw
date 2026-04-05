@@ -94,14 +94,16 @@ const AGENT_TYPES = [
 ]
 
 const AGENT_SKILLS = [
-  { id: 'market_data', label: 'Market Data Ingestion', description: 'Real-time price feeds and OHLCV data' },
-  { id: 'signal_parsing', label: 'Signal Parsing', description: 'Parse trade signals from text sources' },
-  { id: 'order_execution', label: 'Order Execution', description: 'Place and manage orders via broker API' },
-  { id: 'risk_management', label: 'Risk Management', description: 'Position sizing and loss limits' },
-  { id: 'portfolio_tracking', label: 'Portfolio Tracking', description: 'Track positions and P&L in real time' },
-  { id: 'sentiment_analysis', label: 'Sentiment Analysis', description: 'NLP-based market sentiment scoring' },
-  { id: 'backtesting', label: 'Backtesting', description: 'Historical strategy performance testing' },
-  { id: 'alerting', label: 'Alerting & Notifications', description: 'Push alerts on key events' },
+  { id: 'discord_monitoring', label: 'Discord Signal Monitoring', description: 'Listen to analyst channels for trade signals in real-time' },
+  { id: 'technical_analysis', label: 'Technical Analysis', description: 'RSI, MACD, Bollinger Bands, support/resistance levels' },
+  { id: 'options_analysis', label: 'Options Flow Analysis', description: 'Analyze options chain, IV, Greeks, unusual flow' },
+  { id: 'risk_assessment', label: 'Risk Assessment', description: 'Position sizing, stop-loss, portfolio risk scoring' },
+  { id: 'trade_execution', label: 'Trade Execution (Robinhood)', description: 'Execute trades via Robinhood MCP server' },
+  { id: 'position_monitoring', label: 'Position Monitoring', description: 'Track open positions, trailing stops, P&L alerts' },
+  { id: 'pre_market_analysis', label: 'Pre-Market Intelligence', description: 'Pre-market scan, set agent mode (aggressive/conservative)' },
+  { id: 'pattern_recognition', label: 'Pattern Recognition', description: 'Apply backtesting-derived patterns to new trades' },
+  { id: 'model_inference', label: 'ML Model Inference', description: 'Run trained models (XGBoost, LSTM, etc.) for trade decisions' },
+  { id: 'explainability', label: 'Trade Explainability', description: 'Explain why a trade was taken or skipped using SHAP' },
 ]
 
 const WIZARD_STEPS = ['Basic Info', 'Connectors', 'Instance', 'Skills', 'Risk Config', 'Review'] as const
@@ -696,7 +698,7 @@ function StepSkills({ form, onChange }: { form: WizardFormData; onChange: (f: Pa
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">Select the capabilities this agent should have.</p>
+      <p className="text-sm text-muted-foreground">Select the Claude Code agent tools and capabilities to enable.</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {AGENT_SKILLS.map((skill) => {
           const checked = form.skills.includes(skill.id)
@@ -774,7 +776,11 @@ function SliderInput({ label, value, onChange, min, max, step, unit }: {
 function StepRiskConfig({ form, onChange }: { form: WizardFormData; onChange: (f: Partial<WizardFormData>) => void }) {
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted-foreground">Configure risk management thresholds for this agent.</p>
+      <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
+        <p className="text-xs text-blue-400">
+          <strong>Tip:</strong> These defaults are a starting point. When backtesting completes, the agent&apos;s risk parameters will be automatically tuned based on historical performance (optimal stop-loss, position sizing, max drawdown). You can override them anytime from the agent&apos;s Rules tab.
+        </p>
+      </div>
       <SliderInput
         label="Max Daily Loss"
         value={form.max_daily_loss_pct}
