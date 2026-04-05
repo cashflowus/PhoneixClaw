@@ -22,6 +22,7 @@ COPY --from=deps /usr/local/bin /usr/local/bin
 COPY shared/ shared/
 COPY apps/api/ apps/api/
 COPY agents/ agents/
+COPY scripts/ scripts/
 COPY pyproject.toml .
 
 RUN pip install --no-deps -e . 2>/dev/null || true
@@ -32,4 +33,4 @@ EXPOSE 8011
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD curl -f http://localhost:8011/health || exit 1
 
-CMD ["sh", "-c", "alembic -c shared/db/migrations/alembic.ini upgrade head && uvicorn apps.api.src.main:app --host 0.0.0.0 --port 8011"]
+CMD ["uvicorn", "apps.api.src.main:app", "--host", "0.0.0.0", "--port", "8011"]

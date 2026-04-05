@@ -62,8 +62,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    command: >
-      sh -c "cd /app && python -m alembic upgrade head 2>/dev/null || python scripts/init_db.py"
+    command: ["python", "scripts/docker_migrate.py"]
     environment:
       - DATABASE_URL=${DATABASE_URL}
     depends_on:
