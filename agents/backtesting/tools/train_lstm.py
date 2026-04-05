@@ -303,6 +303,11 @@ def main():
     with open(output_dir / "lstm_results.json", "w") as f:
         json.dump(results, f, indent=2)
     print(f"LSTM: accuracy={results['accuracy']} auc={results['auc_roc']} f1={results['f1_score']}")
+    try:
+        from report_to_phoenix import report_progress
+        report_progress("train_lstm", "LSTM training complete", 52)
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

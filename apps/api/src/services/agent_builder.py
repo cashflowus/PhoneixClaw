@@ -1,7 +1,7 @@
-"""Agent Builder — manifest-driven agent creation, rendering, and shipping.
+"""Agent Builder — manifest-driven agent creation and rendering.
 
-Replaces the raw SCP approach with a structured pipeline:
-  template defaults + backtest output + user config → manifest → render → ship
+V3: Removed SSH/SCP shipping. The builder now only handles:
+  template defaults + backtest output + user config → manifest → render locally
 """
 
 import copy
@@ -9,15 +9,15 @@ import json
 import logging
 import os
 import shutil
-import tarfile
 import tempfile
 from pathlib import Path
 from typing import Any
-from uuid import UUID
 
-from jinja2 import Environment, FileSystemLoader
-
-from apps.api.src.services.ssh_pool import SSHResult, ssh_pool
+try:
+    from jinja2 import Environment, FileSystemLoader
+except ImportError:
+    Environment = None  # type: ignore[misc,assignment]
+    FileSystemLoader = None  # type: ignore[misc,assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ def _load_json(path: Path) -> dict:
 
 
 class AgentBuilder:
-    """Builds, validates, renders, and ships agents from templates + manifests."""
+    """Builds, validates, and renders agents from templates + manifests."""
 
     def __init__(self, templates_dir: Path | None = None):
         self.templates_dir = templates_dir or TEMPLATES_DIR
@@ -152,7 +152,7 @@ class AgentBuilder:
         return _validate(manifest, template_dir)
 
     # ------------------------------------------------------------------
-    # 3. Render agent bundle
+    # 3. Render agent bundle locally
     # ------------------------------------------------------------------
 
     def render_agent(self, manifest: dict) -> Path:
@@ -175,24 +175,29 @@ class AgentBuilder:
         if skills_src.exists():
             shutil.copytree(skills_src, output / "skills", dirs_exist_ok=True)
 
-        self._render_claude_md(manifest, template_dir, output)
+        claude_src = template_dir / ".claude"
+        if claude_src.exists():
+            shutil.copytree(claude_src, output / ".claude", dirs_exist_ok=True)
 
+        self._render_claude_md(manifest, template_dir, output)
         self._write_config(manifest, output)
 
         with open(output / "manifest.json", "w") as f:
             json.dump(manifest, f, indent=2, default=str)
 
         (output / "trades.log").write_text("")
-
         (output / "models").mkdir(exist_ok=True)
 
         return output
 
     def _render_claude_md(self, manifest: dict, template_dir: Path, output: Path):
-        """Render CLAUDE.md from the Jinja2 template."""
+        """Render CLAUDE.md from the Jinja2 template, falling back to static copy."""
         jinja_file = template_dir / "CLAUDE.md.jinja2"
-        if not jinja_file.exists():
-            fallback = template_dir / "CLAUDE.md"
+        fallback = template_dir / "CLAUDE.md"
+
+        if not jinja_file.exists() or Environment is None:
+            if jinja_file.exists() and Environment is None:
+                logger.warning("jinja2 not installed — copying static CLAUDE.md instead of rendering template")
             if fallback.exists():
                 shutil.copy2(fallback, output / "CLAUDE.md")
             return
@@ -254,100 +259,6 @@ class AgentBuilder:
         }
         with open(output / "config.json", "w") as f:
             json.dump(config, f, indent=2, default=str)
-
-    # ------------------------------------------------------------------
-    # 4. Ship agent to VPS
-    # ------------------------------------------------------------------
-
-    async def ship_agent(
-        self,
-        manifest: dict,
-        instance_id: UUID,
-        models_dir: Path | None = None,
-    ) -> SSHResult:
-        """
-        Render agent from manifest, copy model artifacts, package, SCP, and unpack on VPS.
-        """
-        errors = self.validate_manifest(manifest, manifest.get("template"))
-        if errors:
-            return SSHResult(exit_code=1, stdout="", stderr=f"Manifest invalid: {'; '.join(errors)}")
-
-        bundle_dir = self.render_agent(manifest)
-
-        if models_dir and models_dir.exists():
-            out_models = bundle_dir / "models"
-            out_models.mkdir(exist_ok=True)
-            for artifact in models_dir.glob("*"):
-                if artifact.is_file():
-                    shutil.copy2(artifact, out_models / artifact.name)
-
-        channel = manifest.get("identity", {}).get("channel", "agent")
-        remote_path = f"~/agents/live/{channel}"
-
-        try:
-            tar_path = bundle_dir.parent / f"{channel}.tar.gz"
-            with tarfile.open(tar_path, "w:gz") as tar:
-                tar.add(str(bundle_dir), arcname=channel)
-
-            await ssh_pool.run(instance_id, f"mkdir -p {remote_path}")
-            scp_result = await ssh_pool.scp_to(instance_id, str(tar_path), "~/agents/live/")
-            if scp_result.exit_code != 0:
-                return scp_result
-
-            untar = await ssh_pool.run(
-                instance_id,
-                f"cd ~/agents/live && tar xzf {channel}.tar.gz && rm {channel}.tar.gz",
-            )
-            if untar.exit_code != 0:
-                return untar
-
-            return SSHResult(
-                exit_code=0,
-                stdout=f"Agent shipped to {remote_path} with manifest v{manifest.get('version', '?')}",
-                stderr="",
-            )
-        finally:
-            shutil.rmtree(bundle_dir, ignore_errors=True)
-
-    # ------------------------------------------------------------------
-    # 5. Update config on a running agent
-    # ------------------------------------------------------------------
-
-    async def update_agent_config(
-        self,
-        instance_id: UUID,
-        channel: str,
-        config_patch: dict,
-    ) -> SSHResult:
-        """Merge a config patch into the running agent's config.json on the VPS."""
-        remote_config = f"~/agents/live/{channel}/config.json"
-        read_result = await ssh_pool.run(instance_id, f"cat {remote_config}")
-        if read_result.exit_code != 0:
-            return read_result
-
-        try:
-            current = json.loads(read_result.stdout)
-        except json.JSONDecodeError:
-            return SSHResult(exit_code=1, stdout="", stderr="Failed to parse remote config.json")
-
-        updated = _deep_merge(current, config_patch)
-        config_json = json.dumps(updated, indent=2, default=str)
-        escaped = config_json.replace("'", "'\\''")
-
-        return await ssh_pool.run(instance_id, f"echo '{escaped}' > {remote_config}")
-
-    async def get_agent_logs(
-        self,
-        instance_id: UUID,
-        channel: str,
-        lines: int = 200,
-    ) -> str:
-        """Tail the agent's trades.log from the VPS."""
-        result = await ssh_pool.run(
-            instance_id,
-            f"tail -n {lines} ~/agents/live/{channel}/trades.log 2>/dev/null || echo 'No logs'",
-        )
-        return result.stdout
 
 
 agent_builder = AgentBuilder()

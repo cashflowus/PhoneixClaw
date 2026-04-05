@@ -33,6 +33,11 @@ def main():
         print("No text column found, generating zero embeddings")
         embeddings = np.zeros((len(df), 384), dtype=np.float32)
         np.save(output_dir / "text_embeddings.npy", embeddings)
+        try:
+            from report_to_phoenix import report_progress
+            report_progress("embeddings", "Text embeddings computed", 38)
+        except Exception:
+            pass
         return
 
     texts = df[text_col].fillna("").astype(str).tolist()
@@ -64,6 +69,11 @@ def main():
 
     np.save(output_dir / "text_embeddings.npy", embeddings)
     print(f"Saved text embeddings: shape={embeddings.shape} to {output_dir / 'text_embeddings.npy'}")
+    try:
+        from report_to_phoenix import report_progress
+        report_progress("embeddings", "Text embeddings computed", 38)
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

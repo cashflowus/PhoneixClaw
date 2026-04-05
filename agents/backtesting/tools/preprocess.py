@@ -188,6 +188,11 @@ def main():
         json.dump(meta, f, indent=2)
 
     print(f"Preprocessing complete: {json.dumps(summary, indent=2)}")
+    try:
+        from report_to_phoenix import report_progress
+        report_progress("preprocess", "Preprocessing complete", 35)
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

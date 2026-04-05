@@ -5,7 +5,6 @@ import type { Agent, AgentStatus, AgentType } from '@/types/agent'
 export interface AgentFilters {
   type?: AgentType
   status?: AgentStatus
-  instance_id?: string
   limit?: number
   offset?: number
 }

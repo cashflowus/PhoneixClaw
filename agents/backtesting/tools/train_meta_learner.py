@@ -81,6 +81,11 @@ def main():
         json.dump(results, f, indent=2)
     print(f"Meta-Learner: accuracy={results['accuracy']} auc={results['auc_roc']}")
     print(f"  Model weights: {results['model_weights']}")
+    try:
+        from report_to_phoenix import report_progress
+        report_progress("train_meta", "Meta-learner training complete", 60)
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

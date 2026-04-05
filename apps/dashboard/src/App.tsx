@@ -21,7 +21,6 @@ import StrategiesPage from '@/pages/Strategies'
 import ConnectorsPage from '@/pages/Connectors'
 import SkillsPage from '@/pages/Skills'
 import AdminPage from '@/pages/Admin'
-import NetworkPage from '@/pages/Network'
 import TasksPage from '@/pages/Tasks'
 import SettingsPage from '@/pages/Settings'
 import MarketPage from '@/pages/Market'
@@ -109,7 +108,6 @@ function AppRoutes() {
         <Route path="narrative" element={<NarrativeSentimentPage />} />
         <Route path="risk" element={<RiskCompliancePage />} />
         <Route path="admin" element={<AdminPage />} />
-        <Route path="network" element={<NetworkPage />} />
         <Route path="tasks" element={<TasksPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="agent-learning" element={<AgentLearningPage />} />

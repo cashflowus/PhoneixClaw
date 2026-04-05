@@ -19,13 +19,13 @@ class Agent(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     type: Mapped[str] = mapped_column(String(30), nullable=False)  # trading | trend
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="CREATED")
-    instance_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("claude_code_instances.id"), nullable=True
-    )
     user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    phoenix_api_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
-    # Claude Code agent fields
+    worker_container_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    worker_status: Mapped[str] = mapped_column(String(30), nullable=False, default="STOPPED")
+
     source: Mapped[str] = mapped_column(String(50), nullable=False, default="manual")
     channel_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     analyst_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -38,7 +38,6 @@ class Agent(Base):
     last_signal_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_trade_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Manifest-driven agent framework
     manifest: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     current_mode: Mapped[str] = mapped_column(String(30), nullable=False, default="conservative")
     rules_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
@@ -58,6 +57,8 @@ class AgentBacktest(Base):
         UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="RUNNING", index=True)
+    current_step: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    progress_pct: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     strategy_template: Mapped[str | None] = mapped_column(String(100), nullable=True)
     start_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     end_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

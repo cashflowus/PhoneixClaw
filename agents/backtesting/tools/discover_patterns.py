@@ -130,6 +130,11 @@ def main():
         with open(args.output, "w") as f:
             json.dump([], f, indent=2)
         print("Discovered 0 patterns (empty enriched data)")
+        try:
+            from report_to_phoenix import report_progress
+            report_progress("patterns", "Pattern discovery complete", 80, {"pattern_count": 0})
+        except Exception:
+            pass
         return
     patterns = discover_patterns(df)
 
@@ -139,6 +144,11 @@ def main():
     print(f"Discovered {len(patterns)} patterns")
     for p in patterns[:10]:
         print(f"  {p['name']}: win_rate={p['win_rate']:.2%} (n={p['sample_size']})")
+    try:
+        from report_to_phoenix import report_progress
+        report_progress("patterns", "Pattern discovery complete", 80, {"pattern_count": len(patterns)})
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

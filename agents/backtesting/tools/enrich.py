@@ -345,6 +345,15 @@ def main():
     result.to_parquet(output_path, index=False)
     print(f"Saved enriched data to {output_path}")
 
+    try:
+        from report_to_phoenix import report_progress
+        report_progress("enrich", f"Enriched {len(result)} trades with {n_new_cols} attributes", 30, {
+            "trades": len(result),
+            "attributes_added": n_new_cols,
+        })
+    except Exception:
+        pass
+
 
 def _build_candle_windows(df: pd.DataFrame, cache: dict) -> np.ndarray | None:
     """Build 30-bar x 15-feature candle windows for each trade."""

@@ -23,7 +23,7 @@ import { useTheme } from '@/context/ThemeContext'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, TrendingUp, BarChart3, Bot, Target, Plug, BookOpen,
-  LineChart, Settings, Shield, Network, ListTodo, Moon, Sun, LogOut, Zap,
+  LineChart, Settings, Shield, ListTodo, Moon, Sun, LogOut, Zap,
   Activity, Fish, MessageCircle, ShieldCheck, Bell, PanelLeftClose, PanelLeft,
   Bug, GripVertical, RotateCcw, Menu, Terminal, FlaskConical,
 } from 'lucide-react'
@@ -48,7 +48,6 @@ const DEFAULT_NAV_SECTIONS: NavSection[] = [
       { to: '/agents', icon: Bot, label: 'Agents' },
       { to: '/strategies', icon: Target, label: 'Strategies' },
       { to: '/skills', icon: BookOpen, label: 'Skills' },
-      { to: '/network', icon: Network, label: 'Network' },
       { to: '/performance', icon: BarChart3, label: 'Performance' },
       { to: '/backtests', icon: FlaskConical, label: 'Backtests' },
     ],

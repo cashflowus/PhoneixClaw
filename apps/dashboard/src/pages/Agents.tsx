@@ -30,7 +30,7 @@ interface AgentData {
   name: string
   type: string
   status: string
-  instance_id: string
+  worker_status?: string
   config: Record<string, unknown>
   created_at: string
   channel_name?: string
@@ -92,7 +92,7 @@ const AGENT_TYPES = [
   { value: 'trend', label: 'Trend Agent' },
 ]
 
-const WIZARD_STEPS = ['Channel', 'Instance', 'Risk Config', 'Review'] as const
+const WIZARD_STEPS = ['Channel', 'Risk Config', 'Review'] as const
 
 interface ConnectorInfo {
   id: string
@@ -164,7 +164,6 @@ interface WizardFormData {
   description: string
   connector_ids: string[]
   selected_channel: SelectedChannel | null
-  instance_id: string
   skills: string[]
   max_daily_loss_pct: number
   max_position_pct: number
@@ -180,7 +179,6 @@ const DEFAULT_FORM: WizardFormData = {
   description: '',
   connector_ids: [],
   selected_channel: null,
-  instance_id: '',
   skills: [],
   max_daily_loss_pct: 5,
   max_position_pct: 10,
@@ -609,63 +607,120 @@ function StepChannel({ form, onChange, connectors }: {
   )
 }
 
-function StepInstance({ form, onChange, instances }: {
+function StepReview({ form, connectors }: {
   form: WizardFormData
-  onChange: (f: Partial<WizardFormData>) => void
-  instances: Array<{ id: string; name: string }>
+  connectors: ConnectorInfo[]
 }) {
-  const useManaged = form.instance_id === '' || form.instance_id === '__managed__'
+  const typeName = AGENT_TYPES.find((t) => t.value === form.type)?.label ?? form.type
+  const selectedConnectors = connectors.filter((c) => form.connector_ids.includes(c.id))
+
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Choose where this agent runs. Use a managed pipeline (recommended) or connect to a Claude Code VPS instance for advanced agent capabilities.
-      </p>
+      <p className="text-sm text-muted-foreground">Review your agent configuration before creating.</p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <button
-          type="button"
-          onClick={() => onChange({ instance_id: '__managed__' })}
-          className={`flex flex-col items-start gap-2 rounded-lg border p-4 text-left transition-all ${
-            useManaged ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-border hover:border-primary/40'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <div className={`h-4 w-4 rounded-full border-2 ${useManaged ? 'border-primary bg-primary' : 'border-muted-foreground/40'}`} />
-            <span className="font-medium text-sm">Managed Pipeline</span>
+      <div className="rounded-lg border divide-y">
+        <div className="p-3">
+          <p className="text-xs text-muted-foreground">Name</p>
+          <p className="font-medium">{form.name}</p>
+        </div>
+        <div className="p-3">
+          <p className="text-xs text-muted-foreground">Type</p>
+          <p className="font-medium">{typeName}</p>
+        </div>
+        {form.description && (
+          <div className="p-3">
+            <p className="text-xs text-muted-foreground">Description</p>
+            <p className="text-sm">{form.description}</p>
           </div>
-          <p className="text-xs text-muted-foreground">Runs on Phoenix backend. No external instance needed.</p>
-        </button>
-        <button
-          type="button"
-          onClick={() => onChange({ instance_id: instances[0]?.id ?? '' })}
-          className={`flex flex-col items-start gap-2 rounded-lg border p-4 text-left transition-all ${
-            !useManaged && form.instance_id ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-border hover:border-primary/40'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <div className={`h-4 w-4 rounded-full border-2 ${!useManaged && form.instance_id ? 'border-primary bg-primary' : 'border-muted-foreground/40'}`} />
-            <span className="font-medium text-sm">Claude Code VPS</span>
+        )}
+        <div className="p-3">
+          <p className="text-xs text-muted-foreground">Connectors</p>
+          <div className="flex flex-wrap gap-1 mt-1">
+            {selectedConnectors.length === 0 ? (
+              <span className="text-sm text-muted-foreground">None selected</span>
+            ) : (
+              selectedConnectors.map((c) => {
+                const meta = getPlatformMeta(c.type)
+                return (
+                  <Badge key={c.id} variant="secondary" className="gap-1">
+                    <span className={meta.color}>●</span> {c.name}
+                  </Badge>
+                )
+              })
+            )}
           </div>
-          <p className="text-xs text-muted-foreground">Run on a Claude Code VPS instance for autonomous trading agent capabilities.</p>
-        </button>
-      </div>
-
-      {!useManaged && (
-        <div>
-          <Label>Select Instance</Label>
-          <Select value={form.instance_id} onValueChange={(v) => onChange({ instance_id: v })}>
-            <SelectTrigger><SelectValue placeholder="Select instance..." /></SelectTrigger>
-            <SelectContent>
-              {instances.map((inst) => (
-                <SelectItem key={inst.id} value={inst.id}>{inst.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {instances.length === 0 && (
-            <p className="text-sm text-amber-500 mt-2">No instances available. Create an instance first or use Managed Pipeline.</p>
+          {form.selected_channel && (
+            <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
+              <Hash className="h-3 w-3" /> Channel: <span className="font-medium text-foreground">{form.selected_channel.channel_name}</span>
+            </p>
           )}
         </div>
-      )}
+        <div className="p-3">
+          <p className="text-xs text-muted-foreground">Execution</p>
+          <p className="text-sm mt-1">Backtesting runs on the Phoenix server. Live trading uses a managed Docker worker.</p>
+        </div>
+        <div className="p-3">
+          <p className="text-xs text-muted-foreground">Risk Configuration</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-1">
+            <div>
+              <p className="text-xs text-muted-foreground">Max Daily Loss</p>
+              <p className="font-mono font-medium">{form.max_daily_loss_pct}%</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Max Position</p>
+              <p className="font-mono font-medium">{form.max_position_pct}%</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Stop Loss</p>
+              <p className="font-mono font-medium">{form.stop_loss_pct}%</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}({ label, value, onChange, min, max, step, unit }: {
+  label: string
+  value: number
+  onChange: (v: number) => void
+  min: number
+  max: number
+  step: number
+  unit: string
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>{label}</Label>
+        <span className="text-sm font-mono font-medium">{value}{unit}</span>
+      </div>
+      <div className="flex items-center gap-3">
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(e) => onChange(parseFloat(e.target.value))}
+          className="flex-1 accent-primary"
+        />
+        <Input
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value)
+            if (!isNaN(v) && v >= min && v <= max) onChange(v)
+          }}
+          className="w-20"
+        />
+      </div>
+      <div className="flex justify-between text-xs text-muted-foreground">
+        <span>{min}{unit}</span>
+        <span>{max}{unit}</span>
+      </div>
     </div>
   )
 }
@@ -779,82 +834,6 @@ function StepRiskConfig({ form, onChange }: { form: WizardFormData; onChange: (f
             unit="%"
           />
         )}
-      </div>
-    </div>
-  )
-}
-
-function StepReview({ form, instances, connectors }: {
-  form: WizardFormData
-  instances: Array<{ id: string; name: string }>
-  connectors: ConnectorInfo[]
-}) {
-  const instanceName = instances.find((i) => i.id === form.instance_id)?.name ?? form.instance_id
-  const typeName = AGENT_TYPES.find((t) => t.value === form.type)?.label ?? form.type
-  const selectedConnectors = connectors.filter((c) => form.connector_ids.includes(c.id))
-
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">Review your agent configuration before creating.</p>
-
-      <div className="rounded-lg border divide-y">
-        <div className="p-3">
-          <p className="text-xs text-muted-foreground">Name</p>
-          <p className="font-medium">{form.name}</p>
-        </div>
-        <div className="p-3">
-          <p className="text-xs text-muted-foreground">Type</p>
-          <p className="font-medium">{typeName}</p>
-        </div>
-        {form.description && (
-          <div className="p-3">
-            <p className="text-xs text-muted-foreground">Description</p>
-            <p className="text-sm">{form.description}</p>
-          </div>
-        )}
-        <div className="p-3">
-          <p className="text-xs text-muted-foreground">Connectors</p>
-          <div className="flex flex-wrap gap-1 mt-1">
-            {selectedConnectors.length === 0 ? (
-              <span className="text-sm text-muted-foreground">None selected</span>
-            ) : (
-              selectedConnectors.map((c) => {
-                const meta = getPlatformMeta(c.type)
-                return (
-                  <Badge key={c.id} variant="secondary" className="gap-1">
-                    <span className={meta.color}>●</span> {c.name}
-                  </Badge>
-                )
-              })
-            )}
-          </div>
-          {form.selected_channel && (
-            <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
-              <Hash className="h-3 w-3" /> Channel: <span className="font-medium text-foreground">{form.selected_channel.channel_name}</span>
-            </p>
-          )}
-        </div>
-        <div className="p-3">
-          <p className="text-xs text-muted-foreground">Instance</p>
-          <p className="font-medium">{instanceName}</p>
-        </div>
-        <div className="p-3">
-          <p className="text-xs text-muted-foreground">Risk Configuration</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-1">
-            <div>
-              <p className="text-xs text-muted-foreground">Max Daily Loss</p>
-              <p className="font-mono font-medium">{form.max_daily_loss_pct}%</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Max Position</p>
-              <p className="font-mono font-medium">{form.max_position_pct}%</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Stop Loss</p>
-              <p className="font-mono font-medium">{form.stop_loss_pct}%</p>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   )
@@ -1106,17 +1085,12 @@ export default function AgentsPage() {
     },
   })
 
-  // Backtesting is now handled on VPS via Agent Gateway — no client-side timer needed
+  // Backtesting is now handled locally via task_runner — no VPS needed
 
   const { data: stats } = useQuery<AgentStats>({
     queryKey: ['agent-stats'],
     queryFn: async () => (await api.get('/api/v2/agents/stats')).data,
     refetchInterval: 15000,
-  })
-
-  const { data: instances = [] } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: ['instances'],
-    queryFn: async () => (await api.get('/api/v2/instances')).data,
   })
 
   const { data: connectors = [] } = useQuery<ConnectorInfo[]>({
@@ -1145,7 +1119,6 @@ export default function AgentsPage() {
       const payload = {
         name: form.name,
         type: form.type,
-        instance_id: form.instance_id === '__managed__' ? '' : form.instance_id,
         description: form.description,
         skills: form.skills,
         connector_ids: form.connector_ids,
@@ -1189,9 +1162,8 @@ export default function AgentsPage() {
         }
         return form.connector_ids.length > 0
       }
-      case 1: return form.instance_id === '__managed__' || form.instance_id.length > 0
+      case 1: return true
       case 2: return true
-      case 3: return true
       default: return false
     }
   }
@@ -1221,9 +1193,8 @@ export default function AgentsPage() {
 
             <div className="min-h-[280px]">
               {wizardStep === 0 && <StepChannel form={form} onChange={updateForm} connectors={connectors} />}
-              {wizardStep === 1 && <StepInstance form={form} onChange={updateForm} instances={instances} />}
-              {wizardStep === 2 && <StepRiskConfig form={form} onChange={updateForm} />}
-              {wizardStep === 3 && <StepReview form={form} instances={instances} connectors={connectors} />}
+              {wizardStep === 1 && <StepRiskConfig form={form} onChange={updateForm} />}
+              {wizardStep === 2 && <StepReview form={form} connectors={connectors} />}
             </div>
 
             <div className="flex items-center justify-between pt-4 border-t">
@@ -1357,8 +1328,8 @@ export default function AgentsPage() {
               <StatusBadge status={selected.status} />
               <span className="text-muted-foreground">Type</span>
               <span className="capitalize">{selected.type}</span>
-              <span className="text-muted-foreground">Instance</span>
-              <span className="font-mono text-xs">{selected.instance_id ? `${selected.instance_id.slice(0, 8)}...` : 'Managed Pipeline'}</span>
+              <span className="text-muted-foreground">Worker</span>
+              <span className="font-mono text-xs">{selected.worker_status || 'STOPPED'}</span>
               <span className="text-muted-foreground">Created</span>
               <span>{new Date(selected.created_at).toLocaleString()}</span>
             </div>

@@ -140,6 +140,11 @@ def main():
     parser.add_argument("--output", required=True, help="Output path for price_buffers.json")
     args = parser.parse_args()
     compute_buffers(args.data, args.output)
+    try:
+        from report_to_phoenix import report_progress
+        report_progress("price_buffer", "Price buffer computed", 40)
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

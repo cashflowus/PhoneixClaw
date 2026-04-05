@@ -1,12 +1,24 @@
 """Production DB initializer — creates all tables via SQLAlchemy metadata.
 
 Used by the phoenix-db-migrate service in docker-compose.coolify.yml.
-Falls back from alembic to raw create_all if migrations fail.
+After create_all, applies V3 cleanup (drop VPS columns/tables).
 """
 import asyncio
 import os
-import subprocess
 import sys
+
+
+CURRENT_MIGRATION = "007"
+
+V3_CLEANUP_SQL = [
+    "ALTER TABLE agents DROP CONSTRAINT IF EXISTS agents_instance_id_fkey",
+    "ALTER TABLE agents DROP CONSTRAINT IF EXISTS agents_backtest_instance_id_fkey",
+    "ALTER TABLE agents DROP CONSTRAINT IF EXISTS agents_trading_instance_id_fkey",
+    "ALTER TABLE agents DROP COLUMN IF EXISTS instance_id",
+    "ALTER TABLE agents DROP COLUMN IF EXISTS backtest_instance_id",
+    "ALTER TABLE agents DROP COLUMN IF EXISTS trading_instance_id",
+    "DROP TABLE IF EXISTS claude_code_instances",
+]
 
 
 async def create_all_tables():
@@ -40,9 +52,21 @@ async def create_all_tables():
                 )
             )
             await conn.execute(
-                text("INSERT INTO alembic_version VALUES ('006')")
+                text(f"INSERT INTO alembic_version VALUES ('{CURRENT_MIGRATION}')")
             )
-            print("Stamped alembic_version at 006")
+            print(f"Stamped alembic_version at {CURRENT_MIGRATION}")
+        else:
+            await conn.execute(
+                text(f"UPDATE alembic_version SET version_num = '{CURRENT_MIGRATION}'")
+            )
+            print(f"Updated alembic_version to {CURRENT_MIGRATION}")
+
+        for sql in V3_CLEANUP_SQL:
+            try:
+                await conn.execute(text(sql))
+            except Exception as e:
+                print(f"  (skipped: {e})")
+        print("V3 cleanup complete — VPS columns and tables removed.")
 
     await engine.dispose()
     print("DB tables ready.")

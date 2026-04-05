@@ -2,7 +2,8 @@
 
 Builds a manifest from backtest artifacts (patterns, models, explainability,
 analyst profile), renders the agent from the live-trader-v1 template, copies
-model artifacts, and writes everything to the output directory.
+model artifacts, writes .claude/settings.json for sandboxing, and handles
+cross-VPS shipping when the trading VPS differs from the backtesting VPS.
 
 Usage:
     python tools/create_live_agent.py \
@@ -13,14 +14,38 @@ Usage:
 
 import argparse
 import json
-import math
+import os
 import shutil
+import subprocess
+import tarfile
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
 TEMPLATE_DIR = Path(__file__).resolve().parents[2] / "templates" / "live-trader-v1"
 SCHEMA_DIR = Path(__file__).resolve().parents[2] / "schema"
 LEGACY_TEMPLATE_DIR = Path(__file__).resolve().parents[2] / "live-template"
+
+CLAUDE_SETTINGS = {
+    "permissions": {
+        "allow": [
+            "Bash(python *)", "Bash(python3 *)", "Bash(pip *)", "Bash(pip3 *)", "Bash(curl *)",
+            "Read", "Write", "Edit", "Grep", "Glob",
+        ],
+        "deny": [
+            "Bash(rm -rf /)", "Bash(rm -rf ~)", "Bash(git push --force *)",
+            "Bash(shutdown *)", "Bash(reboot *)",
+        ],
+    },
+    "hooks": {
+        "SessionStart": [{
+            "hooks": [{"type": "command", "command": "python3 tools/report_to_phoenix.py --event session_start 2>/dev/null || true"}],
+        }],
+        "Stop": [{
+            "hooks": [{"type": "command", "command": "python3 tools/report_to_phoenix.py --event session_stop 2>/dev/null || true"}],
+        }],
+    },
+}
 
 
 def _load_json(path: Path) -> dict:
@@ -213,6 +238,12 @@ def create_live_agent(config_path: str, models_dir: str, output_dir: str):
     if template_tools.exists():
         shutil.copytree(template_tools, out_tools, dirs_exist_ok=True)
 
+    # Copy report_to_phoenix.py from backtesting tools if not in template
+    backtesting_report = Path(__file__).parent / "report_to_phoenix.py"
+    if backtesting_report.exists() and not (out_tools / "report_to_phoenix.py").exists():
+        out_tools.mkdir(exist_ok=True)
+        shutil.copy2(backtesting_report, out_tools / "report_to_phoenix.py")
+
     skills_src = TEMPLATE_DIR / "skills"
     if skills_src.exists():
         shutil.copytree(skills_src, output / "skills", dirs_exist_ok=True)
@@ -224,7 +255,8 @@ def create_live_agent(config_path: str, models_dir: str, output_dir: str):
             shutil.copy2(artifact, out_models / artifact.name)
 
     _render_claude_md(manifest, output)
-    _write_config(manifest, output)
+    _write_config(manifest, config, output)
+    _write_claude_settings(output)
     (output / "trades.log").write_text("")
 
     print(f"Live agent created at {output}")
@@ -237,7 +269,77 @@ def create_live_agent(config_path: str, models_dir: str, output_dir: str):
     print(f"  Skills: {len(list((output / 'skills').glob('*.md')))} files")
     print(f"  Models: {len(list(out_models.glob('*')))} artifacts")
 
+    _handle_cross_vps_shipping(config, channel_name, output)
+
+    try:
+        from report_to_phoenix import report_progress
+        report_progress(
+            "create_live_agent",
+            f"Live agent created for #{channel_name}",
+            95,
+            {
+                "channel": channel_name,
+                "model": manifest["models"]["primary"],
+                "rules": len(rules),
+                "character": character,
+            },
+            status="COMPLETED",
+        )
+    except Exception as e:
+        print(f"  Warning: could not report completion to Phoenix: {e}")
+
     return str(output)
+
+
+def _handle_cross_vps_shipping(config: dict, channel_name: str, output: Path):
+    """If trading_instance_id differs from current VPS, SCP the bundle."""
+    trading_instance_id = config.get("trading_instance_id", "")
+    trading_ssh_host = config.get("trading_ssh_host", "")
+    trading_ssh_user = config.get("trading_ssh_user", "root")
+    trading_ssh_port = config.get("trading_ssh_port", 22)
+    trading_ssh_key_path = config.get("trading_ssh_key_path", "")
+
+    if not trading_ssh_host:
+        return
+
+    print(f"  Cross-VPS shipping to {trading_ssh_host}...")
+
+    tar_path = Path(tempfile.mktemp(suffix=".tar.gz"))
+    try:
+        with tarfile.open(tar_path, "w:gz") as tar:
+            tar.add(str(output), arcname=channel_name)
+
+        remote_path = f"~/agents/live/"
+        ssh_opts = f"-o StrictHostKeyChecking=no -o ConnectTimeout=30 -p {trading_ssh_port}"
+        if trading_ssh_key_path:
+            ssh_opts += f" -i {trading_ssh_key_path}"
+
+        subprocess.run(
+            f"ssh {ssh_opts} {trading_ssh_user}@{trading_ssh_host} 'mkdir -p {remote_path}'",
+            shell=True, check=True, timeout=60,
+        )
+        subprocess.run(
+            f"scp {ssh_opts} {tar_path} {trading_ssh_user}@{trading_ssh_host}:{remote_path}",
+            shell=True, check=True, timeout=300,
+        )
+        subprocess.run(
+            f"ssh {ssh_opts} {trading_ssh_user}@{trading_ssh_host} "
+            f"'cd {remote_path} && tar xzf {channel_name}.tar.gz && rm {channel_name}.tar.gz'",
+            shell=True, check=True, timeout=120,
+        )
+        print(f"  Shipped to {trading_ssh_host}:{remote_path}{channel_name}/")
+    except Exception as e:
+        print(f"  Warning: cross-VPS shipping failed: {e}")
+    finally:
+        tar_path.unlink(missing_ok=True)
+
+
+def _write_claude_settings(output: Path):
+    """Write .claude/settings.json for agent sandboxing and hooks."""
+    claude_dir = output / ".claude"
+    claude_dir.mkdir(exist_ok=True)
+    with open(claude_dir / "settings.json", "w") as f:
+        json.dump(CLAUDE_SETTINGS, f, indent=2)
 
 
 def _render_claude_md(manifest: dict, output: Path):
@@ -277,13 +379,14 @@ def _render_claude_md(manifest: dict, output: Path):
         (output / "CLAUDE.md").write_text(text)
 
 
-def _write_config(manifest: dict, output: Path):
+def _write_config(manifest: dict, original_config: dict, output: Path):
     identity = manifest.get("identity", {})
     risk = manifest.get("risk", {})
     models = manifest.get("models", {})
     creds = manifest.get("credentials", {})
 
     config = {
+        "agent_id": original_config.get("agent_id", ""),
         "agent_name": identity.get("name", ""),
         "channel_name": identity.get("channel", ""),
         "channel_id": identity.get("channel_id", ""),
@@ -293,7 +396,6 @@ def _write_config(manifest: dict, output: Path):
         "discord_token": creds.get("discord_token", ""),
         "phoenix_api_url": creds.get("phoenix_api_url", ""),
         "phoenix_api_key": creds.get("phoenix_api_key", ""),
-        "agent_id": "",
         "risk_params": {
             "max_position_size_pct": risk.get("max_position_size_pct", 5.0),
             "max_daily_loss_pct": risk.get("max_daily_loss_pct", 3.0),

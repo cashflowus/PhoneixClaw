@@ -135,6 +135,11 @@ def main():
     with open(output_dir / "catboost_results.json", "w") as f:
         json.dump(results, f, indent=2)
     print(f"CatBoost: accuracy={results['accuracy']} auc={results['auc_roc']}")
+    try:
+        from report_to_phoenix import report_progress
+        report_progress("train_catboost", "CatBoost training complete", 49)
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

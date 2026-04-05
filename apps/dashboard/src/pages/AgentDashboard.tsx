@@ -32,7 +32,7 @@ import { toast } from 'sonner'
 
 interface AgentData {
   id: string; name: string; type: string; status: string
-  instance_id: string | null; config: Record<string, unknown>
+  worker_status?: string; config: Record<string, unknown>
   channel_name?: string; analyst_name?: string
   model_type?: string; model_accuracy?: number
   daily_pnl?: number; total_pnl?: number; total_trades?: number; win_rate?: number
@@ -647,6 +647,190 @@ function RulesTab({ id }: { id: string }) {
 }
 
 /* ================================================================
+   BACKTEST PROGRESS PANEL
+   ================================================================ */
+
+interface BacktestLogEntry {
+  id: string
+  step: string
+  message: string
+  progress_pct: number | null
+  level: string
+  created_at: string
+  details?: Record<string, unknown>
+}
+
+interface BacktestInfo {
+  id: string
+  status: string
+  current_step: string | null
+  progress_pct: number
+  metrics: Record<string, unknown>
+  created_at: string | null
+  completed_at: string | null
+}
+
+const PIPELINE_STEPS = [
+  { key: 'transform', label: 'Transform', pct: 15 },
+  { key: 'enrich', label: 'Enrich', pct: 30 },
+  { key: 'preprocess', label: 'Preprocess', pct: 35 },
+  { key: 'train', label: 'Train Models', pct: 60 },
+  { key: 'evaluate', label: 'Evaluate', pct: 70 },
+  { key: 'patterns', label: 'Patterns', pct: 80 },
+  { key: 'explainability', label: 'Explainability', pct: 85 },
+  { key: 'create_live_agent', label: 'Create Agent', pct: 95 },
+]
+
+function BacktestProgressPanel({ id, status }: { id: string; status: string }) {
+  const { data: backtest } = useQuery<BacktestInfo>({
+    queryKey: ['backtest-info', id],
+    queryFn: async () => {
+      try { return (await api.get(`/api/v2/agents/${id}/backtest`)).data }
+      catch { return null }
+    },
+    enabled: !!id,
+    refetchInterval: status === 'BACKTESTING' ? 5000 : 30000,
+  })
+
+  const { data: logs = [] } = useQuery<BacktestLogEntry[]>({
+    queryKey: ['backtest-logs', id],
+    queryFn: async () => {
+      try { return (await api.get(`/api/v2/agents/${id}/logs?source=backtest&limit=50`)).data }
+      catch { return [] }
+    },
+    enabled: !!id,
+    refetchInterval: status === 'BACKTESTING' ? 5000 : 30000,
+  })
+
+  const progressPct = backtest?.progress_pct ?? 0
+  const currentStep = backtest?.current_step ?? ''
+  const isRunning = status === 'BACKTESTING'
+  const isComplete = status === 'BACKTEST_COMPLETE' || backtest?.status === 'COMPLETED'
+
+  const activeStepIdx = PIPELINE_STEPS.findIndex(s =>
+    currentStep.toLowerCase().includes(s.key)
+  )
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          {isRunning ? (
+            <>
+              <div className="relative">
+                <div className="h-4 w-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
+              </div>
+              <span className="text-amber-600 dark:text-amber-400">Backtesting in Progress</span>
+            </>
+          ) : isComplete ? (
+            <>
+              <div className="h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center">
+                <svg className="h-2.5 w-2.5 text-white" viewBox="0 0 12 12"><path d="M3.5 6L5.5 8L8.5 4" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </div>
+              <span className="text-emerald-600 dark:text-emerald-400">Backtesting Complete</span>
+            </>
+          ) : (
+            <span>Backtesting</span>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Progress bar */}
+        <div>
+          <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
+            <span>{currentStep ? currentStep.replace(/_/g, ' ') : 'Starting...'}</span>
+            <span className="font-mono">{progressPct}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              className={cn(
+                'h-full rounded-full transition-all duration-500',
+                isComplete ? 'bg-emerald-500' : 'bg-amber-500',
+                isRunning && 'animate-pulse',
+              )}
+              style={{ width: `${Math.max(progressPct, 2)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Pipeline steps */}
+        <div className="flex items-center gap-1 overflow-x-auto pb-1">
+          {PIPELINE_STEPS.map((step, idx) => {
+            const isDone = progressPct >= step.pct
+            const isCurrent = activeStepIdx === idx
+            return (
+              <div key={step.key} className="flex items-center">
+                <div className={cn(
+                  'flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium whitespace-nowrap border',
+                  isDone ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400' :
+                  isCurrent ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400' :
+                  'bg-muted/50 border-border text-muted-foreground',
+                )}>
+                  {isDone && <svg className="h-2.5 w-2.5" viewBox="0 0 12 12"><path d="M3.5 6L5.5 8L8.5 4" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  {isCurrent && !isDone && <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />}
+                  {step.label}
+                </div>
+                {idx < PIPELINE_STEPS.length - 1 && <div className={cn('h-px w-2 mx-0.5', isDone ? 'bg-emerald-500/40' : 'bg-border')} />}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Recent log entries */}
+        {logs.length > 0 && (
+          <div className="max-h-40 overflow-y-auto space-y-1 rounded-lg border bg-muted/20 p-2">
+            {logs.slice(-15).map(log => (
+              <div key={log.id} className="flex items-start gap-2 text-[11px]">
+                <span className="text-muted-foreground shrink-0 w-14 font-mono">
+                  {log.created_at ? new Date(log.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''}
+                </span>
+                <span className={cn(
+                  'shrink-0 w-12 uppercase font-medium',
+                  log.level === 'ERROR' ? 'text-red-500' : log.level === 'WARN' ? 'text-amber-500' : 'text-muted-foreground',
+                )}>
+                  {log.step || log.level}
+                </span>
+                <span className="text-foreground">{log.message}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Metrics from backtesting */}
+        {backtest?.metrics && Object.keys(backtest.metrics).length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {backtest.metrics.total_trades != null && (
+              <div className="rounded-lg border bg-muted/30 p-2">
+                <p className="text-[10px] text-muted-foreground uppercase">Trades</p>
+                <p className="text-sm font-mono font-semibold">{String(backtest.metrics.total_trades)}</p>
+              </div>
+            )}
+            {backtest.metrics.best_model != null && (
+              <div className="rounded-lg border bg-muted/30 p-2">
+                <p className="text-[10px] text-muted-foreground uppercase">Best Model</p>
+                <p className="text-sm font-mono font-semibold truncate">{String(backtest.metrics.best_model)}</p>
+              </div>
+            )}
+            {backtest.metrics.pattern_count != null && (
+              <div className="rounded-lg border bg-muted/30 p-2">
+                <p className="text-[10px] text-muted-foreground uppercase">Patterns</p>
+                <p className="text-sm font-mono font-semibold">{String(backtest.metrics.pattern_count)}</p>
+              </div>
+            )}
+            {backtest.metrics.attributes_added != null && (
+              <div className="rounded-lg border bg-muted/30 p-2">
+                <p className="text-[10px] text-muted-foreground uppercase">Features</p>
+                <p className="text-sm font-mono font-semibold">{String(backtest.metrics.attributes_added)}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/* ================================================================
    MAIN PAGE
    ================================================================ */
 export default function AgentDashboardPage() {
@@ -658,7 +842,7 @@ export default function AgentDashboardPage() {
     queryKey: ['agent', id],
     queryFn: async () => {
       try { return (await api.get(`/api/v2/agents/${id}`)).data }
-      catch { return { id: id ?? '', name: 'Unknown Agent', type: 'trading', status: 'CREATED', instance_id: null, config: {}, created_at: new Date().toISOString() } }
+      catch { return { id: id ?? '', name: 'Unknown Agent', type: 'trading', status: 'CREATED', config: {}, created_at: new Date().toISOString() } }
     },
     enabled: !!id,
   })
@@ -733,6 +917,11 @@ export default function AgentDashboardPage() {
         <MetricCard title="Today P&L" value={`$${(agent.daily_pnl ?? 0).toLocaleString()}`} trend={(agent.daily_pnl ?? 0) >= 0 ? 'up' : 'down'} />
         <MetricCard title="Heartbeat" value={agent.last_signal_at ? `${Math.round((Date.now() - new Date(agent.last_signal_at).getTime()) / 60000)}m` : '—'} />
       </div>
+
+      {/* Backtest Progress (shown during BACKTESTING) */}
+      {(agent.status === 'BACKTESTING' || agent.status === 'BACKTEST_COMPLETE') && (
+        <BacktestProgressPanel id={id!} status={agent.status} />
+      )}
 
       {/* Tabs */}
       <Tabs defaultValue="portfolio">

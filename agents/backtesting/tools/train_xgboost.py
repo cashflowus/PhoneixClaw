@@ -68,6 +68,11 @@ def main():
         json.dump(results, f, indent=2)
 
     print(f"XGBoost: accuracy={results['accuracy']} auc={results['auc_roc']} f1={results['f1_score']}")
+    try:
+        from report_to_phoenix import report_progress
+        report_progress("train_xgboost", "XGBoost training complete", 45, {"accuracy": results["accuracy"]})
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)", "Bash(python3 *)", "Bash(pip *)", "Bash(pip3 *)", "Bash(curl *)",
+      "Read", "Write", "Edit", "Grep", "Glob"
+    ],
+    "deny": [
+      "Bash(rm -rf /)", "Bash(rm -rf ~)", "Bash(git push --force *)",
+      "Bash(shutdown *)", "Bash(reboot *)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [{
+      "hooks": [{"type": "command", "command": "python3 tools/report_to_phoenix.py --event session_start 2>/dev/null || true"}]
+    }],
+    "Stop": [{
+      "hooks": [{"type": "command", "command": "python3 tools/report_to_phoenix.py --event session_stop 2>/dev/null || true"}]
+    }]
+  }
+}

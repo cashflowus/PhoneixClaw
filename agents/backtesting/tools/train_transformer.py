@@ -326,6 +326,11 @@ def main():
     with open(output_dir / "transformer_results.json", "w") as f:
         json.dump(results, f, indent=2)
     print(f"Transformer: accuracy={results['accuracy']} auc={results['auc_roc']} f1={results['f1_score']}")
+    try:
+        from report_to_phoenix import report_progress
+        report_progress("train_transformer", "Transformer training complete", 54)
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

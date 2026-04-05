@@ -1,285 +1,109 @@
-# System Architecture — Claude Code Agent Platform
+# System Architecture — Phoenix V3 Cloud-First
 
 ## Overview
 
-Phoenix Claw is a multi-agent trading platform where **Claude Code instances on VPS machines** serve as the intelligence plane. The Phoenix dashboard and API act as the control plane. Agents are autonomous Claude Code projects that listen to Discord channels, run trained ML models, and execute trades via Robinhood.
+Phoenix is a multi-agent trading platform. **Claude Code Cloud Tasks** (on Anthropic's infrastructure) handle intelligence work — backtesting, analysis, and strategy reviews. **Python workers** on the Phoenix server handle real-time execution — signal processing, risk checks, and trade execution.
 
-## Planes
+**PostgreSQL is the single source of truth** — all agent state, trades, metrics, logs, and backtest results live in the database. Agents communicate via HTTP callbacks to the Phoenix API. The dashboard reads from the same DB via REST polling.
 
-### Control Plane (this repo)
+## Architecture Tiers
 
-| Component | Role |
-|-----------|------|
-| `apps/dashboard/` | React UI — agent management, metrics, chat, token monitoring |
-| `apps/api/` | FastAPI — CRUD, agent lifecycle, gateway orchestration |
-| `shared/db/` | Postgres — agents, trades, metrics, VPS instances |
-| Agent Gateway | New module in API — SSH-based communication with VPS |
+### Tier 1 — Claude Code Cloud (Anthropic Infrastructure)
 
-### Intelligence Plane (remote VPS)
+| Component | Schedule | Purpose |
+|-----------|----------|---------|
+| Backtesting Task | On-demand (Remote Task) | Full pipeline: ingest → transform → train → evaluate → patterns |
+| Pre-Market Analysis | Daily 7am (Scheduled Task) | Scan market conditions, write briefing to DB |
+| Strategy Review | Weekly (Scheduled Task) | Review agent performance, suggest parameter adjustments |
+| Agent Teams (future) | On-demand | Coordinate multiple agents for research tasks |
 
-| Component | Role |
-|-----------|------|
-| Claude Code CLI | Runtime for agents — orchestrates tools, writes code |
-| Backtesting Agent | Pre-built project shipped to VPS; runs ETL + training |
-| Live Trading Agents | Created by backtesting agent; listen to Discord, trade via Robinhood |
+Claude Code Cloud Tasks clone the repo, run Python tools, and POST results to the Phoenix API via HTTP callbacks. They self-heal on errors and require no VPS management.
 
-### Shared Services
+### Tier 2 — Phoenix Server (Coolify VPS)
 
-| Component | Role |
-|-----------|------|
-| Postgres | Persistent state for both planes |
-| Redis | Event bus, caching, pub/sub for real-time updates |
-| MinIO | Model artifact storage (optional; can also use VPS filesystem) |
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| Phoenix API | FastAPI | Agent CRUD, authentication, callbacks, dashboards |
+| PostgreSQL | Docker | ALL state: agents, trades, signals, logs, backtest results |
+| Task Runner | Python asyncio | Run backtesting pipeline as local subprocess (alternative to Cloud Tasks) |
+| Trading Workers | Docker containers | Real-time signal processing, risk checks, trade execution |
+| Dashboard | React + Vite | Agent management, metrics, chat, monitoring |
 
-## Communication Flow
+### Tier 3 — Communication
 
-```
-Dashboard --HTTP--> Phoenix API --SSH--> VPS (Claude Code)
-                        |                    |
-                        v                    v
-                    Postgres            Agent Project/
-                                          CLAUDE.md
-                                          tools/
-                                          models/
-                                          skills/
-```
+| Channel | Direction | Protocol |
+|---------|-----------|----------|
+| Cloud Task → API | Inbound | HTTP POST callbacks to `/backtest-progress`, `/live-trades`, `/metrics` |
+| Dashboard → API | Outbound | REST API polling via React Query |
+| Worker → DB | Direct | SQLAlchemy (same server) |
+| API → Worker | Local | Docker SDK / subprocess |
 
-### API Gateway → VPS Protocol
-
-1. **Registration**: User adds VPS in Network tab with host + SSH credentials
-2. **Health Check**: Gateway SSHs to VPS, runs `claude --version` and checks disk/memory
-3. **Ship Agent**: `scp -r agents/backtesting/ user@vps:~/agents/backtesting/`
-4. **Run Command**: `ssh user@vps "cd ~/agents/backtesting && claude --print 'run backtest for channel SPX-alerts'"`
-5. **Stream Output**: SSH session streams stdout back; gateway parses progress events
-6. **Callback**: Agent writes results to a JSON file; gateway polls or agent calls back via HTTP
-
-### Agent → Phoenix API Protocol
-
-Live agents call back to Phoenix API to:
-- Register themselves (`POST /api/v2/agents` with `source=backtesting`)
-- Report trades (`POST /api/v2/trades`)
-- Report metrics (`POST /api/v2/agents/{id}/metrics`)
-- Report health (`POST /api/v2/agents/{id}/heartbeat`)
-
-## Directory Layout on VPS
+## Agent Lifecycle
 
 ```
-~/agents/
-  backtesting/              # Shipped from repo; one per VPS
-    CLAUDE.md               # Backtesting orchestration instructions
-    tools/                  # Python scripts for ETL, enrichment, training
-    skills/                 # Reusable skill definitions
-    output/                 # Backtesting results (temporary)
-  
-  live/
-    spx-alerts/             # Created by backtesting agent
-      CLAUDE.md             # Live trading instructions
-      models/               # Trained model artifacts (.pkl, .pt)
-      tools/                # Inference, TA, Robinhood MCP
-      skills/               # Discord listener, trade execution
-      config.json           # Channel, thresholds, risk params
-      trades.log            # Local trade journal
-    
-    aapl-swings/            # Another analyst channel
-      ...
+Dashboard Wizard (Channel → Risk → Review → Create)
+  → Agent row created (status: BACKTESTING)
+  → Task Runner spawns backtesting subprocess
+  → Each step updates progress in DB
+  → Pipeline completes → status: BACKTEST_COMPLETE
+  → User reviews backtest results
+  → User approves → status: APPROVED/PAPER
+  → User promotes → status: RUNNING (Docker worker starts)
 ```
 
-## Token Optimization Architecture
+## Directory Layout
 
 ```
-                         ┌─────────────────────┐
-                         │   Claude Code CLI    │
-                         │                      │
-  Routine decisions ───> │  claude-haiku (fast) │ <── Discord msg parsing
-  Complex analysis ────> │  claude-sonnet       │ <── Error recovery, chat
-                         │                      │
-                         │  Python scripts ─────│──── ML inference (no tokens)
-                         │  robin_stocks ───────│──── Trade execution (no tokens)
-                         │  yfinance ───────────│──── Market data (no tokens)
-                         └─────────────────────┘
+ProjectPhoneix/
+├── apps/
+│   ├── api/                     # FastAPI backend
+│   │   └── src/
+│   │       ├── routes/          # Agent, connector, trades, backtests endpoints
+│   │       └── services/        # task_runner.py, agent_builder.py
+│   └── dashboard/               # React frontend
+│       └── src/pages/           # Agents, Connectors, AgentDashboard, etc.
+├── agents/
+│   ├── backtesting/tools/       # Python backtesting pipeline scripts
+│   ├── templates/live-trader-v1/ # Live agent template (tools, skills, CLAUDE.md)
+│   └── schema/                  # Manifest validation, characters.json
+├── services/                    # Docker Compose microservices
+│   ├── backtest-runner/         # Backtest orchestration
+│   ├── execution/               # Live trading pipeline
+│   └── ...                      # Other services
+├── shared/
+│   └── db/
+│       ├── models/              # SQLAlchemy ORM models
+│       └── migrations/          # Alembic migration scripts
+└── specs/                       # Architecture and feature specifications
 ```
 
-Most compute happens in **Python scripts** invoked by Claude Code, not in LLM calls. The LLM orchestrates which scripts to run and handles edge cases.
+## Why Python Workers for Live Trading (Not Claude Code)
 
-## Service Dependency Map
+Claude Code Cloud Tasks have a **1-hour minimum interval** and **clone fresh each run** (no persistent state). Live trading needs:
 
-| Service | Postgres | Redis | Kafka | MinIO | VPS (SSH) |
-|---------|----------|-------|-------|-------|-----------|
-| phoenix-api | Required | Required | - | - | Via gateway |
-| phoenix-ws-gateway | - | Required | - | - | - |
-| phoenix-execution | Required | Required | - | - | - |
-| phoenix-position-monitor | Required | - | Producer | - | - |
-| phoenix-automation | Required | Required | - | - | - |
-| phoenix-connector-manager | Required | Required | - | - | - |
-| phoenix-backtest-runner | Required | - | - | Required | - |
-| phoenix-global-monitor | Required | Required | - | - | - |
-| phoenix-orchestrator | Required | Required | - | - | - |
-| phoenix-comms | - | Required | - | - | - |
-| phoenix-skill-sync | - | - | - | Required | - |
-| phoenix-agent-comm | Required | Required | - | - | - |
+- Sub-second Discord signal processing
+- Persistent websocket connections  
+- Continuous position monitoring (60-second ticks)
 
-## Deployment Topology
+All live trading tools (`discord_listener.py`, `inference.py`, `risk_check.py`, `robinhood_mcp.py`) are **pure Python** — no LLM calls needed at runtime. Docker containers are faster, cheaper, and more reliable for this use case.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Coolify VPS (69.62.86.166) — cashflowus.com               │
-│                                                              │
-│  Traefik (TLS termination)                                   │
-│    └── nginx (port 80)                                       │
-│          ├── /          → phoenix-dashboard                  │
-│          ├── /api/      → phoenix-api                        │
-│          ├── /ws/       → phoenix-ws-gateway                 │
-│          └── /auth/     → phoenix-api                        │
-│                                                              │
-│  Infrastructure:                                             │
-│    ├── postgres (TimescaleDB)                                │
-│    ├── redis                                                 │
-│    └── minio                                                 │
-│                                                              │
-│  Background Services:                                        │
-│    ├── phoenix-execution                                     │
-│    ├── phoenix-position-monitor                              │
-│    ├── phoenix-automation                                    │
-│    ├── phoenix-orchestrator                                  │
-│    ├── phoenix-global-monitor                                │
-│    ├── phoenix-connector-manager                             │
-│    ├── phoenix-backtest-runner                               │
-│    ├── phoenix-skill-sync                                    │
-│    ├── phoenix-agent-comm                                    │
-│    └── phoenix-comms                                         │
-│                                                              │
-│  Observability:                                              │
-│    ├── prometheus                                            │
-│    ├── grafana                                               │
-│    ├── loki + promtail                                       │
-│    └── node-exporter, postgres-exporter, redis-exporter      │
-└─────────────────────────────────────────────────────────────┘
-          │
-          │ SSH (port 22)
-          ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Agent VPS(es) — Claude Code Instances                       │
-│                                                              │
-│  ~/agents/backtesting/    ← shipped by gateway               │
-│  ~/agents/live/spx-alerts/  ← created by backtesting agent  │
-│  ~/agents/live/aapl-swings/ ← created by backtesting agent  │
-│                                                              │
-│  Each live agent:                                            │
-│    - Discord listener (long-running Python)                  │
-│    - ML models (.pkl, .pt)                                   │
-│    - Robinhood MCP server                                    │
-│    - Heartbeat → Phoenix API                                 │
-└─────────────────────────────────────────────────────────────┘
-```
+Claude Code adds value for **intelligence** (backtesting, analysis, strategy) — not for **execution** (listening, computing, trading).
 
-## Failure and Retry Sequences
+## Key Design Decisions
 
-### Scenario: SSH Connection to VPS Fails
+1. **No VPS management** — eliminated SSH/SCP layer (~1,300 lines removed in V3)
+2. **DB as communication hub** — no file polling, no remote reads, no SSH tunnels
+3. **Local backtesting** — task_runner.py spawns subprocess on API server
+4. **Cloud backtesting** — Claude Code Remote Tasks POST progress to `/backtest-progress`
+5. **Manifest-driven agents** — agent_builder.py creates structured configs from templates
+6. **Worker isolation** — each live trading agent runs in its own Docker container
 
-```
-Phoenix API                   VPS
-    │                          │
-    │── SSH connect ──────────>│ TIMEOUT
-    │                          │
-    │  (retry 1, after 5s)     │
-    │── SSH connect ──────────>│ TIMEOUT
-    │                          │
-    │  (retry 2, after 15s)    │
-    │── SSH connect ──────────>│ TIMEOUT
-    │                          │
-    │  Mark instance UNREACHABLE in DB
-    │  Notify user via WebSocket
-    │  Return 502 to dashboard
-```
+## Future: Agent Teams
 
-Retry policy: 3 attempts with exponential backoff (5s, 15s, 45s). After 3 failures, mark instance as `UNREACHABLE` and alert the user.
+With this architecture, agent teams are straightforward:
 
-### Scenario: Agent Crashes on VPS
-
-```
-Live Agent (VPS)              Phoenix API
-    │                            │
-    │── heartbeat ──────────────>│  ✓ (every 60s)
-    │── heartbeat ──────────────>│  ✓
-    │   CRASH                    │
-    │                            │  (no heartbeat for 3 minutes)
-    │                            │  Mark agent UNRESPONSIVE
-    │                            │  Attempt SSH health check
-    │                            │── SSH: check process ──>│
-    │                            │<── not running ─────────│
-    │                            │── SSH: restart agent ──>│
-    │                            │<── started ─────────────│
-    │                            │  Mark agent RUNNING
-```
-
-### Scenario: Robinhood Order Fails
-
-```
-Decision Engine          Robinhood MCP          Robinhood API
-    │                        │                       │
-    │── place_order ────────>│                       │
-    │                        │── POST order ────────>│
-    │                        │<── 400 insufficient ──│
-    │                        │                       │
-    │<── error: insufficient │
-    │    buying power        │
-    │                        │
-    │  Log failed attempt    │
-    │  Report to Phoenix     │
-    │  Do NOT retry (not     │
-    │  transient error)      │
-```
-
-Retryable errors (network timeout, 5xx): retry up to 2 times with 3s delay.
-Non-retryable errors (insufficient funds, invalid order, auth failure): fail immediately, log, report.
-
-## End-to-End Live Trade Data Flow
-
-```
-1. Analyst posts in Discord    ──────> Discord API
-                                          │
-2. Discord listener (Python)   <──────────┘
-   - Regex pre-filter
-   - Priority detection
-   - Write to pending_signals.json
-                │
-3. Decision Engine (Python)
-   a. Parse signal (ticker, side, price)
-   b. Enrich with live market data (yfinance)
-   c. Run ML classifier (model.predict())
-   d. Check pattern matches
-   e. Apply price buffer
-   f. Run risk checks (confidence, position limits, daily loss)
-                │
-   TRADE decision? ─── No ──> Log skip reason, report to Phoenix
-                │
-               Yes
-                │
-4. Robinhood MCP
-   a. Place limit order with buffer
-   b. Attach stop-loss order
-   c. Monitor fill (poll every 2s)
-                │
-5. Position Monitor (Python daemon)
-   - Every 60s: check price vs stops
-   - Every 5m: full TA scan (RSI, MACD, volume)
-   - Partial exit ladder at profit targets
-   - Trailing stop adjustment
-   - Swing trade overnight hold logic
-                │
-6. Report to Phoenix API
-   - POST /api/v2/agents/{id}/live-trades
-   - POST /api/v2/agents/{id}/metrics
-   - POST /api/v2/agents/{id}/heartbeat
-                │
-7. Dashboard displays real-time via WebSocket
-```
-
-## Configuration Hierarchy
-
-Configuration flows from multiple sources with this precedence (highest first):
-
-1. **Runtime commands** — `POST /api/v2/agents/{id}/command` (e.g., pause, change mode)
-2. **Agent config.json** — Per-agent settings on VPS
-3. **Environment variables** — `.env` on VPS
-4. **Defaults** — Hardcoded in tool scripts
+- An "Agent Team" is a DB record grouping multiple Agents
+- Each agent has its own trading worker container
+- A Claude Code Cloud Scheduled Task coordinates the team (daily strategy meeting)
+- Team members share signals via the PostgreSQL `agent_signals` table
+- The dashboard shows team performance alongside individual agent performance

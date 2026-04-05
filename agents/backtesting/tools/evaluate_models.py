@@ -46,6 +46,16 @@ def main():
     print(f"Best model: {best['model_name']} (score: {best['score']:.4f})")
     for r in results:
         print(f"  {r['model_name']}: score={r['score']:.4f} auc={r.get('auc_roc', 0):.4f} pf={r.get('profit_factor', 0):.2f}")
+    try:
+        from report_to_phoenix import report_progress
+        report_progress(
+            "evaluate",
+            "Model evaluation complete",
+            70,
+            {"best_model": best["model_name"]},
+        )
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

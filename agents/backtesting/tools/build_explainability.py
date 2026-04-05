@@ -125,6 +125,11 @@ def main():
     print(f"Explainability built: {len(output.get('top_features', []))} features ranked")
     for feat in output.get("top_features", [])[:5]:
         print(f"  {feat['feature']}: {feat['importance']:.4f}")
+    try:
+        from report_to_phoenix import report_progress
+        report_progress("explainability", "Explainability analysis complete", 85)
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

@@ -17,7 +17,6 @@ from apps.api.src.middleware.error_handler import ErrorHandlerMiddleware
 from apps.api.src.middleware.rate_limit import RateLimitMiddleware
 from apps.api.src.middleware.logging import LoggingMiddleware
 from apps.api.src.routes import auth as auth_routes
-from apps.api.src.routes import instances as instance_routes
 from apps.api.src.routes import connectors as connector_routes
 from apps.api.src.routes import trades as trades_routes
 from apps.api.src.routes import positions as positions_routes
@@ -31,7 +30,6 @@ from apps.api.src.routes import dev_agent as dev_agent_routes
 from apps.api.src.routes import tasks as tasks_routes
 from apps.api.src.routes import automations as automations_routes
 from apps.api.src.routes import admin as admin_routes
-from apps.api.src.routes import network as network_routes
 from apps.api.src.routes import performance as performance_routes
 from apps.api.src.routes import market as market_routes
 from apps.api.src.routes import ws as ws_routes
@@ -81,7 +79,6 @@ app.add_middleware(
 )
 
 app.include_router(auth_routes.router)
-app.include_router(instance_routes.router)
 app.include_router(connector_routes.router)
 app.include_router(trades_routes.router)
 app.include_router(positions_routes.router)
@@ -95,7 +92,6 @@ app.include_router(dev_agent_routes.router)
 app.include_router(tasks_routes.router)
 app.include_router(automations_routes.router)
 app.include_router(admin_routes.router)
-app.include_router(network_routes.router)
 app.include_router(performance_routes.router)
 app.include_router(market_routes.router)
 app.include_router(ws_routes.router)

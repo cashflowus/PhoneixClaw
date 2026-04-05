@@ -22,7 +22,7 @@ export interface Agent {
   name: string
   type: AgentType
   status: AgentStatus
-  instance_id: string
+  worker_status?: string
   user_id?: string
   config: Record<string, unknown>
   created_at: string

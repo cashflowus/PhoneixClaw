@@ -25,7 +25,6 @@ import {
   LineChart,
   Settings,
   Shield,
-  Network,
   ListTodo,
 } from 'lucide-react'
 
@@ -42,7 +41,6 @@ const MORE_TABS = [
   { to: '/skills', icon: BookOpen, label: 'Skills' },
   { to: '/market', icon: LineChart, label: 'Market' },
   { to: '/admin', icon: Shield, label: 'Admin' },
-  { to: '/network', icon: Network, label: 'Network' },
   { to: '/tasks', icon: ListTodo, label: 'Tasks' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]

@@ -348,6 +348,15 @@ def main():
         avg_pnl = df["pnl_pct"].mean() if "pnl_pct" in df.columns else 0
         print(f"Win rate: {win_rate:.1%}, Avg P&L: {avg_pnl:.2%}")
 
+    try:
+        from report_to_phoenix import report_progress
+        report_progress("transform", f"Transformed {len(df)} trades from {channel_name}", 15, {
+            "total_trades": len(df),
+            "total_messages": len(raw_messages),
+        })
+    except Exception:
+        pass
+
 
 if __name__ == "__main__":
     main()

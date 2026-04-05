@@ -199,6 +199,11 @@ def _try_pytorch_forecasting(
     with open(output_dir / "tft_results.json", "w") as f:
         json.dump(results, f, indent=2)
     print(f"TFT (pytorch-forecasting): accuracy={results['accuracy']} auc={results['auc_roc']}")
+    try:
+        from report_to_phoenix import report_progress
+        report_progress("train_tft", "TFT training complete", 56)
+    except Exception:
+        pass
     return True
 
 
@@ -351,6 +356,11 @@ def main():
     with open(output_dir / "tft_results.json", "w") as f:
         json.dump(results, f, indent=2)
     print(f"TFT: accuracy={results['accuracy']} auc={results['auc_roc']}")
+    try:
+        from report_to_phoenix import report_progress
+        report_progress("train_tft", "TFT training complete", 56)
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":
