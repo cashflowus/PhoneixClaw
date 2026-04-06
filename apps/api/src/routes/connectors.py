@@ -389,6 +389,22 @@ async def test_connector(connector_id: str, session: DbSession):
             port = config.get("port", 7497)
             detail = f"IBKR configured for {host}:{port} (connect via TWS/Gateway)"
 
+        elif connector.type == "robinhood":
+            username = creds.get("username", "")
+            password = creds.get("password", "")
+            if not username or not password:
+                return {"connection_status": "ERROR", "detail": "Missing Robinhood username or password"}
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://api.robinhood.com/",
+                    headers={"User-Agent": "PhoenixTrade/1.0"},
+                )
+                if resp.status_code == 200:
+                    conn_status = "connected"
+                    detail = f"Robinhood credentials stored for {username}"
+                else:
+                    detail = f"Robinhood API returned {resp.status_code}"
+
         elif connector.type == "custom_webhook":
             conn_status = "connected"
             detail = "Webhook endpoint is ready to receive signals"

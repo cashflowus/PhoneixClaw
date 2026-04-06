@@ -801,6 +801,7 @@ function BacktestReviewDialog({ agent, open, onOpenChange }: {
   onOpenChange: (open: boolean) => void
 }) {
   const queryClient = useQueryClient()
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('')
 
   const { data: backtest, isLoading } = useQuery<BacktestData>({
     queryKey: ['agent-backtest', agent?.id],
@@ -814,6 +815,15 @@ function BacktestReviewDialog({ agent, open, onOpenChange }: {
     enabled: !!agent && open,
   })
 
+  const { data: brokerConnectors } = useQuery<Array<{ id: string; name: string; type: string; status: string }>>({
+    queryKey: ['broker-connectors'],
+    queryFn: async () => {
+      const res = await api.get('/api/v2/connectors?type=robinhood')
+      return res.data
+    },
+    enabled: !!agent && open,
+  })
+
   const totalTrades = backtest?.total_trades || (artifacts?.total_trades as number) || (artifacts?.preprocessing_summary as Record<string, number>)?.total_rows || 0
   const winRate = backtest?.win_rate ?? (artifacts?.win_rate as number | null)
   const totalReturn = backtest?.total_return ?? (artifacts?.total_return as number | null)
@@ -824,7 +834,11 @@ function BacktestReviewDialog({ agent, open, onOpenChange }: {
 
   const approveMutation = useMutation({
     mutationFn: async ({ mode }: { mode: 'paper' | 'live' }) => {
-      await api.post(`/api/v2/agents/${agent!.id}/approve`, { trading_mode: mode })
+      const payload: Record<string, string> = { trading_mode: mode }
+      if (mode === 'live' && selectedAccountId) {
+        payload.account_id = selectedAccountId
+      }
+      await api.post(`/api/v2/agents/${agent!.id}/approve`, payload)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agents'] })
@@ -955,8 +969,36 @@ function BacktestReviewDialog({ agent, open, onOpenChange }: {
             </div>
 
             {/* Approve actions */}
-            <div className="border-t pt-4">
-              <p className="text-sm text-muted-foreground mb-3">Approve this agent for trading:</p>
+            <div className="border-t pt-4 space-y-4">
+              <p className="text-sm text-muted-foreground">Approve this agent for trading:</p>
+
+              {/* Broker account selector */}
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wider">Trading Account (required for live)</Label>
+                {brokerConnectors && brokerConnectors.length > 0 ? (
+                  <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select a Robinhood account..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {brokerConnectors.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          <span className="flex items-center gap-2">
+                            <Landmark className="h-3.5 w-3.5" />
+                            {c.name}
+                            <Badge variant="outline" className="text-[10px] ml-1">{c.status}</Badge>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-600 dark:text-amber-400">
+                    No Robinhood accounts configured. <Link to="/connectors" className="underline font-medium">Add one in Connectors</Link> to enable live trading.
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-3">
                 <Button
                   className="flex-1 gap-2"
@@ -970,7 +1012,8 @@ function BacktestReviewDialog({ agent, open, onOpenChange }: {
                 <Button
                   className="flex-1 gap-2"
                   onClick={() => approveMutation.mutate({ mode: 'live' })}
-                  disabled={approveMutation.isPending}
+                  disabled={approveMutation.isPending || !selectedAccountId}
+                  title={!selectedAccountId ? 'Select a trading account first' : ''}
                 >
                   <Zap className="h-4 w-4" />
                   {approveMutation.isPending ? 'Approving...' : 'Start Live Trading'}

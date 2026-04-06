@@ -353,6 +353,35 @@ async def approve_agent(agent_id: str, session: DbSession, payload: AgentApprove
     }
     if payload.account_id:
         approval_config["account_id"] = payload.account_id
+
+        try:
+            from shared.crypto.credentials import decrypt_credentials
+            conn_result = await session.execute(
+                select(Connector).where(Connector.id == uuid.UUID(payload.account_id))
+            )
+            connector = conn_result.scalar_one_or_none()
+            if connector and connector.credentials_encrypted:
+                creds = decrypt_credentials(connector.credentials_encrypted)
+                if connector.type == "robinhood":
+                    agent.config = {
+                        **(agent.config or {}),
+                        "robinhood_credentials": {
+                            "username": creds.get("username", ""),
+                            "password": creds.get("password", ""),
+                            "totp_secret": creds.get("totp_secret", ""),
+                        },
+                    }
+                elif connector.type in ("alpaca", "ibkr", "tradier"):
+                    agent.config = {
+                        **(agent.config or {}),
+                        "broker_credentials": {
+                            "broker": connector.type,
+                            **creds,
+                        },
+                    }
+        except Exception:
+            pass
+
     agent.config = {**(agent.config or {}), "approval": approval_config}
 
     agent.status = "PAPER" if payload.trading_mode == "paper" else "APPROVED"
