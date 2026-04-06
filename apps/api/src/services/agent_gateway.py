@@ -88,16 +88,20 @@ class AgentGateway:
         work_dir: Path,
         session_row_id: uuid.UUID,
     ) -> None:
-        """Run backtesting via Claude Code agent, fall back to subprocess."""
+        """Run backtesting via Claude Code agent with retries. No subprocess fallback."""
         _chown_to_phoenix(work_dir)
         use_claude = _can_use_claude_sdk()
 
         if not use_claude:
+            reason = _sdk_unavailable_reason()
+            logger.error("Claude SDK unavailable for agent %s: %s", agent_id, reason)
             async for db in _get_session():
-                await self._update_session(db, session_row_id, status="fallback")
-                await _syslog(db, agent_id, backtest_id, "fallback", 3,
-                              f"Claude SDK unavailable ({_sdk_unavailable_reason()}), using subprocess pipeline")
-            await self._fallback_subprocess(agent_id, backtest_id, config)
+                await self._update_session(db, session_row_id, status="error",
+                                           error=f"Claude SDK unavailable: {reason}")
+                await _syslog(db, agent_id, backtest_id, "sdk_unavailable", 0,
+                              f"Backtesting requires Claude Code SDK — {reason}")
+                await _mark_backtest_failed(db, agent_id, backtest_id, "agent-gateway",
+                                           f"Claude SDK unavailable: {reason}")
             return
 
         async for db in _get_session():
@@ -105,55 +109,76 @@ class AgentGateway:
             await _syslog(db, agent_id, backtest_id, "claude_agent_start", 2,
                           "Starting Claude Code agent for backtesting")
 
-        try:
-            from claude_agent_sdk import query, ClaudeAgentOptions
+        max_attempts = 3
+        last_error = ""
 
-            prompt = _build_backtest_prompt(agent_id, config, work_dir)
-            options = ClaudeAgentOptions(
-                cwd=str(work_dir),
-                permission_mode="dontAsk",
-                allowed_tools=["Bash", "Read", "Write", "Edit", "Grep", "Glob"],
-            )
+        for attempt in range(1, max_attempts + 1):
+            try:
+                from claude_agent_sdk import query, ClaudeAgentOptions
 
-            last_text = ""
-            async for message in query(prompt=prompt, options=options):
-                if hasattr(message, "content") and isinstance(message.content, list):
-                    for block in message.content:
-                        if hasattr(block, "text"):
-                            last_text = block.text[-500:]
-                if hasattr(message, "session_id"):
-                    sid = message.session_id
-                    _session_ids[str(agent_id)] = sid
-                    async for db in _get_session():
-                        await self._update_session(db, session_row_id, session_id=sid)
-                if hasattr(message, "is_error") and getattr(message, "is_error", False):
-                    async for db in _get_session():
-                        await self._update_session(db, session_row_id, status="error",
-                                                   error=f"Claude agent error: {last_text[:500]}")
-                        await _mark_backtest_failed(db, agent_id, backtest_id, "claude_agent", last_text[:500])
+                prompt = _build_backtest_prompt(agent_id, config, work_dir)
+                options = ClaudeAgentOptions(
+                    cwd=str(work_dir),
+                    permission_mode="dontAsk",
+                    allowed_tools=["Bash", "Read", "Write", "Edit", "Grep", "Glob"],
+                )
+
+                last_text = ""
+                hit_error_message = False
+                async for message in query(prompt=prompt, options=options):
+                    if hasattr(message, "content") and isinstance(message.content, list):
+                        for block in message.content:
+                            if hasattr(block, "text"):
+                                last_text = block.text[-500:]
+                    if hasattr(message, "session_id"):
+                        sid = message.session_id
+                        _session_ids[str(agent_id)] = sid
+                        async for db in _get_session():
+                            await self._update_session(db, session_row_id, session_id=sid)
+                    if hasattr(message, "is_error") and getattr(message, "is_error", False):
+                        hit_error_message = True
+                        async for db in _get_session():
+                            await self._update_session(db, session_row_id, status="error",
+                                                       error=f"Claude agent error: {last_text[:500]}")
+                            await _mark_backtest_failed(db, agent_id, backtest_id, "claude_agent", last_text[:500])
+                        break
+
+                if hit_error_message:
                     return
 
-            async for db in _get_session():
-                bt = (await db.execute(
-                    select(AgentBacktest).where(AgentBacktest.id == backtest_id)
-                )).scalar_one_or_none()
-                if bt and bt.status not in ("COMPLETED", "FAILED"):
-                    await _mark_backtest_completed(db, agent_id, backtest_id)
-                await self._update_session(db, session_row_id, status="completed")
+                async for db in _get_session():
+                    bt = (await db.execute(
+                        select(AgentBacktest).where(AgentBacktest.id == backtest_id)
+                    )).scalar_one_or_none()
+                    if bt and bt.status not in ("COMPLETED", "FAILED"):
+                        await _mark_backtest_completed(db, agent_id, backtest_id)
+                    await self._update_session(db, session_row_id, status="completed")
 
-            await self._auto_create_analyst(agent_id, config, work_dir)
+                await self._auto_create_analyst(agent_id, config, work_dir)
+                return
 
-        except Exception as exc:
-            error_str = str(exc)[:500]
-            logger.warning("Claude SDK failed for agent %s: %s — falling back", agent_id, error_str)
-            async for db in _get_session():
-                await self._update_session(db, session_row_id, status="fallback",
-                                           error=f"SDK error: {error_str[:200]}")
-                await _syslog(db, agent_id, backtest_id, "sdk_fallback", 3,
-                              f"Claude SDK error, retrying with subprocess")
-            await self._fallback_subprocess(agent_id, backtest_id, config)
-        finally:
-            _running_tasks.pop(str(agent_id), None)
+            except Exception as exc:
+                last_error = str(exc)[:500]
+                if attempt < max_attempts:
+                    delay = 10 * (2 ** (attempt - 1))
+                    logger.warning("Claude SDK attempt %d/%d failed for agent %s: %s — retrying in %ds",
+                                   attempt, max_attempts, agent_id, last_error[:200], delay)
+                    async for db in _get_session():
+                        await _syslog(db, agent_id, backtest_id, "sdk_retry", 3,
+                                      f"Claude SDK error (attempt {attempt}/{max_attempts}), retrying in {delay}s: {last_error[:200]}")
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error("Claude SDK failed after %d attempts for agent %s: %s",
+                                 max_attempts, agent_id, last_error)
+                    async for db in _get_session():
+                        await self._update_session(db, session_row_id, status="error",
+                                                   error=f"SDK failed after {max_attempts} attempts: {last_error[:200]}")
+                        await _syslog(db, agent_id, backtest_id, "sdk_failed", 3,
+                                      f"Claude SDK failed after {max_attempts} attempts: {last_error[:200]}")
+                        await _mark_backtest_failed(db, agent_id, backtest_id, "claude_agent",
+                                                   f"SDK failed after {max_attempts} attempts: {last_error[:300]}")
+
+        _running_tasks.pop(str(agent_id), None)
 
     async def _auto_create_analyst(
         self, agent_id: uuid.UUID, config: dict, backtest_work_dir: Path
