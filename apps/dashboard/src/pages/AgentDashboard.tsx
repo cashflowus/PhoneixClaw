@@ -945,6 +945,8 @@ function BacktestDownloadsTab({ id, artifacts }: { id: string; artifacts: Backte
     return <FileDown className="h-4 w-4 text-muted-foreground" />
   }
 
+  const parquetFiles = files.filter(f => f.name.endsWith('.parquet'))
+
   if (files.length === 0) {
     return (
       <Card className="border-dashed">
@@ -965,14 +967,42 @@ function BacktestDownloadsTab({ id, artifacts }: { id: string; artifacts: Backte
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <Download className="h-4 w-4 text-primary" />
-          Backtesting Files ({files.length})
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
+    <div className="space-y-4">
+      {parquetFiles.length > 0 && (
+        <Card className="border-green-500/30 bg-green-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <FileSpreadsheet className="h-4 w-4 text-green-500" />
+              Download as CSV
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {parquetFiles.map(f => (
+                <a
+                  key={f.name}
+                  href={`${baseUrl}/api/v2/agents/${id}/backtest-csv/${f.name}`}
+                  download
+                  className="inline-flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 hover:bg-green-500/20 transition-colors text-xs font-mono"
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5 text-green-500" />
+                  {f.name.replace('.parquet', '.csv')}
+                  <Download className="h-3 w-3 text-green-500" />
+                </a>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Download className="h-4 w-4 text-primary" />
+            All Backtesting Files ({files.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
         <div className="space-y-4">
           {Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([dir, dirFiles]) => (
             <div key={dir}>
@@ -999,6 +1029,7 @@ function BacktestDownloadsTab({ id, artifacts }: { id: string; artifacts: Backte
         </div>
       </CardContent>
     </Card>
+    </div>
   )
 }
 

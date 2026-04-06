@@ -190,11 +190,24 @@ async def _mark_completed(session, agent_id: uuid.UUID, backtest_id: uuid.UUID) 
         bt.current_step = "completed"
         bt.completed_at = now
 
+        m = bt.metrics or {}
+        bt.total_trades = m.get("total_trades") or m.get("trades") or 0
+        bt.win_rate = m.get("win_rate")
+        bt.sharpe_ratio = m.get("sharpe_ratio")
+        bt.max_drawdown = m.get("max_drawdown")
+        bt.total_return = m.get("total_return")
+
     agent_result = await session.execute(select(Agent).where(Agent.id == agent_id))
     agent = agent_result.scalar_one_or_none()
     if agent:
         agent.status = "BACKTEST_COMPLETE"
         agent.updated_at = now
+        if bt:
+            m = bt.metrics or {}
+            agent.model_type = m.get("best_model") or m.get("model")
+            agent.model_accuracy = m.get("accuracy")
+            agent.total_trades = bt.total_trades or 0
+            agent.win_rate = bt.win_rate or 0.0
 
     log = SystemLog(
         id=uuid.uuid4(), source="backtest", level="INFO", service="task-runner",

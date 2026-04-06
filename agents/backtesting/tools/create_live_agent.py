@@ -159,11 +159,22 @@ def _build_final_metrics(
     config_dir = Path(config_path).parent
     output_dir = config_dir / "output"
 
+    def _find(*candidates: Path) -> Path | None:
+        for c in candidates:
+            if c.exists():
+                return c
+        return None
+
     # --- Feature names from preprocessor meta.json ---
     feature_names = []
     preprocessing_summary = {}
-    meta_path = output_dir / "meta.json"
-    if meta_path.exists():
+    meta_path = _find(
+        config_dir / "preprocessed" / "meta.json",
+        config_dir / "meta.json",
+        output_dir / "meta.json",
+        output_dir / "preprocessed" / "meta.json",
+    )
+    if meta_path:
         try:
             with open(meta_path) as f:
                 meta = json.load(f)
@@ -189,8 +200,11 @@ def _build_final_metrics(
     total_return = 0.0
     try:
         import pandas as pd
-        enriched_path = output_dir / "enriched.parquet"
-        if enriched_path.exists():
+        enriched_path = _find(
+            config_dir / "enriched.parquet",
+            output_dir / "enriched.parquet",
+        )
+        if enriched_path:
             df = pd.read_parquet(enriched_path)
             total_trades = len(df)
             if "is_profitable" in df.columns:

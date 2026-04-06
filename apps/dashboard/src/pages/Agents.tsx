@@ -846,10 +846,10 @@ function BacktestReviewDialog({ agent, open, onOpenChange }: {
             {/* Summary metrics */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
-                { label: 'Total Return', value: `${backtest.total_return?.toFixed(2)}%`, good: (backtest.total_return ?? 0) > 0, icon: TrendingUp },
+                { label: 'Total Return', value: backtest.total_return != null ? `${backtest.total_return.toFixed(2)}%` : 'N/A', good: (backtest.total_return ?? 0) > 0, icon: TrendingUp },
                 { label: 'Win Rate', value: `${((backtest.win_rate ?? 0) * 100).toFixed(1)}%`, good: (backtest.win_rate ?? 0) >= 0.5, icon: CheckCircle2 },
-                { label: 'Sharpe Ratio', value: `${backtest.sharpe_ratio?.toFixed(2)}`, good: (backtest.sharpe_ratio ?? 0) >= 1.0, icon: Activity },
-                { label: 'Max Drawdown', value: `${backtest.max_drawdown?.toFixed(2)}%`, good: (backtest.max_drawdown ?? 0) < 10, icon: Shield },
+                { label: 'Sharpe Ratio', value: backtest.sharpe_ratio != null ? backtest.sharpe_ratio.toFixed(2) : 'N/A', good: (backtest.sharpe_ratio ?? 0) >= 1.0, icon: Activity },
+                { label: 'Max Drawdown', value: backtest.max_drawdown != null ? `${backtest.max_drawdown.toFixed(2)}%` : 'N/A', good: (backtest.max_drawdown ?? 0) < 10, icon: Shield },
               ].map((m) => (
                 <div key={m.label} className={`rounded-lg border p-3 ${m.good ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
                   <div className="flex items-center gap-1.5 mb-1">

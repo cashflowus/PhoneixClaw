@@ -1039,75 +1039,129 @@ async def get_backtest_artifacts(agent_id: str, session: DbSession):
     work_dir = data_dir / f"backtest_{agent_id}"
     output_dir = work_dir / "output"
 
+    def _find_file(*candidates: Path) -> Path | None:
+        for c in candidates:
+            if c.exists():
+                return c
+        return None
+
     feature_names: list[str] = metrics.get("feature_names", [])
     if not feature_names:
-        for candidate in [output_dir / "feature_names.json", output_dir / "preprocessed" / "feature_names.json"]:
-            if candidate.exists():
-                import json as _json
-                feature_names = _json.loads(candidate.read_text())
-                break
+        fn_file = _find_file(
+            work_dir / "feature_names.json",
+            work_dir / "preprocessed" / "feature_names.json",
+            output_dir / "feature_names.json",
+            output_dir / "preprocessed" / "feature_names.json",
+        )
+        if fn_file:
+            import json as _json
+            feature_names = _json.loads(fn_file.read_text())
         if not feature_names:
-            meta_path = output_dir / "meta.json"
-            if meta_path.exists():
+            meta_file = _find_file(
+                work_dir / "preprocessed" / "meta.json",
+                work_dir / "meta.json",
+                output_dir / "meta.json",
+                output_dir / "preprocessed" / "meta.json",
+            )
+            if meta_file:
                 import json as _json
                 try:
-                    feature_names = _json.loads(meta_path.read_text()).get("feature_columns", [])
+                    feature_names = _json.loads(meta_file.read_text()).get("feature_columns", [])
                 except Exception:
                     pass
 
     all_model_results: list[dict] = metrics.get("all_model_results", [])
     if not all_model_results:
-        models_dir = output_dir / "models"
-        if models_dir.exists():
-            import json as _json
-            for rf in sorted(models_dir.glob("*_results.json")):
-                try:
-                    all_model_results.append(_json.loads(rf.read_text()))
-                except Exception:
-                    pass
+        import json as _json
+        for mdir in [work_dir / "models", output_dir / "models"]:
+            if mdir.exists():
+                for rf in sorted(mdir.glob("*_results.json")):
+                    try:
+                        all_model_results.append(_json.loads(rf.read_text()))
+                    except Exception:
+                        pass
+                if all_model_results:
+                    break
 
     preprocessing_summary: dict = metrics.get("preprocessing_summary", {})
     if not preprocessing_summary:
-        for candidate in [output_dir / "preprocessed" / "preprocessing_summary.json", output_dir / "preprocessing_summary.json"]:
-            if candidate.exists():
+        ps_file = _find_file(
+            work_dir / "preprocessed" / "preprocessing_summary.json",
+            work_dir / "preprocessing_summary.json",
+            output_dir / "preprocessed" / "preprocessing_summary.json",
+            output_dir / "preprocessing_summary.json",
+        )
+        if ps_file:
+            import json as _json
+            try:
+                preprocessing_summary = _json.loads(ps_file.read_text())
+            except Exception:
+                pass
+        if not preprocessing_summary:
+            meta_file = _find_file(
+                work_dir / "preprocessed" / "meta.json",
+                work_dir / "meta.json",
+                output_dir / "meta.json",
+            )
+            if meta_file:
                 import json as _json
-                preprocessing_summary = _json.loads(candidate.read_text())
-                break
+                try:
+                    meta = _json.loads(meta_file.read_text())
+                    preprocessing_summary = {
+                        "total_rows": meta.get("total_rows", 0),
+                        "train_rows": meta.get("train_rows", 0),
+                        "val_rows": meta.get("val_rows", 0),
+                        "test_rows": meta.get("test_rows", 0),
+                        "feature_count": meta.get("num_features", len(meta.get("feature_columns", []))),
+                    }
+                except Exception:
+                    pass
 
     explainability: dict = metrics.get("explainability", {})
     if not explainability:
-        for expl_candidate in [output_dir / "models" / "explainability.json", output_dir / "explainability.json"]:
-            if expl_candidate.exists():
-                import json as _json
-                try:
-                    explainability = _json.loads(expl_candidate.read_text())
-                    break
-                except Exception:
-                    pass
+        expl_file = _find_file(
+            work_dir / "explainability.json",
+            work_dir / "models" / "explainability.json",
+            output_dir / "models" / "explainability.json",
+            output_dir / "explainability.json",
+        )
+        if expl_file:
+            import json as _json
+            try:
+                explainability = _json.loads(expl_file.read_text())
+            except Exception:
+                pass
 
     patterns: list = metrics.get("patterns", [])
     if not patterns:
-        for pat_candidate in [output_dir / "models" / "patterns.json", output_dir / "patterns.json"]:
-            if pat_candidate.exists():
-                import json as _json
-                try:
-                    pat_data = _json.loads(pat_candidate.read_text())
-                    patterns = pat_data if isinstance(pat_data, list) else pat_data.get("patterns", [])
-                    if patterns:
-                        break
-                except Exception:
-                    pass
+        pat_file = _find_file(
+            work_dir / "patterns.json",
+            work_dir / "models" / "patterns.json",
+            output_dir / "models" / "patterns.json",
+            output_dir / "patterns.json",
+        )
+        if pat_file:
+            import json as _json
+            try:
+                pat_data = _json.loads(pat_file.read_text())
+                patterns = pat_data if isinstance(pat_data, list) else pat_data.get("patterns", [])
+            except Exception:
+                pass
 
     downloadable_files: list[dict] = []
-    if output_dir.exists():
-        for fpath in sorted(output_dir.rglob("*")):
-            if fpath.is_file() and fpath.stat().st_size > 0:
-                rel = fpath.relative_to(output_dir)
-                downloadable_files.append({
-                    "name": str(rel),
-                    "size_bytes": fpath.stat().st_size,
-                    "size_human": _human_size(fpath.stat().st_size),
-                })
+    for scan_root in [work_dir, output_dir]:
+        if scan_root.exists():
+            for fpath in sorted(scan_root.rglob("*")):
+                if fpath.is_file() and fpath.stat().st_size > 0:
+                    rel = fpath.relative_to(work_dir)
+                    rel_str = str(rel)
+                    if any(d["name"] == rel_str for d in downloadable_files):
+                        continue
+                    downloadable_files.append({
+                        "name": rel_str,
+                        "size_bytes": fpath.stat().st_size,
+                        "size_human": _human_size(fpath.stat().st_size),
+                    })
 
     return {
         "backtest_id": str(bt.id),
@@ -1142,15 +1196,15 @@ def _human_size(nbytes: int) -> str:
 
 @router.get("/{agent_id}/backtest-files/{file_path:path}")
 async def download_backtest_file(agent_id: str, file_path: str):
-    """Download a raw file from the backtesting output directory."""
+    """Download a raw file from the backtesting work directory."""
     from pathlib import Path
     from fastapi.responses import FileResponse
 
     repo_root = Path(__file__).resolve().parents[4]
-    output_dir = repo_root / "data" / f"backtest_{agent_id}" / "output"
-    target = (output_dir / file_path).resolve()
+    work_dir = repo_root / "data" / f"backtest_{agent_id}"
 
-    if not str(target).startswith(str(output_dir.resolve())):
+    target = (work_dir / file_path).resolve()
+    if not str(target).startswith(str(work_dir.resolve())):
         raise HTTPException(status_code=403, detail="Path traversal not allowed")
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="File not found")
@@ -1158,14 +1212,44 @@ async def download_backtest_file(agent_id: str, file_path: str):
     media_type = "application/octet-stream"
     if target.suffix == ".json":
         media_type = "application/json"
-    elif target.suffix == ".parquet":
-        media_type = "application/octet-stream"
     elif target.suffix == ".csv":
         media_type = "text/csv"
-    elif target.suffix == ".npy":
-        media_type = "application/octet-stream"
 
     return FileResponse(target, media_type=media_type, filename=target.name)
+
+
+@router.get("/{agent_id}/backtest-csv/{file_path:path}")
+async def download_backtest_csv(agent_id: str, file_path: str):
+    """Convert a .parquet file to CSV on-the-fly and serve it for download."""
+    from pathlib import Path
+    from fastapi.responses import StreamingResponse
+    import io
+
+    repo_root = Path(__file__).resolve().parents[4]
+    work_dir = repo_root / "data" / f"backtest_{agent_id}"
+
+    target = (work_dir / file_path).resolve()
+    if not str(target).startswith(str(work_dir.resolve())):
+        raise HTTPException(status_code=403, detail="Path traversal not allowed")
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    if target.suffix != ".parquet":
+        raise HTTPException(status_code=400, detail="Only .parquet files can be converted to CSV")
+
+    try:
+        import pandas as pd
+        df = pd.read_parquet(target)
+        buf = io.StringIO()
+        df.to_csv(buf, index=False)
+        buf.seek(0)
+        csv_name = target.stem + ".csv"
+        return StreamingResponse(
+            iter([buf.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={csv_name}"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to convert: {str(e)[:200]}")
 
 
 # -- Gateway session listing -----------------------------------------------
