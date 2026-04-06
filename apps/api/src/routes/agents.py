@@ -1041,11 +1041,19 @@ async def get_backtest_artifacts(agent_id: str, session: DbSession):
 
     feature_names: list[str] = metrics.get("feature_names", [])
     if not feature_names:
-        for candidate in [output_dir / "preprocessed" / "feature_names.json", output_dir / "feature_names.json"]:
+        for candidate in [output_dir / "feature_names.json", output_dir / "preprocessed" / "feature_names.json"]:
             if candidate.exists():
                 import json as _json
                 feature_names = _json.loads(candidate.read_text())
                 break
+        if not feature_names:
+            meta_path = output_dir / "meta.json"
+            if meta_path.exists():
+                import json as _json
+                try:
+                    feature_names = _json.loads(meta_path.read_text()).get("feature_columns", [])
+                except Exception:
+                    pass
 
     all_model_results: list[dict] = metrics.get("all_model_results", [])
     if not all_model_results:
@@ -1068,24 +1076,27 @@ async def get_backtest_artifacts(agent_id: str, session: DbSession):
 
     explainability: dict = metrics.get("explainability", {})
     if not explainability:
-        expl_path = output_dir / "explainability.json"
-        if expl_path.exists():
-            import json as _json
-            try:
-                explainability = _json.loads(expl_path.read_text())
-            except Exception:
-                pass
+        for expl_candidate in [output_dir / "models" / "explainability.json", output_dir / "explainability.json"]:
+            if expl_candidate.exists():
+                import json as _json
+                try:
+                    explainability = _json.loads(expl_candidate.read_text())
+                    break
+                except Exception:
+                    pass
 
     patterns: list = metrics.get("patterns", [])
     if not patterns:
-        pat_path = output_dir / "patterns.json"
-        if pat_path.exists():
-            import json as _json
-            try:
-                pat_data = _json.loads(pat_path.read_text())
-                patterns = pat_data if isinstance(pat_data, list) else pat_data.get("patterns", [])
-            except Exception:
-                pass
+        for pat_candidate in [output_dir / "models" / "patterns.json", output_dir / "patterns.json"]:
+            if pat_candidate.exists():
+                import json as _json
+                try:
+                    pat_data = _json.loads(pat_candidate.read_text())
+                    patterns = pat_data if isinstance(pat_data, list) else pat_data.get("patterns", [])
+                    if patterns:
+                        break
+                except Exception:
+                    pass
 
     downloadable_files: list[dict] = []
     if output_dir.exists():

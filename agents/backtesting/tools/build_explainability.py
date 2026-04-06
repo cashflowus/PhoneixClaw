@@ -127,7 +127,9 @@ def main():
         print(f"  {feat['feature']}: {feat['importance']:.4f}")
     try:
         from report_to_phoenix import report_progress
-        report_progress("explainability", "Explainability analysis complete", 85)
+        report_progress("explainability", "Explainability analysis complete", 85, {
+            "explainability": output,
+        })
     except Exception:
         pass
 

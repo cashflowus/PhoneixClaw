@@ -83,17 +83,25 @@ This assembles the live trading agent with:
 - Tool scripts and skill markdown files
 - `config.json` with risk parameters and credentials
 
-### Step 10: Auto-Create Analyst Agent
-After all pipeline steps complete successfully, notify Phoenix to auto-create the analyst agent:
+**This step also sends the final COMPLETED callback to Phoenix** with comprehensive metrics
+including all model results, patterns, features, explainability, win rate, sharpe ratio,
+total return, max drawdown, and total trades. The dashboard displays all this data.
+No extra curl call is needed after this step.
 
-```bash
-curl -s -X POST "{phoenix_api_url}/api/v2/agents/{agent_id}/backtest-progress" \
-  -H "Content-Type: application/json" \
-  -H "X-Agent-Key: {phoenix_api_key}" \
-  -d '{"step": "completed", "message": "Pipeline complete — analyst agent ready for creation", "progress_pct": 100, "status": "COMPLETED", "metrics": {"auto_create_analyst": true}}'
-```
+## Data Each Step Reports to Phoenix
 
-This triggers the Agent Gateway to prepare the analyst agent with all trained models and configuration.
+Every tool script reports metrics via `report_to_phoenix.py`. These merge into `bt.metrics` (JSONB)
+and the dashboard reads them. Here is what each step MUST report:
+
+| Step | Key metrics sent | Dashboard tab |
+|------|-----------------|---------------|
+| preprocess | `preprocessing_summary`, `feature_names`, `feature_count` | Features tab |
+| evaluate | `all_model_results`, `best_model`, `best_model_score`, `model_count` | Models tab |
+| patterns | `patterns` (full array), `pattern_count` | Patterns tab |
+| explainability | `explainability` (top_features, model_name, method) | Features tab |
+| create_live_agent | `total_trades`, `win_rate`, `sharpe_ratio`, `max_drawdown`, `total_return`, all of the above merged, `auto_create_analyst: true` | Summary metrics + all tabs |
+
+**Critical: If any step fails to report these fields, the dashboard shows "No data" for that section.**
 
 ## Error Recovery (Self-Healing)
 
@@ -120,7 +128,7 @@ curl -s -X POST "{phoenix_api_url}/api/v2/agents/{agent_id}/backtest-progress" \
   -d '{"step": "<step_name>", "message": "<what happened>", "progress_pct": <pct>}'
 ```
 
-Progress percentages: transform=12, enrich=30, text_embeddings=33, preprocess=35, train_base=55, train_ensemble=65, evaluate=70, explainability=80, patterns=85, create_live_agent=95, completed=100
+Progress percentages: transform=12, enrich=30, text_embeddings=33, preprocess=35, train_base=55, train_ensemble=65, evaluate=70, explainability=85, patterns=80, create_live_agent=100
 
 ## Important Rules
 - Always check if each tool script exists before running it

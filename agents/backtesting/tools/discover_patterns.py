@@ -146,7 +146,10 @@ def main():
         print(f"  {p['name']}: win_rate={p['win_rate']:.2%} (n={p['sample_size']})")
     try:
         from report_to_phoenix import report_progress
-        report_progress("patterns", "Pattern discovery complete", 80, {"pattern_count": len(patterns)})
+        report_progress("patterns", "Pattern discovery complete", 80, {
+            "pattern_count": len(patterns),
+            "patterns": patterns,
+        })
     except Exception:
         pass
 

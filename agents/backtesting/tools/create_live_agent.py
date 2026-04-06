@@ -139,6 +139,102 @@ def _load_explainability(models_dir: Path) -> dict:
     return {"top_features": top_features}
 
 
+def _build_final_metrics(
+    config_path: str,
+    models_dir: Path,
+    patterns: list[dict],
+    explainability: dict,
+    analyst_profile: dict,
+    manifest: dict,
+    channel_name: str,
+    character: str,
+    rules_count: int,
+) -> dict:
+    """Aggregate all backtesting outputs into a comprehensive metrics dict.
+
+    The backtest-progress endpoint merges this into bt.metrics, and then
+    uses specific keys (win_rate, sharpe_ratio, etc.) to populate typed
+    columns on the backtest and agent records.
+    """
+    config_dir = Path(config_path).parent
+    output_dir = config_dir / "output"
+
+    # --- Feature names from preprocessor meta.json ---
+    feature_names = []
+    preprocessing_summary = {}
+    meta_path = output_dir / "meta.json"
+    if meta_path.exists():
+        try:
+            with open(meta_path) as f:
+                meta = json.load(f)
+            feature_names = meta.get("feature_columns", [])
+            preprocessing_summary = {
+                "total_rows": meta.get("total_rows", 0),
+                "train_rows": meta.get("train_rows", 0),
+                "val_rows": meta.get("val_rows", 0),
+                "test_rows": meta.get("test_rows", 0),
+                "feature_count": len(feature_names),
+            }
+        except Exception:
+            pass
+
+    # --- All model results from best_model.json ---
+    all_model_results = []
+    best_model_info = _load_json(models_dir / "best_model.json")
+    all_model_results = best_model_info.get("all_results", [])
+
+    # --- Backtest-level summary from enriched data ---
+    total_trades = 0
+    win_rate = analyst_profile.get("win_rate", 0)
+    total_return = 0.0
+    try:
+        import pandas as pd
+        enriched_path = output_dir / "enriched.parquet"
+        if enriched_path.exists():
+            df = pd.read_parquet(enriched_path)
+            total_trades = len(df)
+            if "is_profitable" in df.columns:
+                win_rate = float(df["is_profitable"].mean())
+            if "pnl_pct" in df.columns:
+                total_return = round(float(df["pnl_pct"].sum()), 4)
+    except Exception:
+        pass
+
+    # --- Best model's sharpe and max_drawdown ---
+    sharpe_ratio = 0.0
+    max_drawdown = 0.0
+    best_name = best_model_info.get("best_model", "")
+    for r in all_model_results:
+        if r.get("model_name") == best_name:
+            sharpe_ratio = r.get("sharpe_ratio", 0.0)
+            max_drawdown = r.get("max_drawdown_pct", 0.0)
+            break
+
+    return {
+        "channel": channel_name,
+        "model": manifest["models"]["primary"],
+        "best_model": manifest["models"]["primary"],
+        "accuracy": manifest["models"].get("accuracy", 0),
+        "rules": rules_count,
+        "character": character,
+        "total_trades": total_trades,
+        "win_rate": round(win_rate, 4),
+        "sharpe_ratio": round(sharpe_ratio, 4),
+        "max_drawdown": round(max_drawdown, 4),
+        "total_return": round(total_return, 4),
+        "patterns": patterns,
+        "pattern_count": len(patterns),
+        "feature_names": feature_names,
+        "feature_count": len(feature_names),
+        "all_model_results": all_model_results,
+        "model_count": len(all_model_results),
+        "preprocessing_summary": preprocessing_summary,
+        "explainability": explainability,
+        "analyst_profile": analyst_profile,
+        "auto_create_analyst": True,
+    }
+
+
 def create_live_agent(config_path: str, models_dir: str, output_dir: str):
     config = _load_json(Path(config_path))
     models = Path(models_dir)
@@ -273,16 +369,24 @@ def create_live_agent(config_path: str, models_dir: str, output_dir: str):
 
     try:
         from report_to_phoenix import report_progress
+
+        final_metrics = _build_final_metrics(
+            config_path=config_path,
+            models_dir=models,
+            patterns=patterns,
+            explainability=explainability,
+            analyst_profile=analyst_profile,
+            manifest=manifest,
+            channel_name=channel_name,
+            character=character,
+            rules_count=len(rules),
+        )
+
         report_progress(
             "create_live_agent",
             f"Live agent created for #{channel_name}",
-            95,
-            {
-                "channel": channel_name,
-                "model": manifest["models"]["primary"],
-                "rules": len(rules),
-                "character": character,
-            },
+            100,
+            final_metrics,
             status="COMPLETED",
         )
     except Exception as e:
